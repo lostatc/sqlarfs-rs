@@ -69,12 +69,6 @@ pub struct SeekableFile {
     cursor: u64,
 }
 
-impl AsRef<File> for SeekableFile {
-    fn as_ref(&self) -> &File {
-        &self.file
-    }
-}
-
 // Keep these method doc comments in sync with `File`.
 impl SeekableFile {
     /// The path of the file.
@@ -104,6 +98,18 @@ impl SeekableFile {
         self.file.original_len == 0
     }
 
+    /// Truncate or extend the file to the given `len`.
+    ///
+    /// If the given `len` is greater than the current size of the file, the file will be extended
+    /// to `len` and the intermediate space will be filled with null bytes. This **does not**
+    /// create a sparse hole in the file, as sqlar archives do not support sparse files.
+    ///
+    /// If `len` is less than the current size of the file and the seek position is past the point
+    /// which the file is truncated to, it is moved to the new end of the file.
+    pub fn set_len(&mut self, _len: u64) -> crate::Result<()> {
+        todo!()
+    }
+
     /// Return a reference to the underlying [`File`].
     pub fn as_file(&self) -> &File {
         &self.file
@@ -126,6 +132,12 @@ impl From<SeekableFile> for File {
     }
 }
 
+impl AsRef<File> for SeekableFile {
+    fn as_ref(&self) -> &File {
+        &self.file
+    }
+}
+
 impl Read for SeekableFile {
     fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
         todo!()
@@ -143,7 +155,32 @@ impl Write for SeekableFile {
 }
 
 impl Seek for SeekableFile {
-    fn seek(&mut self, _pos: io::SeekFrom) -> io::Result<u64> {
-        todo!()
+    fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
+        let current_len = self.len();
+
+        let new_pos = match pos {
+            io::SeekFrom::Start(off) => Some(off),
+            io::SeekFrom::End(off) => current_len.checked_add_signed(off),
+            io::SeekFrom::Current(off) => self.cursor.checked_add_signed(off),
+        };
+
+        let new_pos = match new_pos {
+            Some(new_pos) => new_pos,
+            None => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "Attempted to seek to a negative offset or integer overflow.",
+                ))
+            }
+        };
+
+        // If we seek past the end of the file, we need to fill the space with null bytes.
+        if new_pos > current_len {
+            self.set_len(new_pos)?;
+        }
+
+        self.cursor = new_pos;
+
+        Ok(self.cursor)
     }
 }

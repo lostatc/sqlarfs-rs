@@ -26,7 +26,7 @@ impl File {
 
     /// The time the file was last modified.
     ///
-    /// This value is second precision.
+    /// This value has second precision.
     pub fn mtime(&self) -> SystemTime {
         self.mtime
     }

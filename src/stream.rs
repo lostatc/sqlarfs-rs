@@ -13,10 +13,6 @@ pub struct FileReader<'a> {
 }
 
 impl<'a> FileReader<'a> {
-    pub(super) fn new(file: &'a mut File) -> Self {
-        Self { file }
-    }
-
     /// Return a reference to the underlying [`File`].
     pub fn as_file(&self) -> &File {
         self.file
@@ -45,10 +41,6 @@ pub struct FileWriter<'a> {
 }
 
 impl<'a> FileWriter<'a> {
-    pub(super) fn new(file: &'a mut File) -> Self {
-        Self { file }
-    }
-
     /// Return a reference to the underlying [`File`].
     pub fn as_file(&self) -> &File {
         self.file

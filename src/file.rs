@@ -78,7 +78,7 @@ impl File {
     /// Get a readable stream of the data in the file.
     ///
     /// This starts reading from the beginning of the file.
-    pub fn reader(&mut self) -> FileReader<'_> {
+    pub fn reader(&mut self) -> crate::Result<FileReader<'_>> {
         todo!()
     }
 

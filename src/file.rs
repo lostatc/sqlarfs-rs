@@ -1,7 +1,9 @@
-use super::metadata::FileMode;
 use std::io::{self, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
+
+use super::metadata::FileMode;
+use super::stream::{FileReader, FileWriter};
 
 /// A file in a SQL archive.
 #[derive(Debug, Clone)]
@@ -70,6 +72,21 @@ impl File {
         } else {
             None
         }
+    }
+
+    /// Get a readable stream of the data in the file.
+    ///
+    /// This starts reading from the beginning of the file.
+    pub fn reader(&mut self) -> FileReader<'_> {
+        FileReader::new(self)
+    }
+
+    /// Get a writer for writing data to the file.
+    ///
+    /// This truncates the file and starts writing from the beginning of the file.
+    pub fn writer(&mut self) -> crate::Result<FileWriter<'_>> {
+        self.set_len(0)?;
+        Ok(FileWriter::new(self))
     }
 }
 

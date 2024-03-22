@@ -13,7 +13,6 @@ pub struct File {
     compressed_len: u64,
 }
 
-// Keep these method doc comments in sync with `SeekableFile`.
 impl File {
     /// The path of the file.
     pub fn path(&self) -> &Path {
@@ -40,6 +39,18 @@ impl File {
     /// Whether the file is empty.
     pub fn is_empty(&self) -> bool {
         self.original_len == 0
+    }
+
+    /// Truncate or extend the file to the given `len`.
+    ///
+    /// If the given `len` is greater than the current size of the file, the file will be extended
+    /// to `len` and the intermediate space will be filled with null bytes. This **does not**
+    /// create a sparse hole in the file, as sqlar archives do not support sparse files.
+    ///
+    /// If `len` is less than the current size of the file and the seek position is past the point
+    /// which the file is truncated to, it is moved to the new end of the file.
+    pub fn set_len(&mut self, _len: u64) -> crate::Result<()> {
+        todo!()
     }
 
     /// Convert this file into a [`SeekableFile`].
@@ -69,47 +80,7 @@ pub struct SeekableFile {
     cursor: u64,
 }
 
-// Keep these method doc comments in sync with `File`.
 impl SeekableFile {
-    /// The path of the file.
-    pub fn path(&self) -> &Path {
-        &self.file.path
-    }
-
-    /// The file mode.
-    pub fn mode(&self) -> FileMode {
-        self.file.mode
-    }
-
-    /// The time the file was last modified.
-    ///
-    /// This value has second precision.
-    pub fn mtime(&self) -> SystemTime {
-        self.file.mtime
-    }
-
-    /// The uncompressed size of the file.
-    pub fn len(&self) -> u64 {
-        self.file.original_len
-    }
-
-    /// Whether the file is empty.
-    pub fn is_empty(&self) -> bool {
-        self.file.original_len == 0
-    }
-
-    /// Truncate or extend the file to the given `len`.
-    ///
-    /// If the given `len` is greater than the current size of the file, the file will be extended
-    /// to `len` and the intermediate space will be filled with null bytes. This **does not**
-    /// create a sparse hole in the file, as sqlar archives do not support sparse files.
-    ///
-    /// If `len` is less than the current size of the file and the seek position is past the point
-    /// which the file is truncated to, it is moved to the new end of the file.
-    pub fn set_len(&mut self, _len: u64) -> crate::Result<()> {
-        todo!()
-    }
-
     /// Return a reference to the underlying [`File`].
     pub fn as_file(&self) -> &File {
         &self.file
@@ -138,6 +109,12 @@ impl AsRef<File> for SeekableFile {
     }
 }
 
+impl AsMut<File> for SeekableFile {
+    fn as_mut(&mut self) -> &mut File {
+        &mut self.file
+    }
+}
+
 impl Read for SeekableFile {
     fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
         todo!()
@@ -156,7 +133,7 @@ impl Write for SeekableFile {
 
 impl Seek for SeekableFile {
     fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
-        let current_len = self.len();
+        let current_len = self.as_file().len();
 
         let new_pos = match pos {
             io::SeekFrom::Start(off) => Some(off),
@@ -176,7 +153,7 @@ impl Seek for SeekableFile {
 
         // If we seek past the end of the file, we need to fill the space with null bytes.
         if new_pos > current_len {
-            self.set_len(new_pos)?;
+            self.as_file_mut().set_len(new_pos)?;
         }
 
         self.cursor = new_pos;

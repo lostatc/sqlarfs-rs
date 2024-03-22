@@ -1,7 +1,7 @@
 use bitflags::bitflags;
 
 bitflags! {
-    /// A file mode.
+    /// A Unix file mode.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct FileMode: u32 {
         /// Read for owner (`S_IRUSR`).

@@ -1,5 +1,5 @@
 mod file;
 mod metadata;
 
-pub use file::File;
+pub use file::{File, SeekableFile};
 pub use metadata::FileMode;

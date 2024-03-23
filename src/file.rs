@@ -65,8 +65,8 @@ impl File {
 
     /// Convert this file into a [`SeekableFile`].
     ///
-    /// A [`SeekableFile`] implements [`Read`], [`Write`], and [`Seek`] for reading and writing the
-    /// data in the file.
+    /// A [`SeekableFile`] implements [`Read`][std::io::Read], [`Write`][std::io::Write], and
+    /// [`Seek`][std::io::Seek] for reading and writing the data in the file.
     ///
     /// You can only convert an uncompressed file into a [`SeekableFile`]. If the file is
     /// compressed, this returns `None`. For compressed files, you can use [`FileReader`] and

@@ -1,1 +1,4 @@
-/target
+/target/
+
+# For local testing.
+/src/main.rs

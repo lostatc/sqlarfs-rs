@@ -1,7 +1,19 @@
+use std::fmt;
 use std::io;
 use std::result;
 
 use thiserror::Error as DeriveError;
+
+#[derive(Debug)]
+pub struct SqlError {
+    inner: rusqlite::Error,
+}
+
+impl fmt::Display for SqlError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.inner.fmt(f)
+    }
+}
 
 /// The error type for sqlarfs.
 #[derive(Debug, DeriveError)]
@@ -18,6 +30,10 @@ pub enum Error {
     /// A file is not seekable because it's compressed.
     #[error("This file is compressed and therefore not seekable.")]
     NotSeekable,
+
+    /// There was an error with the underlying SQLite database.
+    #[error("There was an error with the underlying SQLite database.\n{0}")]
+    Sql(SqlError),
 
     /// An I/O error occurred.
     #[error("{0}")]
@@ -48,10 +64,17 @@ impl From<Error> for io::Error {
             // When it's stable, we can use `io::ErrorKind::NotSeekable`.
             // https://doc.rust-lang.org/std/io/enum.ErrorKind.html#variant.NotSeekable
             Error::NotSeekable => io::ErrorKind::Other,
+            Error::Sql(_) => io::ErrorKind::Other,
             Error::Io(err) => return err,
         };
 
         io::Error::new(kind, err)
+    }
+}
+
+impl From<rusqlite::Error> for Error {
+    fn from(err: rusqlite::Error) -> Self {
+        Self::Sql(SqlError { inner: err })
     }
 }
 

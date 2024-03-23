@@ -5,4 +5,5 @@ edition = "2021"
 
 [dependencies]
 bitflags = "2.5.0"
+rusqlite = { version = "0.31.0", features = ["bundled"] }
 thiserror = "1.0.58"

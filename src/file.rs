@@ -91,14 +91,14 @@ impl<'a> File<'a> {
     /// Get a readable stream of the data in the file.
     ///
     /// This starts reading from the beginning of the file.
-    pub fn reader(&mut self) -> crate::Result<FileReader<'a>> {
+    pub fn reader(&self) -> crate::Result<FileReader<'a>> {
         todo!()
     }
 
     /// Get a writer for writing data to the file.
     ///
     /// This truncates the file and starts writing from the beginning of the file.
-    pub fn writer(&mut self) -> crate::Result<FileWriter<'a>> {
+    pub fn writer(&self) -> crate::Result<FileWriter<'a>> {
         todo!()
     }
 }

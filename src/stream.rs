@@ -1,34 +1,32 @@
+use std::fmt;
 use std::io::{self, Read, Write};
 
-use crate::File;
+use rusqlite::blob::Blob;
 
 /// A readable stream of the data in a [`File`].
 ///
 /// This implements [`Read`] for reading a stream of data from a [`File`], but does not support
 /// seeking. You must use this over [`SeekableFile`][crate::SeekableFile] when the file is
 /// compressed.
-#[derive(Debug)]
 pub struct FileReader<'a> {
-    file: &'a File<'a>,
-    _conn: &'a rusqlite::Connection,
+    blob: Blob<'a>,
 }
 
-impl<'a> FileReader<'a> {
-    /// Return a reference to the underlying [`File`].
-    pub fn as_file(&self) -> &File {
-        self.file
+impl<'a> fmt::Debug for FileReader<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FileReader").finish_non_exhaustive()
     }
 }
 
-impl<'a> AsRef<File<'a>> for FileReader<'a> {
-    fn as_ref(&self) -> &File<'a> {
-        self.file
+impl<'a> FileReader<'a> {
+    pub fn new(blob: Blob<'a>) -> Self {
+        Self { blob }
     }
 }
 
 impl<'a> Read for FileReader<'a> {
-    fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
-        todo!()
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.blob.read(buf)
     }
 }
 
@@ -36,31 +34,28 @@ impl<'a> Read for FileReader<'a> {
 ///
 /// This implements [`Write`] for writing data to a [`File`], but does not support seeking. You
 /// must use this over [`SeekableFile`][crate::SeekableFile] when the file is compressed.
-#[derive(Debug)]
 pub struct FileWriter<'a> {
-    file: &'a File<'a>,
-    _conn: &'a rusqlite::Connection,
+    blob: Blob<'a>,
 }
 
-impl<'a> FileWriter<'a> {
-    /// Return a reference to the underlying [`File`].
-    pub fn as_file(&self) -> &File {
-        self.file
+impl<'a> fmt::Debug for FileWriter<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FileWriter").finish_non_exhaustive()
     }
 }
 
-impl<'a> AsRef<File<'a>> for FileWriter<'a> {
-    fn as_ref(&self) -> &File<'a> {
-        self.file
+impl<'a> FileWriter<'a> {
+    pub fn new(blob: Blob<'a>) -> Self {
+        Self { blob }
     }
 }
 
 impl<'a> Write for FileWriter<'a> {
-    fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
-        todo!()
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.blob.write(buf)
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        todo!()
+        self.blob.flush()
     }
 }

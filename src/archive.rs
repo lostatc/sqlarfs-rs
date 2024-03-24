@@ -12,14 +12,14 @@ pub enum TransactionBehavior {
 
 #[derive(Debug)]
 pub struct Transaction<'a> {
-    archive: &'a Sqlar,
+    archive: &'a Archive,
     tx: rusqlite::Transaction<'a>,
 }
 
 impl<'a> Transaction<'a> {
     pub fn exec<T, E, F>(self, f: F) -> Result<T, E>
     where
-        F: FnOnce(&Sqlar) -> Result<T, E>,
+        F: FnOnce(&Archive) -> Result<T, E>,
         E: From<crate::Error>,
     {
         let result = f(self.archive)?;
@@ -29,7 +29,7 @@ impl<'a> Transaction<'a> {
         Ok(result)
     }
 
-    pub fn sqlar(&self) -> &Sqlar {
+    pub fn archive(&self) -> &Archive {
         self.archive
     }
 
@@ -44,11 +44,11 @@ impl<'a> Transaction<'a> {
 
 /// A SQLite archive file.
 #[derive(Debug)]
-pub struct Sqlar {
+pub struct Archive {
     conn: rusqlite::Connection,
 }
 
-impl Sqlar {
+impl Archive {
     // TODO: Make private.
     pub fn new(conn: rusqlite::Connection) -> Self {
         Self { conn }

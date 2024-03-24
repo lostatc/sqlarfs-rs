@@ -1,46 +1,7 @@
 use std::path::Path;
 
-use crate::File;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[non_exhaustive]
-pub enum TransactionBehavior {
-    Deferred,
-    Immediate,
-    Exclusive,
-}
-
-#[derive(Debug)]
-pub struct Transaction<'a> {
-    archive: &'a Archive,
-    tx: rusqlite::Transaction<'a>,
-}
-
-impl<'a> Transaction<'a> {
-    pub fn exec<T, E, F>(self, f: F) -> Result<T, E>
-    where
-        F: FnOnce(&Archive) -> Result<T, E>,
-        E: From<crate::Error>,
-    {
-        let result = f(self.archive)?;
-
-        self.tx.commit().map_err(crate::Error::from)?;
-
-        Ok(result)
-    }
-
-    pub fn archive(&self) -> &Archive {
-        self.archive
-    }
-
-    pub fn rollback(self) -> crate::Result<()> {
-        Ok(self.tx.rollback()?)
-    }
-
-    pub fn commit(self) -> crate::Result<()> {
-        Ok(self.tx.commit()?)
-    }
-}
+use super::file::File;
+use super::transaction::{Transaction, TransactionBehavior};
 
 /// A SQLite archive file.
 #[derive(Debug)]
@@ -55,19 +16,16 @@ impl Archive {
     }
 
     pub fn transaction(&mut self) -> crate::Result<Transaction> {
-        Ok(Transaction {
-            archive: self,
-            tx: self.conn.unchecked_transaction()?,
-        })
+        Ok(Transaction::new(self, self.conn.unchecked_transaction()?))
     }
 
     pub fn transaction_with(
         &mut self,
         behavior: TransactionBehavior,
     ) -> crate::Result<Transaction> {
-        Ok(Transaction {
-            archive: self,
-            tx: rusqlite::Transaction::new_unchecked(
+        Ok(Transaction::new(
+            self,
+            rusqlite::Transaction::new_unchecked(
                 &self.conn,
                 match behavior {
                     TransactionBehavior::Deferred => rusqlite::TransactionBehavior::Deferred,
@@ -75,7 +33,7 @@ impl Archive {
                     TransactionBehavior::Exclusive => rusqlite::TransactionBehavior::Exclusive,
                 },
             )?,
-        })
+        ))
     }
 
     /// Create a handle to the file at the given `path`.

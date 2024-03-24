@@ -6,6 +6,24 @@ use super::seekable::SeekableFile;
 use super::stream::{FileReader, FileWriter};
 
 /// A file in a SQL archive.
+///
+///
+/// If the file is uncompressed, you can get a [`SeekableFile`] with [`File::into_seekable`].
+/// [`SeekableFile`] implements [`Read`][std::io::Read], [`Write`][std::io::Write], and
+/// [`Seek`][std::io::Seek`].
+///
+/// If the file is compressed, your options are:
+///
+/// 1. Start reading the file from the beginning.
+/// 2. Truncate and start writing the file from the beginning.
+///
+/// You can use [`File::reader`], and [`File::writer`] to operate on compressed files.
+///
+/// Unless you have an exclusive lock on the database (see
+/// [`Archive::transaction_with`][crate::Archive::transaction_with]), it may be possible for other
+/// writers to modify the file in the database out from under you. SQLite calls this situation an
+/// ["expired blob"](https://sqlite.org/c3ref/blob_open.html), and it will cause reads and writes
+/// to return an [`Error::BlobExpired`][crate::Error::BlobExpired].
 #[derive(Debug, Clone)]
 pub struct File<'a> {
     path: PathBuf,

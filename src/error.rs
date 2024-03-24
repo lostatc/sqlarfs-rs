@@ -40,6 +40,15 @@ pub enum Error {
     #[error("This file is compressed and therefore not seekable.")]
     NotSeekable,
 
+    /// A file was modified in the database while you were trying to read or write to it.
+    ///
+    /// In SQLite parlance, this is called an ["expired
+    /// blob"](https://sqlite.org/c3ref/blob_open.html).
+    #[error(
+        "This file was modified in the database while you were trying to read or write to it."
+    )]
+    BlobExpired,
+
     /// There was an error with the underlying SQLite database.
     #[error("There was an error with the underlying SQLite database.\n{0}")]
     Sqlite(SqliteError),
@@ -73,6 +82,7 @@ impl From<Error> for io::Error {
             // When it's stable, we can use `io::ErrorKind::NotSeekable`.
             // https://doc.rust-lang.org/std/io/enum.ErrorKind.html#variant.NotSeekable
             Error::NotSeekable => io::ErrorKind::Other,
+            Error::BlobExpired => io::ErrorKind::Other,
             Error::Sqlite(_) => io::ErrorKind::Other,
             Error::Io(err) => return err,
         };

@@ -6,8 +6,11 @@ use rusqlite::blob::Blob;
 /// A readable stream of the data in a [`File`].
 ///
 /// This implements [`Read`] for reading a stream of data from a [`File`], but does not support
-/// seeking. You must use this over [`SeekableFile`][crate::SeekableFile] when the file is
+/// seeking like [`SeekableFile`] does. You must use this over [`SeekableFile`] when the file is
 /// compressed.
+///
+/// [`File`]: crate::File
+/// [`SeekableFile`]: crate::SeekableFile
 pub struct FileReader<'a> {
     blob: Blob<'a>,
 }
@@ -32,8 +35,11 @@ impl<'a> Read for FileReader<'a> {
 
 /// A writer for writing data to a [`File`].
 ///
-/// This implements [`Write`] for writing data to a [`File`], but does not support seeking. You
-/// must use this over [`SeekableFile`][crate::SeekableFile] when the file is compressed.
+/// This implements [`Write`] for writing data to a [`File`], but does not support seeking like
+/// [`SeekableFile`] does. You must use this over [`SeekableFile`] when the file is compressed.
+///
+/// [`File`]: crate::File
+/// [`SeekableFile`]: crate::SeekableFile
 pub struct FileWriter<'a> {
     blob: Blob<'a>,
 }

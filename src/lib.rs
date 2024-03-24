@@ -7,7 +7,7 @@ mod stream;
 mod transaction;
 
 pub use archive::Archive;
-pub use error::{Error, Result, SqlError};
+pub use error::{Error, Result, SqliteError};
 pub use file::File;
 pub use metadata::FileMode;
 pub use seekable::SeekableFile;

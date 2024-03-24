@@ -4,18 +4,27 @@ use std::result;
 
 use thiserror::Error as DeriveError;
 
+/// An opaque type that represents a SQLite error.
+///
+/// This type implements [`Debug`][fmt::Debug] and [`Display`][fmt::Display], but not
+/// [`std::error::Error`][std::error::Error]. Rather than try to use this as an error type, you
+/// should use [`sqlarfs::Error::Sqlite`][crate::Error::Sqlite].
 #[derive(Debug)]
-pub struct SqlError {
+pub struct SqliteError {
     inner: rusqlite::Error,
 }
 
-impl fmt::Display for SqlError {
+impl fmt::Display for SqliteError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.inner.fmt(f)
     }
 }
 
 /// The error type for sqlarfs.
+///
+/// This type can be converted [`From`] an [`std::io::Error`]. If the value the [`std::io::Error`]
+/// wraps can be downcast into a [`sqlarfs::Error`][crate::Error], it will be. Otherwise, it will
+/// be converted to [`sqlarfs::Error::Io`][crate::Error::Io].
 #[derive(Debug, DeriveError)]
 #[non_exhaustive]
 pub enum Error {
@@ -33,7 +42,7 @@ pub enum Error {
 
     /// There was an error with the underlying SQLite database.
     #[error("There was an error with the underlying SQLite database.\n{0}")]
-    Sql(SqlError),
+    Sqlite(SqliteError),
 
     /// An I/O error occurred.
     #[error("{0}")]
@@ -64,7 +73,7 @@ impl From<Error> for io::Error {
             // When it's stable, we can use `io::ErrorKind::NotSeekable`.
             // https://doc.rust-lang.org/std/io/enum.ErrorKind.html#variant.NotSeekable
             Error::NotSeekable => io::ErrorKind::Other,
-            Error::Sql(_) => io::ErrorKind::Other,
+            Error::Sqlite(_) => io::ErrorKind::Other,
             Error::Io(err) => return err,
         };
 
@@ -74,7 +83,7 @@ impl From<Error> for io::Error {
 
 impl From<rusqlite::Error> for Error {
     fn from(err: rusqlite::Error) -> Self {
-        Self::Sql(SqlError { inner: err })
+        Self::Sqlite(SqliteError { inner: err })
     }
 }
 

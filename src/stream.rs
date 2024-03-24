@@ -9,7 +9,8 @@ use crate::File;
 /// compressed.
 #[derive(Debug)]
 pub struct FileReader<'a> {
-    file: &'a mut File,
+    file: &'a File<'a>,
+    _conn: &'a rusqlite::Connection,
 }
 
 impl<'a> FileReader<'a> {
@@ -19,8 +20,8 @@ impl<'a> FileReader<'a> {
     }
 }
 
-impl<'a> AsRef<File> for FileReader<'a> {
-    fn as_ref(&self) -> &File {
+impl<'a> AsRef<File<'a>> for FileReader<'a> {
+    fn as_ref(&self) -> &File<'a> {
         self.file
     }
 }
@@ -37,7 +38,8 @@ impl<'a> Read for FileReader<'a> {
 /// must use this over [`SeekableFile`][crate::SeekableFile] when the file is compressed.
 #[derive(Debug)]
 pub struct FileWriter<'a> {
-    file: &'a mut File,
+    file: &'a File<'a>,
+    _conn: &'a rusqlite::Connection,
 }
 
 impl<'a> FileWriter<'a> {
@@ -47,8 +49,8 @@ impl<'a> FileWriter<'a> {
     }
 }
 
-impl<'a> AsRef<File> for FileWriter<'a> {
-    fn as_ref(&self) -> &File {
+impl<'a> AsRef<File<'a>> for FileWriter<'a> {
+    fn as_ref(&self) -> &File<'a> {
         self.file
     }
 }

@@ -1,3 +1,15 @@
+use std::path::Path;
+
+use crate::File;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum TransactionBehavior {
+    Deferred,
+    Immediate,
+    Exclusive,
+}
+
 #[derive(Debug)]
 pub struct Transaction<'a> {
     archive: &'a Sqlar,
@@ -37,6 +49,7 @@ pub struct Sqlar {
 }
 
 impl Sqlar {
+    // TODO: Make private.
     pub fn new(conn: rusqlite::Connection) -> Self {
         Self { conn }
     }
@@ -46,5 +59,32 @@ impl Sqlar {
             archive: self,
             tx: self.conn.unchecked_transaction()?,
         })
+    }
+
+    pub fn transaction_with(
+        &mut self,
+        behavior: TransactionBehavior,
+    ) -> crate::Result<Transaction> {
+        Ok(Transaction {
+            archive: self,
+            tx: rusqlite::Transaction::new_unchecked(
+                &self.conn,
+                match behavior {
+                    TransactionBehavior::Deferred => rusqlite::TransactionBehavior::Deferred,
+                    TransactionBehavior::Immediate => rusqlite::TransactionBehavior::Immediate,
+                    TransactionBehavior::Exclusive => rusqlite::TransactionBehavior::Exclusive,
+                },
+            )?,
+        })
+    }
+
+    /// Create a handle to the file at the given `path`.
+    ///
+    /// This doesn't guarantee that the file actually exists in the database; it only returns a
+    /// handle to a file that may or may not exist.
+    ///
+    /// See [`File::exists`] to check if the file actually exists in the database.
+    pub fn open<P: AsRef<Path>>(&self, path: P) -> File<'_> {
+        File::new(path.as_ref().to_path_buf(), &self.conn)
     }
 }

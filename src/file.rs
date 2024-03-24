@@ -7,14 +7,27 @@ use super::stream::{FileReader, FileWriter};
 
 /// A file in a SQL archive.
 #[derive(Debug, Clone)]
-pub struct File {
+pub struct File<'a> {
     path: PathBuf,
+    _conn: &'a rusqlite::Connection,
 }
 
-impl File {
+impl<'a> File<'a> {
+    pub(super) fn new(path: PathBuf, conn: &'a rusqlite::Connection) -> Self {
+        Self { path, _conn: conn }
+    }
+
     /// The path of the file.
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Returns whether this file actually exists in the database.
+    ///
+    /// ⚠️ Unless you have an exclusive lock on the database, the file may be deleted between when
+    /// you call this method and when you act on its result!
+    pub fn exists(&self) -> crate::Result<bool> {
+        todo!()
     }
 
     /// The file mode.
@@ -69,23 +82,23 @@ impl File {
     /// [`Seek`][std::io::Seek] for reading and writing the data in the file.
     ///
     /// You can only convert an uncompressed file into a [`SeekableFile`]. If the file is
-    /// compressed, this returns `None`. For compressed files, you can use [`FileReader`] and
-    /// [`FileWriter`] instead.
-    pub fn into_seekable(self) -> crate::Result<SeekableFile> {
+    /// compressed, this returns [`Error::NotSeekable`][crate::Error::NotSeekable]. For compressed
+    /// files, you can use [`FileReader`] and [`FileWriter`] instead.
+    pub fn into_seekable(self) -> crate::Result<SeekableFile<'a>> {
         todo!()
     }
 
     /// Get a readable stream of the data in the file.
     ///
     /// This starts reading from the beginning of the file.
-    pub fn reader(&mut self) -> crate::Result<FileReader<'_>> {
+    pub fn reader(&mut self) -> crate::Result<FileReader<'a>> {
         todo!()
     }
 
     /// Get a writer for writing data to the file.
     ///
     /// This truncates the file and starts writing from the beginning of the file.
-    pub fn writer(&mut self) -> crate::Result<FileWriter<'_>> {
+    pub fn writer(&mut self) -> crate::Result<FileWriter<'a>> {
         todo!()
     }
 }

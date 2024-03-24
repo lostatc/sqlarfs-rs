@@ -5,7 +5,7 @@ mod metadata;
 mod seekable;
 mod stream;
 
-pub use archive::{Sqlar, Transaction};
+pub use archive::{Sqlar, Transaction, TransactionBehavior};
 pub use error::{Error, Result, SqlError};
 pub use file::File;
 pub use metadata::FileMode;

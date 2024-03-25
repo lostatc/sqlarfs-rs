@@ -103,12 +103,10 @@ impl From<rusqlite::Error> for Error {
     }
 }
 
-pub fn io_err_has_sqlite_code(err: &io::Error, code: rusqlite::ffi::ErrorCode) -> bool {
+pub fn io_err_has_sqlite_code(err: &io::Error, code: rusqlite::ErrorCode) -> bool {
     if let Some(payload) = err.get_ref() {
-        if let Some(rusqlite::Error::SqliteFailure(sqlite_err, _)) =
-            payload.downcast_ref::<rusqlite::Error>()
-        {
-            return sqlite_err.code == code;
+        if let Some(sqlite_err) = payload.downcast_ref::<rusqlite::Error>() {
+            return sqlite_err.sqlite_error_code() == Some(code);
         }
     }
 

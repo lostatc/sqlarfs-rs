@@ -6,9 +6,12 @@ use thiserror::Error as DeriveError;
 
 /// An opaque type that represents a SQLite error.
 ///
-/// This type implements [`Debug`][fmt::Debug] and [`Display`][fmt::Display], but not
-/// [`std::error::Error`][std::error::Error]. Rather than try to use this as an error type, you
-/// should use [`sqlarfs::Error::Sqlite`][crate::Error::Sqlite].
+/// This type implements [`Debug`] and [`Display`], but not [`std::error::Error`]. Rather than try
+/// to use this as an error type, you should use [`sqlarfs::Error::Sqlite`].
+///
+/// [`Debug`]: fmt::Debug
+/// [`Display`]: fmt::Display
+/// [`sqlarfs::Error::Sqlite`]: crate::Error::Sqlite
 #[derive(Debug)]
 pub struct SqliteError {
     inner: rusqlite::Error,
@@ -23,8 +26,11 @@ impl fmt::Display for SqliteError {
 /// The error type for sqlarfs.
 ///
 /// This type can be converted [`From`] an [`std::io::Error`]. If the value the [`std::io::Error`]
-/// wraps can be downcast into a [`sqlarfs::Error`][crate::Error], it will be. Otherwise, it will
-/// be converted to [`sqlarfs::Error::Io`][crate::Error::Io].
+/// wraps can be downcast into a [`sqlarfs::Error`], it will be. Otherwise, it will be converted
+/// into [`sqlarfs::Error::Io`].
+///
+/// [`sqlarfs::Error`]: crate::Error
+/// [`sqlarfs::Error::Io`]: crate::Error::Io
 #[derive(Debug, DeriveError)]
 #[non_exhaustive]
 pub enum Error {

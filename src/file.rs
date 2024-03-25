@@ -9,21 +9,23 @@ use super::stream::{FileReader, FileWriter};
 ///
 ///
 /// If the file is uncompressed, you can get a [`SeekableFile`] with [`File::into_seekable`].
-/// [`SeekableFile`] implements [`Read`][std::io::Read], [`Write`][std::io::Write], and
-/// [`Seek`][std::io::Seek`].
+/// [`SeekableFile`] implements [`Read`], [`Write`], and [`Seek`].
 ///
 /// If the file is compressed, your options are:
 ///
-/// 1. Start reading the file from the beginning.
-/// 2. Truncate and start writing the file from the beginning.
+/// - Start reading the file from the beginning using [`File::reader`].
+/// - Truncate the file and start writing using [`File::writer`].
 ///
-/// You can use [`File::reader`], and [`File::writer`] to operate on compressed files.
+/// Unless you have an exclusive lock on the database (see [`Archive::transaction_with`]), it may
+/// be possible for other writers to modify the file in the database out from under you. SQLite
+/// calls this situation an ["expired blob"](https://sqlite.org/c3ref/blob_open.html), and it will
+/// cause reads and writes to return an [`Error::BlobExpired`].
 ///
-/// Unless you have an exclusive lock on the database (see
-/// [`Archive::transaction_with`][crate::Archive::transaction_with]), it may be possible for other
-/// writers to modify the file in the database out from under you. SQLite calls this situation an
-/// ["expired blob"](https://sqlite.org/c3ref/blob_open.html), and it will cause reads and writes
-/// to return an [`Error::BlobExpired`][crate::Error::BlobExpired].
+/// [`Read`]: std::io::Read
+/// [`Write`]: std::io::Write
+/// [`Seek`]: std::io::Seek
+/// [`Archive::transaction_with`]: crate::Archive::transaction_with
+/// [`Error::BlobExpired`]: crate::Error::BlobExpired
 #[derive(Debug, Clone)]
 pub struct File<'a> {
     path: PathBuf,
@@ -96,12 +98,17 @@ impl<'a> File<'a> {
 
     /// Convert this file into a [`SeekableFile`].
     ///
-    /// A [`SeekableFile`] implements [`Read`][std::io::Read], [`Write`][std::io::Write], and
-    /// [`Seek`][std::io::Seek] for reading and writing the data in the file.
+    /// A [`SeekableFile`] implements [`Read`], [`Write`], and [`Seek`] for reading and writing the
+    /// data in the file.
     ///
     /// You can only convert an uncompressed file into a [`SeekableFile`]. If the file is
-    /// compressed, this returns [`Error::NotSeekable`][crate::Error::NotSeekable]. For compressed
-    /// files, you can use [`FileReader`] and [`FileWriter`] instead.
+    /// compressed, this returns [`Error::NotSeekable`]. For compressed files, you can use
+    /// [`File::reader`] and [`File::writer`] instead.
+    ///
+    /// [`Read`]: std::io::Read
+    /// [`Write`]: std::io::Write
+    /// [`Seek`]: std::io::Seek
+    /// [`Error::NotSeekable`]: crate::Error::NotSeekable
     pub fn into_seekable(self) -> crate::Result<SeekableFile<'a>> {
         todo!()
     }

@@ -1,57 +1,16 @@
-use std::fs::OpenOptions;
 use std::path::Path;
 
 use super::file::File;
-use super::transaction::Transaction;
 
 /// A SQLite archive file.
 #[derive(Debug)]
-pub struct Archive {
-    conn: rusqlite::Connection,
+pub struct Archive<'a> {
+    conn: &'a rusqlite::Connection,
 }
 
-impl Archive {
-    pub(super) fn new(conn: rusqlite::Connection) -> Self {
+impl<'a> Archive<'a> {
+    pub(super) fn new(conn: &'a rusqlite::Connection) -> Self {
         Self { conn }
-    }
-
-    /// Create a new builder for opening an [`Archive`].
-    pub fn build() -> OpenOptions {
-        OpenOptions::new()
-    }
-
-    pub fn transaction(&mut self) -> crate::Result<Transaction> {
-        Ok(Transaction::new(self, self.conn.unchecked_transaction()?))
-    }
-
-    pub fn transaction_deferred(&mut self) -> crate::Result<Transaction> {
-        Ok(Transaction::new(
-            self,
-            rusqlite::Transaction::new_unchecked(
-                &self.conn,
-                rusqlite::TransactionBehavior::Deferred,
-            )?,
-        ))
-    }
-
-    pub fn transaction_immediate(&mut self) -> crate::Result<Transaction> {
-        Ok(Transaction::new(
-            self,
-            rusqlite::Transaction::new_unchecked(
-                &self.conn,
-                rusqlite::TransactionBehavior::Immediate,
-            )?,
-        ))
-    }
-
-    pub fn transaction_exclusive(&mut self) -> crate::Result<Transaction> {
-        Ok(Transaction::new(
-            self,
-            rusqlite::Transaction::new_unchecked(
-                &self.conn,
-                rusqlite::TransactionBehavior::Exclusive,
-            )?,
-        ))
     }
 
     /// Create a handle to the file at the given `path`.
@@ -61,6 +20,6 @@ impl Archive {
     ///
     /// See [`File::exists`] to check if the file actually exists in the database.
     pub fn open<P: AsRef<Path>>(&self, path: P) -> File<'_> {
-        File::new(path.as_ref().to_path_buf(), &self.conn)
+        File::new(path.as_ref().to_path_buf(), self.conn)
     }
 }

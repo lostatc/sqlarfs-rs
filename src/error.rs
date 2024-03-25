@@ -93,6 +93,7 @@ impl From<Error> for io::Error {
             // https://doc.rust-lang.org/std/io/enum.ErrorKind.html#variant.NotSeekable
             Error::NotSeekable => io::ErrorKind::Other,
             Error::BlobExpired => io::ErrorKind::Other,
+            Error::ReadOnly => io::ErrorKind::Other,
             Error::Sqlite(_) => io::ErrorKind::Other,
             Error::Io(err) => return err,
         };

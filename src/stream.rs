@@ -24,7 +24,7 @@ impl<'a> fmt::Debug for FileReader<'a> {
 }
 
 impl<'a> FileReader<'a> {
-    pub fn new(blob: Blob<'a>) -> Self {
+    pub(super) fn new(blob: Blob<'a>) -> Self {
         Self { blob }
     }
 }
@@ -59,7 +59,7 @@ impl<'a> fmt::Debug for FileWriter<'a> {
 }
 
 impl<'a> FileWriter<'a> {
-    pub fn new(blob: Blob<'a>) -> Self {
+    pub(super) fn new(blob: Blob<'a>) -> Self {
         Self { blob }
     }
 }

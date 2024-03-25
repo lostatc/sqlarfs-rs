@@ -1,4 +1,5 @@
 mod archive;
+mod db;
 mod error;
 mod file;
 mod metadata;
@@ -14,4 +15,4 @@ pub use metadata::FileMode;
 pub use open::OpenOptions;
 pub use seekable::SeekableFile;
 pub use stream::{FileReader, FileWriter};
-pub use transaction::Transaction;
+pub use transaction::{Connection, Transaction, TransactionBehavior};

@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use super::file::File;
-use super::transaction::{Transaction, TransactionBehavior};
+use super::transaction::Transaction;
 
 /// A SQLite archive file.
 #[derive(Debug)]
@@ -19,19 +19,32 @@ impl Archive {
         Ok(Transaction::new(self, self.conn.unchecked_transaction()?))
     }
 
-    pub fn transaction_with(
-        &mut self,
-        behavior: TransactionBehavior,
-    ) -> crate::Result<Transaction> {
+    pub fn transaction_deferred(&mut self) -> crate::Result<Transaction> {
         Ok(Transaction::new(
             self,
             rusqlite::Transaction::new_unchecked(
                 &self.conn,
-                match behavior {
-                    TransactionBehavior::Deferred => rusqlite::TransactionBehavior::Deferred,
-                    TransactionBehavior::Immediate => rusqlite::TransactionBehavior::Immediate,
-                    TransactionBehavior::Exclusive => rusqlite::TransactionBehavior::Exclusive,
-                },
+                rusqlite::TransactionBehavior::Deferred,
+            )?,
+        ))
+    }
+
+    pub fn transaction_immediate(&mut self) -> crate::Result<Transaction> {
+        Ok(Transaction::new(
+            self,
+            rusqlite::Transaction::new_unchecked(
+                &self.conn,
+                rusqlite::TransactionBehavior::Immediate,
+            )?,
+        ))
+    }
+
+    pub fn transaction_exclusive(&mut self) -> crate::Result<Transaction> {
+        Ok(Transaction::new(
+            self,
+            rusqlite::Transaction::new_unchecked(
+                &self.conn,
+                rusqlite::TransactionBehavior::Exclusive,
             )?,
         ))
     }

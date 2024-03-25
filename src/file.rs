@@ -16,15 +16,14 @@ use super::stream::{FileReader, FileWriter};
 /// - Start reading the file from the beginning using [`File::reader`].
 /// - Truncate the file and start writing using [`File::writer`].
 ///
-/// Unless you have an exclusive lock on the database (see [`Archive::transaction_with`]), it may
-/// be possible for other writers to modify the file in the database out from under you. SQLite
-/// calls this situation an ["expired blob"](https://sqlite.org/c3ref/blob_open.html), and it will
-/// cause reads and writes to return an [`Error::BlobExpired`].
+/// Unless you have an exclusive lock on the database, it may be possible for other writers to
+/// modify the file in the database out from under you. SQLite calls this situation an ["expired
+/// blob"](https://sqlite.org/c3ref/blob_open.html), and it will cause reads and writes to return
+/// an [`Error::BlobExpired`].
 ///
 /// [`Read`]: std::io::Read
 /// [`Write`]: std::io::Write
 /// [`Seek`]: std::io::Seek
-/// [`Archive::transaction_with`]: crate::Archive::transaction_with
 /// [`Error::BlobExpired`]: crate::Error::BlobExpired
 #[derive(Debug, Clone)]
 pub struct File<'a> {

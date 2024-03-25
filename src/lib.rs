@@ -12,4 +12,4 @@ pub use file::File;
 pub use metadata::FileMode;
 pub use seekable::SeekableFile;
 pub use stream::{FileReader, FileWriter};
-pub use transaction::{Transaction, TransactionBehavior};
+pub use transaction::Transaction;

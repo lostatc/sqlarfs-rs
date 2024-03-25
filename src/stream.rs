@@ -3,6 +3,8 @@ use std::io::{self, Read, Write};
 
 use rusqlite::blob::Blob;
 
+use super::error::io_err_has_sqlite_code;
+
 /// A readable stream of the data in a [`File`].
 ///
 /// This implements [`Read`] for reading a stream of data from a [`File`], but does not support
@@ -29,7 +31,13 @@ impl<'a> FileReader<'a> {
 
 impl<'a> Read for FileReader<'a> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.blob.read(buf)
+        self.blob.read(buf).map_err(|err| {
+            if io_err_has_sqlite_code(&err, rusqlite::ffi::ErrorCode::OperationAborted) {
+                return crate::Error::BlobExpired.into();
+            }
+
+            err
+        })
     }
 }
 
@@ -58,10 +66,22 @@ impl<'a> FileWriter<'a> {
 
 impl<'a> Write for FileWriter<'a> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.blob.write(buf)
+        self.blob.write(buf).map_err(|err| {
+            if io_err_has_sqlite_code(&err, rusqlite::ffi::ErrorCode::OperationAborted) {
+                return crate::Error::BlobExpired.into();
+            }
+
+            err
+        })
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        self.blob.flush()
+        self.blob.flush().map_err(|err| {
+            if io_err_has_sqlite_code(&err, rusqlite::ffi::ErrorCode::OperationAborted) {
+                return crate::Error::BlobExpired.into();
+            }
+
+            err
+        })
     }
 }

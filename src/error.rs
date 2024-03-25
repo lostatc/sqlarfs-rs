@@ -97,5 +97,17 @@ impl From<rusqlite::Error> for Error {
     }
 }
 
+pub fn io_err_has_sqlite_code(err: &io::Error, code: rusqlite::ffi::ErrorCode) -> bool {
+    if let Some(payload) = err.get_ref() {
+        if let Some(rusqlite::Error::SqliteFailure(sqlite_err, _)) =
+            payload.downcast_ref::<rusqlite::Error>()
+        {
+            return sqlite_err.code == code;
+        }
+    }
+
+    false
+}
+
 /// The result type for operations with a repository.
 pub type Result<T> = result::Result<T, Error>;

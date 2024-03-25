@@ -55,6 +55,10 @@ pub enum Error {
     )]
     BlobExpired,
 
+    /// Attempted to write to a read-only archive or read-only file.
+    #[error("Attempted to write to a read-only archive or read-only file.")]
+    ReadOnly,
+
     /// There was an error with the underlying SQLite database.
     #[error("There was an error with the underlying SQLite database.\n{0}")]
     Sqlite(SqliteError),
@@ -99,7 +103,10 @@ impl From<Error> for io::Error {
 
 impl From<rusqlite::Error> for Error {
     fn from(err: rusqlite::Error) -> Self {
-        Self::Sqlite(SqliteError { inner: err })
+        match err.sqlite_error_code() {
+            Some(rusqlite::ErrorCode::ReadOnly) => Self::ReadOnly,
+            _ => Self::Sqlite(SqliteError { inner: err }),
+        }
     }
 }
 

@@ -10,11 +10,6 @@ pub struct Archive {
 }
 
 impl Archive {
-    // TODO: Make private.
-    pub fn new(conn: rusqlite::Connection) -> Self {
-        Self { conn }
-    }
-
     pub fn transaction(&mut self) -> crate::Result<Transaction> {
         Ok(Transaction::new(self, self.conn.unchecked_transaction()?))
     }

@@ -35,6 +35,18 @@ impl<'a> SeekableFile<'a> {
     pub fn into_file(self) -> File<'a> {
         self.file
     }
+
+    /// Truncate or extend the file to the given `len`.
+    ///
+    /// If the given `len` is greater than the current size of the file, the file will be extended
+    /// to `len` and the intermediate space will be filled with null bytes. This **does not**
+    /// create a sparse hole in the file, as sqlar archives do not support sparse files.
+    ///
+    /// If `len` is less than the current size of the file and the seek position is past the point
+    /// which the file is truncated to, it is moved to the new end of the file.
+    pub fn set_len(&mut self, _len: u64) -> crate::Result<()> {
+        todo!()
+    }
 }
 
 impl<'a> From<SeekableFile<'a>> for File<'a> {

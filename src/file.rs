@@ -83,15 +83,12 @@ impl<'a> File<'a> {
         Ok(self.len()? == 0)
     }
 
-    /// Truncate or extend the file to the given `len`.
+    /// Truncate this file to zero bytes.
     ///
-    /// If the given `len` is greater than the current size of the file, the file will be extended
-    /// to `len` and the intermediate space will be filled with null bytes. This **does not**
-    /// create a sparse hole in the file, as sqlar archives do not support sparse files.
+    /// This moves the seek position back to the beginning of the file.
     ///
-    /// If `len` is less than the current size of the file and the seek position is past the point
-    /// which the file is truncated to, it is moved to the new end of the file.
-    pub fn set_len(&mut self, _len: u64) -> crate::Result<()> {
+    /// If the file is seekable (not compressed), you can also use [`SeekableFile::set_len`].
+    pub fn truncate(&mut self) -> crate::Result<()> {
         todo!()
     }
 

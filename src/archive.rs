@@ -1,3 +1,4 @@
+use std::fs::OpenOptions;
 use std::path::Path;
 
 use super::file::File;
@@ -10,6 +11,15 @@ pub struct Archive {
 }
 
 impl Archive {
+    pub(super) fn new(conn: rusqlite::Connection) -> Self {
+        Self { conn }
+    }
+
+    /// Create a new builder for opening an [`Archive`].
+    pub fn build() -> OpenOptions {
+        OpenOptions::new()
+    }
+
     pub fn transaction(&mut self) -> crate::Result<Transaction> {
         Ok(Transaction::new(self, self.conn.unchecked_transaction()?))
     }

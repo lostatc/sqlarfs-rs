@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use super::archive::Archive;
+use super::db::Store;
 use super::open::OpenOptions;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -45,7 +46,7 @@ impl Connection {
     }
 
     fn archive(&self) -> Archive {
-        Archive::new(&self.conn)
+        Archive::new(Store::new(&self.conn))
     }
 
     // Opening a transaction must take a mutable receiver to ensure that the user can't open more

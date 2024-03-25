@@ -3,12 +3,12 @@ use std::path::Path;
 use rusqlite::blob::Blob;
 
 #[derive(Debug)]
-pub struct Store {
-    conn: rusqlite::Connection,
+pub struct Store<'a> {
+    conn: &'a rusqlite::Connection,
 }
 
-impl Store {
-    pub fn new(conn: rusqlite::Connection) -> Self {
+impl<'a> Store<'a> {
+    pub fn new(conn: &'a rusqlite::Connection) -> Self {
         Self { conn }
     }
 

@@ -9,7 +9,7 @@ use super::stream::{FileReader, FileWriter};
 /// A file in a SQL archive.
 ///
 ///
-/// If the file is uncompressed, you can get a [`SeekableFile`] with [`File::into_seekable`].
+/// If the file is uncompressed, you can get a [`SeekableFile`] with [`File::seekable`].
 /// [`SeekableFile`] implements [`Read`], [`Write`], and [`Seek`].
 ///
 /// If the file is compressed, your options are:
@@ -37,6 +37,16 @@ impl<'a> File<'a> {
         Self { path, store }
     }
 
+    //
+    // Some operations, like setting the mode and mtime, don't strictly need to take a mutable
+    // receiver. We make them take a mutable receiver anyways because:
+    //
+    // 1. The fact that we can implement this without mutable internal state as an implementation
+    //    detail we don't need to expose.
+    // 2. It gives users the option to have a read-only view of a file in a sqlar archive, which
+    //    could be useful for maintaining certain invariants.
+    //
+
     /// The path of the file.
     pub fn path(&self) -> &Path {
         &self.path
@@ -56,7 +66,7 @@ impl<'a> File<'a> {
     }
 
     /// Set the file mode.
-    pub fn set_mode(&self, _mode: FileMode) -> crate::Result<()> {
+    pub fn set_mode(&mut self, _mode: FileMode) -> crate::Result<()> {
         todo!()
     }
 
@@ -70,7 +80,7 @@ impl<'a> File<'a> {
     /// Set the time the file was last modified.
     ///
     /// This rounds to the nearest second.
-    pub fn set_mtime(&self, _mtime: SystemTime) -> crate::Result<()> {
+    pub fn set_mtime(&mut self, _mtime: SystemTime) -> crate::Result<()> {
         todo!()
     }
 
@@ -88,8 +98,8 @@ impl<'a> File<'a> {
     ///
     /// This moves the seek position back to the beginning of the file.
     ///
-    /// If the file is seekable (not compressed), you can also use [`SeekableFile::set_len`].
-    pub fn truncate(&self) -> crate::Result<()> {
+    /// If the file is seekable (not compressed), you can also use [`File::set_len`].
+    pub fn truncate(&mut self) -> crate::Result<()> {
         todo!()
     }
 
@@ -101,12 +111,15 @@ impl<'a> File<'a> {
     ///
     /// If `len` is less than the current size of the file and the seek position is past the point
     /// which the file is truncated to, it is moved to the new end of the file.
-    pub fn set_len(&self, _len: u64) -> crate::Result<()> {
+    pub fn set_len(&mut self, _len: u64) -> crate::Result<()> {
         todo!()
     }
 
+    //
     // Opening a seekable file, reader, or writer must take a mutable receiver to ensure that the
-    // user can't edit the row while the blob is open, otherwise they'll get an expired blob error.
+    // user can't edit the row (e.g. mode or mtime) while the blob is open. This would generate an
+    // expired blob error.
+    //
 
     /// Get a [`SeekableFile`] for reading and writing the contents of the file.
     ///

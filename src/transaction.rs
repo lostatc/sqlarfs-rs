@@ -4,10 +4,19 @@ use super::archive::Archive;
 use super::db::Store;
 use super::open::OpenOptions;
 
+/// The behavior of a SQLite transaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TransactionBehavior {
+    /// DEFERRED means that the transaction does not actually start until the database is first
+    /// accessed.
     Deferred,
+
+    /// IMMEDIATE cause the database connection to start a new write immediately, without waiting
+    /// for a writes statement.
     Immediate,
+
+    /// EXCLUSIVE prevents other database connections from reading the database while the
+    /// transaction is underway.
     Exclusive,
 }
 
@@ -49,8 +58,10 @@ impl Connection {
         Archive::new(Store::new(&self.conn))
     }
 
+    //
     // Opening a transaction must take a mutable receiver to ensure that the user can't open more
     // than one transaction at a time.
+    //
 
     pub fn transaction(&mut self) -> crate::Result<Transaction> {
         Ok(Transaction::new(
@@ -71,7 +82,7 @@ impl Connection {
 
     pub fn exec<T, E, F>(&mut self, f: F) -> Result<T, E>
     where
-        F: FnOnce(&Archive) -> Result<T, E>,
+        F: FnOnce(&mut Archive) -> Result<T, E>,
         E: From<crate::Error>,
     {
         self.transaction()?.exec(f)
@@ -79,7 +90,7 @@ impl Connection {
 
     pub fn exec_with<T, E, F>(&mut self, behavior: TransactionBehavior, f: F) -> Result<T, E>
     where
-        F: FnOnce(&Archive) -> Result<T, E>,
+        F: FnOnce(&mut Archive) -> Result<T, E>,
         E: From<crate::Error>,
     {
         self.transaction_with(behavior)?.exec(f)
@@ -105,12 +116,12 @@ impl<'a> Transaction<'a> {
     /// This calls the given function, passing the [`Archive`] holding this transaction. If the
     /// function returns `Ok`, this transaction is committed. If the function returns `Err`, this
     /// transaction is rolled back.
-    pub fn exec<T, E, F>(self, f: F) -> Result<T, E>
+    pub fn exec<T, E, F>(mut self, f: F) -> Result<T, E>
     where
-        F: FnOnce(&Archive) -> Result<T, E>,
+        F: FnOnce(&mut Archive) -> Result<T, E>,
         E: From<crate::Error>,
     {
-        let result = f(&self.archive)?;
+        let result = f(&mut self.archive)?;
 
         self.tx.commit().map_err(crate::Error::from)?;
 
@@ -122,6 +133,11 @@ impl<'a> Transaction<'a> {
         &self.archive
     }
 
+    /// Get a mutable reference to the [`Archive`] holding this transaction.
+    pub fn archive_mut(&'a mut self) -> &mut Archive {
+        &mut self.archive
+    }
+
     /// Roll back this transaction.
     pub fn rollback(self) -> crate::Result<()> {
         Ok(self.tx.rollback()?)
@@ -130,5 +146,17 @@ impl<'a> Transaction<'a> {
     /// Commit this transaction.
     pub fn commit(self) -> crate::Result<()> {
         Ok(self.tx.commit()?)
+    }
+}
+
+impl<'a> AsRef<Archive<'a>> for Transaction<'a> {
+    fn as_ref(&self) -> &Archive<'a> {
+        &self.archive
+    }
+}
+
+impl<'a> AsMut<Archive<'a>> for Transaction<'a> {
+    fn as_mut(&mut self) -> &mut Archive<'a> {
+        &mut self.archive
     }
 }

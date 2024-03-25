@@ -20,7 +20,10 @@ impl<'a> Archive<'a> {
     /// handle to a file that may or may not exist.
     ///
     /// See [`File::exists`] to check if the file actually exists in the database.
-    pub fn open<P: AsRef<Path>>(&self, path: P) -> File<'_> {
+    pub fn open<P: AsRef<Path>>(&mut self, path: P) -> File<'_> {
+        // Opening a file must take a mutable receiver to ensure that the user can't get two
+        // handles to the same file. Otherwise they could do things like open the blob twice or
+        // edit the row while the blob is open.
         File::new(path.as_ref().to_path_buf(), &self.store)
     }
 }

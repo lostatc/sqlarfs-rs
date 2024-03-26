@@ -1,9 +1,9 @@
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use super::db::Store;
 use super::metadata::FileMode;
 use super::seekable::SeekableFile;
+use super::store::Store;
 use super::stream::{FileReader, FileWriter};
 
 /// A file in a SQL archive.

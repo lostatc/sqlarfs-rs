@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use super::db::Store;
 use super::file::File;
+use super::store::Store;
 
 /// A SQLite archive file.
 #[derive(Debug)]

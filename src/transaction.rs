@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use super::archive::Archive;
-use super::db::Store;
 use super::open::OpenOptions;
+use super::store::Store;
 
 /// The behavior of a SQLite transaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

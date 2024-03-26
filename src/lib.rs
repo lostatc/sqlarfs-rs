@@ -1,10 +1,10 @@
 mod archive;
-mod db;
 mod error;
 mod file;
 mod metadata;
 mod open;
 mod seekable;
+mod store;
 mod stream;
 mod transaction;
 

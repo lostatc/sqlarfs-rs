@@ -29,11 +29,11 @@ use super::stream::{FileReader, FileWriter};
 #[derive(Debug)]
 pub struct File<'a> {
     path: PathBuf,
-    store: &'a Store<'a>,
+    store: Store<'a>,
 }
 
 impl<'a> File<'a> {
-    pub(super) fn new(path: PathBuf, store: &'a Store<'a>) -> Self {
+    pub(super) fn new(path: PathBuf, store: Store<'a>) -> Self {
         Self { path, store }
     }
 

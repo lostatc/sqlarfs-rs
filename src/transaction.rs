@@ -2,7 +2,6 @@ use std::path::Path;
 
 use super::archive::Archive;
 use super::open::OpenOptions;
-use super::store::Store;
 
 /// The behavior of a SQLite transaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -54,20 +53,8 @@ impl Connection {
         OpenOptions::new().open_in_memory()
     }
 
-    fn archive(&self) -> Archive {
-        Archive::new(Store::new(&self.conn))
-    }
-
-    //
-    // Opening a transaction must take a mutable receiver to ensure that the user can't open more
-    // than one transaction at a time.
-    //
-
     pub fn transaction(&mut self) -> crate::Result<Transaction> {
-        Ok(Transaction::new(
-            self.archive(),
-            self.conn.unchecked_transaction()?,
-        ))
+        Ok(Transaction::new(self.conn.transaction()?))
     }
 
     pub fn transaction_with(
@@ -75,8 +62,7 @@ impl Connection {
         behavior: TransactionBehavior,
     ) -> crate::Result<Transaction> {
         Ok(Transaction::new(
-            self.archive(),
-            rusqlite::Transaction::new_unchecked(&self.conn, behavior.inner())?,
+            self.conn.transaction_with_behavior(behavior.inner())?,
         ))
     }
 
@@ -103,12 +89,13 @@ impl Connection {
 #[derive(Debug)]
 pub struct Transaction<'a> {
     archive: Archive<'a>,
-    tx: rusqlite::Transaction<'a>,
 }
 
 impl<'a> Transaction<'a> {
-    pub(super) fn new(archive: Archive<'a>, tx: rusqlite::Transaction<'a>) -> Self {
-        Self { archive, tx }
+    pub(super) fn new(tx: rusqlite::Transaction<'a>) -> Self {
+        Self {
+            archive: Archive::new(tx),
+        }
     }
 
     /// Execute this transaction.
@@ -123,13 +110,16 @@ impl<'a> Transaction<'a> {
     {
         let result = f(&mut self.archive)?;
 
-        self.tx.commit().map_err(crate::Error::from)?;
+        self.archive
+            .into_tx()
+            .commit()
+            .map_err(crate::Error::from)?;
 
         Ok(result)
     }
 
     /// Get a reference to the [`Archive`] holding this transaction.
-    pub fn archive(&self) -> &Archive {
+    pub fn archive(&'a self) -> &Archive {
         &self.archive
     }
 
@@ -140,23 +130,11 @@ impl<'a> Transaction<'a> {
 
     /// Roll back this transaction.
     pub fn rollback(self) -> crate::Result<()> {
-        Ok(self.tx.rollback()?)
+        Ok(self.archive.into_tx().rollback()?)
     }
 
     /// Commit this transaction.
     pub fn commit(self) -> crate::Result<()> {
-        Ok(self.tx.commit()?)
-    }
-}
-
-impl<'a> AsRef<Archive<'a>> for Transaction<'a> {
-    fn as_ref(&self) -> &Archive<'a> {
-        &self.archive
-    }
-}
-
-impl<'a> AsMut<Archive<'a>> for Transaction<'a> {
-    fn as_mut(&mut self) -> &mut Archive<'a> {
-        &mut self.archive
+        Ok(self.archive.into_tx().commit()?)
     }
 }

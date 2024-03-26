@@ -54,10 +54,26 @@ impl<'a> File<'a> {
 
     /// Returns whether this file actually exists in the database.
     ///
-    /// ⚠️ Unless you have an exclusive lock on the database, the file may be deleted between when
-    /// you call this method and when you act on its result!
+    /// Unless you have an exclusive lock on the database, the file may be deleted between when you
+    /// call this method and when you act on its result! If you need the file to exist, consider
+    /// calling [`File::create`] and handling the potential [`Error::AlreadyExists`].
+    ///
+    /// [`Error::AlreadyExists`]: crate::Error::AlreadyExists
     pub fn exists(&self) -> crate::Result<bool> {
         todo!()
+    }
+
+    /// Create this file if it doesn't already exist.
+    ///
+    /// This accepts the initial [`FileMode`] of the file and sets the mtime to now.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::AlreadyExists`]: This file already exists in the archive.
+    ///
+    /// [`Error::AlreadyExists`]: crate::Error::AlreadyExists
+    pub fn create(&mut self, mode: FileMode) -> crate::Result<()> {
+        self.store.create_file(&self.path, mode, SystemTime::now())
     }
 
     /// The file mode.
@@ -121,30 +137,58 @@ impl<'a> File<'a> {
     /// A [`SeekableFile`] implements [`Read`], [`Write`], and [`Seek`] for reading and writing the
     /// data in the file.
     ///
-    /// You can only convert an uncompressed file into a [`SeekableFile`]. If the file is
-    /// compressed, this returns [`Error::NotSeekable`]. For compressed files, you can use
-    /// [`File::reader`] and [`File::writer`] instead.
+    /// You can only convert an uncompressed file into a [`SeekableFile`]. For compressed files,
+    /// you can use [`File::reader`] and [`File::writer`] instead.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::NotSeekable`]: This file is compressed.
+    /// - [`Error::NotFound`]: This file does not exist.
     ///
     /// [`Read`]: std::io::Read
     /// [`Write`]: std::io::Write
     /// [`Seek`]: std::io::Seek
     /// [`Error::NotSeekable`]: crate::Error::NotSeekable
+    /// [`Error::NotFound`]: crate::Error::NotFound
     pub fn seekable(&'a mut self) -> crate::Result<SeekableFile<'a>> {
-        Ok(SeekableFile::new(self.store.open_blob(&self.path, false)?))
+        let file_blob = self.store.open_blob(&self.path, false)?;
+
+        if file_blob.is_compressed() {
+            return Err(crate::Error::NotSeekable);
+        }
+
+        Ok(SeekableFile::new(file_blob.into_blob()))
     }
 
     /// Get a readable stream of the data in the file.
     ///
     /// This starts reading from the beginning of the file.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::NotFound`]: This file does not exist.
+    ///
+    /// [`Error::NotFound`]: crate::Error::NotFound
     pub fn reader(&'a mut self) -> crate::Result<FileReader<'a>> {
-        Ok(FileReader::new(self.store.open_blob(&self.path, false)?))
+        Ok(FileReader::new(
+            self.store.open_blob(&self.path, false)?.into_blob(),
+        ))
     }
 
     /// Get a writer for writing data to the file.
     ///
     /// This truncates the file and starts writing from the beginning of the file.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::NotFound`]: This file does not exist.
+    ///
+    /// [`Error::NotFound`]: crate::Error::NotFound
     pub fn writer(&'a mut self) -> crate::Result<FileWriter<'a>> {
         self.store.truncate_blob(&self.path)?;
-        Ok(FileWriter::new(self.store.open_blob(&self.path, false)?))
+
+        Ok(FileWriter::new(
+            self.store.open_blob(&self.path, false)?.into_blob(),
+        ))
     }
 }

@@ -7,6 +7,7 @@ mod seekable;
 mod store;
 mod stream;
 mod transaction;
+mod util;
 
 pub use archive::Archive;
 pub use error::{Error, Result, SqliteError};

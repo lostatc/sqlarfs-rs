@@ -42,6 +42,10 @@ pub enum Error {
     #[error("A resource was not found.")]
     NotFound,
 
+    /// Some arguments were invalid.
+    #[error("Some arguments were invalid.")]
+    InvalidArgs,
+
     /// A file is not seekable because it's compressed.
     #[error("This file is compressed and therefore not seekable.")]
     NotSeekable,
@@ -89,6 +93,7 @@ impl From<Error> for io::Error {
         let kind = match err {
             Error::AlreadyExists => io::ErrorKind::AlreadyExists,
             Error::NotFound => io::ErrorKind::NotFound,
+            Error::InvalidArgs => io::ErrorKind::InvalidInput,
             // When it's stable, we can use `io::ErrorKind::NotSeekable`.
             // https://doc.rust-lang.org/std/io/enum.ErrorKind.html#variant.NotSeekable
             Error::NotSeekable => io::ErrorKind::Other,

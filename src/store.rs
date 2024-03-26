@@ -1,7 +1,13 @@
 use std::path::Path;
+use std::time::{self, SystemTime};
 
 use rusqlite::blob::Blob;
-use rusqlite::OptionalExtension;
+use rusqlite::{OptionalExtension, Savepoint};
+
+use super::metadata::FileMode;
+use super::util::u64_from_usize;
+
+const EMPTY_BLOB: &[u8] = &[];
 
 #[derive(Debug)]
 enum InnerTransaction<'a> {
@@ -9,6 +15,23 @@ enum InnerTransaction<'a> {
     Savepoint(rusqlite::Savepoint<'a>),
 }
 
+pub struct FileBlob<'a> {
+    blob: Blob<'a>,
+    original_size: u64,
+}
+
+impl<'a> FileBlob<'a> {
+    pub fn is_compressed(&self) -> bool {
+        u64_from_usize(self.blob.len()) != self.original_size
+    }
+
+    pub fn into_blob(self) -> Blob<'a> {
+        self.blob
+    }
+}
+
+// Methods on this type map 1:1 to SQL queries. rusqlite errors are handled and converted to
+// sqlarfs errors.
 #[derive(Debug)]
 pub struct Store<'a> {
     inner: InnerTransaction<'a>,
@@ -28,15 +51,19 @@ impl<'a> Store<'a> {
         }
     }
 
+    fn savepoint(&'a mut self) -> crate::Result<Savepoint<'a>> {
+        Ok(match &mut self.inner {
+            InnerTransaction::Transaction(transaction) => transaction.savepoint()?,
+            InnerTransaction::Savepoint(savepoint) => savepoint.savepoint()?,
+        })
+    }
+
     /// Execute the given function inside of a savepoint.
     pub fn exec<T, F>(&'a mut self, f: F) -> crate::Result<T>
     where
         F: FnOnce(&mut Store) -> crate::Result<T>,
     {
-        let savepoint = match &mut self.inner {
-            InnerTransaction::Transaction(transaction) => transaction.savepoint()?,
-            InnerTransaction::Savepoint(savepoint) => savepoint.savepoint()?,
-        };
+        let savepoint = self.savepoint()?;
 
         let mut store = Self {
             inner: InnerTransaction::Savepoint(savepoint),
@@ -52,34 +79,62 @@ impl<'a> Store<'a> {
         Ok(result)
     }
 
-    pub fn open_blob(&self, path: &Path, read_only: bool) -> crate::Result<Blob> {
+    pub fn create_file(
+        &mut self,
+        path: &Path,
+        mode: FileMode,
+        mtime: SystemTime,
+    ) -> crate::Result<()> {
+        let unix_mtime = mtime
+            .duration_since(time::UNIX_EPOCH)
+            .map_err(|_| crate::Error::InvalidArgs)?
+            .as_secs();
+
+        let result = self.tx().execute(
+            "INSERT INTO sqlar (path, mode, mtime, sz, data) VALUES (?1, ?2, ?3, 0, ?4)",
+            (path.to_string_lossy(), mode.bits(), unix_mtime, EMPTY_BLOB),
+        );
+
+        match result {
+            Ok(_) => Ok(()),
+            Err(err)
+                if err.sqlite_error_code() == Some(rusqlite::ErrorCode::ConstraintViolation) =>
+            {
+                Err(crate::Error::AlreadyExists)
+            }
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    pub fn open_blob(&self, path: &Path, read_only: bool) -> crate::Result<FileBlob> {
         let row = self
             .tx()
             .query_row(
-                "SELECT rowid FROM sqlar WHERE path = ?1;",
+                "SELECT rowid, sz FROM sqlar WHERE path = ?1;",
                 (path.to_string_lossy(),),
-                |row| row.get(0),
+                |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .optional()?;
 
         match row {
-            Some(row_id) => Ok(self.tx().blob_open(
-                rusqlite::DatabaseName::Main,
-                "sqlar",
-                "data",
-                row_id,
-                read_only,
-            )?),
+            Some((row_id, original_size)) => Ok(FileBlob {
+                blob: self.tx().blob_open(
+                    rusqlite::DatabaseName::Main,
+                    "sqlar",
+                    "data",
+                    row_id,
+                    read_only,
+                )?,
+                original_size,
+            }),
             None => Err(crate::Error::NotFound),
         }
     }
 
     pub fn truncate_blob(&self, path: &Path) -> crate::Result<()> {
-        let empty_buf: &[u8] = &[];
-
         let num_updated = self.tx().execute(
             "UPDATE sqlar SET data = ?1 WHERE path = ?2",
-            (empty_buf, path.to_string_lossy()),
+            (EMPTY_BLOB, path.to_string_lossy()),
         )?;
 
         if num_updated == 0 {

@@ -73,4 +73,19 @@ impl<'a> Store<'a> {
             None => Err(crate::Error::NotFound),
         }
     }
+
+    pub fn truncate_blob(&self, path: &Path) -> crate::Result<()> {
+        let empty_buf: &[u8] = &[];
+
+        let num_updated = self.tx().execute(
+            "UPDATE sqlar SET data = ?1 WHERE path = ?2",
+            (empty_buf, path.to_string_lossy()),
+        )?;
+
+        if num_updated == 0 {
+            return Err(crate::Error::NotFound);
+        }
+
+        Ok(())
+    }
 }

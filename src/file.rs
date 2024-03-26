@@ -41,7 +41,7 @@ impl<'a> File<'a> {
     // Some operations, like setting the mode and mtime, don't strictly need to take a mutable
     // receiver. We make them take a mutable receiver anyways because:
     //
-    // 1. The fact that we can implement this without mutable internal state as an implementation
+    // 1. The fact that we can implement this without mutable internal state is an implementation
     //    detail we don't need to expose.
     // 2. It gives users the option to have a read-only view of a file in a sqlar archive, which
     //    could be useful for maintaining certain invariants.
@@ -96,11 +96,9 @@ impl<'a> File<'a> {
 
     /// Truncate this file to zero bytes.
     ///
-    /// This moves the seek position back to the beginning of the file.
-    ///
     /// If the file is seekable (not compressed), you can also use [`File::set_len`].
     pub fn truncate(&mut self) -> crate::Result<()> {
-        todo!()
+        self.store.truncate_blob(&self.path)
     }
 
     /// Truncate or extend the file to the given `len`.
@@ -108,9 +106,6 @@ impl<'a> File<'a> {
     /// If the given `len` is greater than the current size of the file, the file will be extended
     /// to `len` and the intermediate space will be filled with null bytes. This **does not**
     /// create a sparse hole in the file, as sqlar archives do not support sparse files.
-    ///
-    /// If `len` is less than the current size of the file and the seek position is past the point
-    /// which the file is truncated to, it is moved to the new end of the file.
     pub fn set_len(&mut self, _len: u64) -> crate::Result<()> {
         todo!()
     }
@@ -149,7 +144,7 @@ impl<'a> File<'a> {
     ///
     /// This truncates the file and starts writing from the beginning of the file.
     pub fn writer(&'a mut self) -> crate::Result<FileWriter<'a>> {
-        // TODO: Truncate the file first.
+        self.store.truncate_blob(&self.path)?;
         Ok(FileWriter::new(self.store.open_blob(&self.path, false)?))
     }
 }

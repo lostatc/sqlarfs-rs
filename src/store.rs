@@ -89,6 +89,23 @@ impl<'conn> Store<'conn> {
         Ok(result)
     }
 
+    pub fn create_table(&self) -> crate::Result<()> {
+        self.tx().execute(
+            "
+            CREATE TABLE IF NOT EXISTS sqlar(
+                name TEXT PRIMARY KEY,
+                mode INT,
+                mtime INT,
+                sz INT,
+                data BLOB
+            );
+            ",
+            (),
+        )?;
+
+        Ok(())
+    }
+
     pub fn create_file(&self, path: &Path, mode: FileMode, mtime: SystemTime) -> crate::Result<()> {
         let unix_mtime = mtime
             .duration_since(time::UNIX_EPOCH)
@@ -96,7 +113,7 @@ impl<'conn> Store<'conn> {
             .as_secs();
 
         let result = self.tx().execute(
-            "INSERT INTO sqlar (path, mode, mtime, sz, data) VALUES (?1, ?2, ?3, 0, ?4)",
+            "INSERT INTO sqlar (name, mode, mtime, sz, data) VALUES (?1, ?2, ?3, 0, ?4)",
             (path.to_string_lossy(), mode.bits(), unix_mtime, EMPTY_BLOB),
         );
 
@@ -115,7 +132,7 @@ impl<'conn> Store<'conn> {
         let row = self
             .tx()
             .query_row(
-                "SELECT rowid, sz FROM sqlar WHERE path = ?1;",
+                "SELECT rowid, sz FROM sqlar WHERE name = ?1;",
                 (path.to_string_lossy(),),
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )
@@ -138,7 +155,7 @@ impl<'conn> Store<'conn> {
 
     pub fn truncate_blob(&self, path: &Path) -> crate::Result<()> {
         let num_updated = self.tx().execute(
-            "UPDATE sqlar SET data = ?1 WHERE path = ?2",
+            "UPDATE sqlar SET data = ?1 WHERE name = ?2",
             (EMPTY_BLOB, path.to_string_lossy()),
         )?;
 

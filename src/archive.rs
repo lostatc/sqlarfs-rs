@@ -20,6 +20,11 @@ impl<'conn> Archive<'conn> {
         self.store.into_tx()
     }
 
+    /// Create the `sqlar` table in the database if it doesn't already exist.
+    pub fn init(&mut self) -> crate::Result<()> {
+        self.store.create_table()
+    }
+
     /// Create a handle to the file at the given `path`.
     ///
     /// This doesn't guarantee that the file actually exists in the database; it only returns a

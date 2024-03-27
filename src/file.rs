@@ -27,13 +27,13 @@ use super::stream::{FileReader, FileWriter};
 /// [`Seek`]: std::io::Seek
 /// [`Error::BlobExpired`]: crate::Error::BlobExpired
 #[derive(Debug)]
-pub struct File<'a> {
+pub struct File<'conn, 'a> {
     path: PathBuf,
-    store: Store<'a>,
+    store: &'a mut Store<'conn>,
 }
 
-impl<'a> File<'a> {
-    pub(super) fn new(path: PathBuf, store: Store<'a>) -> Self {
+impl<'conn, 'a> File<'conn, 'a> {
+    pub(super) fn new(path: PathBuf, store: &'a mut Store<'conn>) -> Self {
         Self { path, store }
     }
 
@@ -150,7 +150,7 @@ impl<'a> File<'a> {
     /// [`Seek`]: std::io::Seek
     /// [`Error::NotSeekable`]: crate::Error::NotSeekable
     /// [`Error::NotFound`]: crate::Error::NotFound
-    pub fn seekable(&'a mut self) -> crate::Result<SeekableFile<'a>> {
+    pub fn seekable(&mut self) -> crate::Result<SeekableFile> {
         let file_blob = self.store.open_blob(&self.path, false)?;
 
         if file_blob.is_compressed() {
@@ -169,7 +169,7 @@ impl<'a> File<'a> {
     /// - [`Error::NotFound`]: This file does not exist.
     ///
     /// [`Error::NotFound`]: crate::Error::NotFound
-    pub fn reader(&'a mut self) -> crate::Result<FileReader<'a>> {
+    pub fn reader(&mut self) -> crate::Result<FileReader> {
         Ok(FileReader::new(
             self.store.open_blob(&self.path, false)?.into_blob(),
         ))
@@ -184,7 +184,7 @@ impl<'a> File<'a> {
     /// - [`Error::NotFound`]: This file does not exist.
     ///
     /// [`Error::NotFound`]: crate::Error::NotFound
-    pub fn writer(&'a mut self) -> crate::Result<FileWriter<'a>> {
+    pub fn writer(&mut self) -> crate::Result<FileWriter> {
         self.store.truncate_blob(&self.path)?;
 
         Ok(FileWriter::new(

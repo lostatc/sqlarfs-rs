@@ -10,22 +10,22 @@ use super::util::u64_from_usize;
 const EMPTY_BLOB: &[u8] = &[];
 
 #[derive(Debug)]
-enum InnerTransaction<'a> {
-    Transaction(&'a mut rusqlite::Transaction<'a>),
-    Savepoint(rusqlite::Savepoint<'a>),
+enum InnerTransaction<'conn> {
+    Transaction(rusqlite::Transaction<'conn>),
+    Savepoint(rusqlite::Savepoint<'conn>),
 }
 
-pub struct FileBlob<'a> {
-    blob: Blob<'a>,
+pub struct FileBlob<'conn> {
+    blob: Blob<'conn>,
     original_size: u64,
 }
 
-impl<'a> FileBlob<'a> {
+impl<'conn> FileBlob<'conn> {
     pub fn is_compressed(&self) -> bool {
         u64_from_usize(self.blob.len()) != self.original_size
     }
 
-    pub fn into_blob(self) -> Blob<'a> {
+    pub fn into_blob(self) -> Blob<'conn> {
         self.blob
     }
 }
@@ -33,14 +33,22 @@ impl<'a> FileBlob<'a> {
 // Methods on this type map 1:1 to SQL queries. rusqlite errors are handled and converted to
 // sqlarfs errors.
 #[derive(Debug)]
-pub struct Store<'a> {
-    inner: InnerTransaction<'a>,
+pub struct Store<'conn> {
+    inner: InnerTransaction<'conn>,
 }
 
-impl<'a> Store<'a> {
-    pub fn new(tx: &'a mut rusqlite::Transaction<'a>) -> Self {
+impl<'conn> Store<'conn> {
+    pub fn new(tx: rusqlite::Transaction<'conn>) -> Self {
         Self {
             inner: InnerTransaction::Transaction(tx),
+        }
+    }
+
+    pub fn into_tx(self) -> rusqlite::Transaction<'conn> {
+        match self.inner {
+            InnerTransaction::Transaction(tx) => tx,
+            // TODO: Document
+            InnerTransaction::Savepoint(_) => unreachable!(),
         }
     }
 
@@ -51,7 +59,7 @@ impl<'a> Store<'a> {
         }
     }
 
-    fn savepoint(&'a mut self) -> crate::Result<Savepoint<'a>> {
+    fn savepoint(&'conn mut self) -> crate::Result<Savepoint<'conn>> {
         Ok(match &mut self.inner {
             InnerTransaction::Transaction(transaction) => transaction.savepoint()?,
             InnerTransaction::Savepoint(savepoint) => savepoint.savepoint()?,
@@ -59,32 +67,29 @@ impl<'a> Store<'a> {
     }
 
     /// Execute the given function inside of a savepoint.
-    pub fn exec<T, F>(&'a mut self, f: F) -> crate::Result<T>
+    pub fn exec<T, F>(&'conn mut self, f: F) -> crate::Result<T>
     where
         F: FnOnce(&mut Store) -> crate::Result<T>,
     {
         let savepoint = self.savepoint()?;
 
-        let mut store = Self {
+        let mut store = Store {
             inner: InnerTransaction::Savepoint(savepoint),
         };
 
         let result = f(&mut store)?;
 
-        match store.inner {
-            InnerTransaction::Savepoint(savepoint) => savepoint.commit()?,
+        let savepoint = match store.inner {
+            InnerTransaction::Savepoint(savepoint) => savepoint,
             InnerTransaction::Transaction(_) => unreachable!(),
-        }
+        };
+
+        savepoint.commit()?;
 
         Ok(result)
     }
 
-    pub fn create_file(
-        &mut self,
-        path: &Path,
-        mode: FileMode,
-        mtime: SystemTime,
-    ) -> crate::Result<()> {
+    pub fn create_file(&self, path: &Path, mode: FileMode, mtime: SystemTime) -> crate::Result<()> {
         let unix_mtime = mtime
             .duration_since(time::UNIX_EPOCH)
             .map_err(|_| crate::Error::InvalidArgs)?

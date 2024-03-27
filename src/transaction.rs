@@ -87,12 +87,12 @@ impl Connection {
 ///
 /// If a `Transaction` is dropped without committing, the transaction is rolled back.
 #[derive(Debug)]
-pub struct Transaction<'a> {
-    archive: Archive<'a>,
+pub struct Transaction<'conn> {
+    archive: Archive<'conn>,
 }
 
-impl<'a> Transaction<'a> {
-    pub(super) fn new(tx: rusqlite::Transaction<'a>) -> Self {
+impl<'conn> Transaction<'conn> {
+    pub(super) fn new(tx: rusqlite::Transaction<'conn>) -> Self {
         Self {
             archive: Archive::new(tx),
         }
@@ -119,12 +119,12 @@ impl<'a> Transaction<'a> {
     }
 
     /// Get a reference to the [`Archive`] holding this transaction.
-    pub fn archive(&'a self) -> &Archive {
+    pub fn archive(&self) -> &Archive<'conn> {
         &self.archive
     }
 
     /// Get a mutable reference to the [`Archive`] holding this transaction.
-    pub fn archive_mut(&'a mut self) -> &mut Archive {
+    pub fn archive_mut<'a>(&'a mut self) -> &'a mut Archive<'conn> {
         &mut self.archive
     }
 

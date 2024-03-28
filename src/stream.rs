@@ -1,9 +1,12 @@
 use std::fmt;
 use std::io::{self, Read};
 
+#[cfg(feature = "deflate")]
+use flate2::read::DeflateDecoder;
 use rusqlite::blob::Blob;
 
 use super::error::io_err_has_sqlite_code;
+use super::store::FileBlob;
 
 /// The compression method to use when writing to a [`File`].
 ///
@@ -27,10 +30,38 @@ pub enum Compression {
 
 impl Compression {
     /// Compression optimized for best speed of encoding.
+    #[cfg(feature = "deflate")]
     pub const FAST: Self = Self::Deflate { level: 1 };
 
     /// Compression optimized for minimum output size.
+    #[cfg(feature = "deflate")]
     pub const BEST: Self = Self::Deflate { level: 9 };
+}
+
+enum InnerReader<'a> {
+    #[cfg(feature = "deflate")]
+    Compressed(DeflateDecoder<Blob<'a>>),
+    Uncompressed(Blob<'a>),
+}
+
+impl<'a> fmt::Debug for InnerReader<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            #[cfg(feature = "deflate")]
+            Self::Compressed(_) => f.debug_tuple("Compressed").finish(),
+            Self::Uncompressed(_) => f.debug_tuple("Uncompressed").finish(),
+        }
+    }
+}
+
+impl<'a> Read for InnerReader<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self {
+            #[cfg(feature = "deflate")]
+            InnerReader::Compressed(reader) => reader.read(buf),
+            InnerReader::Uncompressed(reader) => reader.read(buf),
+        }
+    }
 }
 
 /// A readable stream of the data in a [`File`].
@@ -43,14 +74,10 @@ impl Compression {
 /// blob"](https://sqlite.org/c3ref/blob_open.html), and it will cause reads to return an
 /// [`Error::BlobExpired`].
 ///
-/// Attempting to read a compressed file will fail with [`Error::CompressionNotSupported`] if the
-/// `deflate` Cargo feature is disabled.
-///
 /// [`File`]: crate::File
 /// [`Error::BlobExpired`]: crate::BlobExpired
-/// [`Error::CompressionNotSupported`]: crate::CompressionNotSupported
 pub struct FileReader<'a> {
-    blob: Blob<'a>,
+    inner: InnerReader<'a>,
 }
 
 impl<'a> fmt::Debug for FileReader<'a> {
@@ -60,14 +87,26 @@ impl<'a> fmt::Debug for FileReader<'a> {
 }
 
 impl<'a> FileReader<'a> {
-    pub(super) fn new(blob: Blob<'a>) -> Self {
-        Self { blob }
+    pub(super) fn new(blob: FileBlob<'a>) -> crate::Result<Self> {
+        if blob.is_compressed() {
+            #[cfg(feature = "deflate")]
+            return Ok(Self {
+                inner: InnerReader::Compressed(DeflateDecoder::new(blob.into_blob())),
+            });
+
+            #[cfg(not(feature = "deflate"))]
+            return Err(crate::Error::CompressionNotSupported);
+        }
+
+        Ok(Self {
+            inner: InnerReader::Uncompressed(blob.into_blob()),
+        })
     }
 }
 
 impl<'a> Read for FileReader<'a> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.blob.read(buf).map_err(|err| {
+        self.inner.read(buf).map_err(|err| {
             if io_err_has_sqlite_code(&err, rusqlite::ffi::ErrorCode::OperationAborted) {
                 return crate::Error::BlobExpired.into();
             }

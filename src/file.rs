@@ -3,6 +3,9 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+#[cfg(feature = "deflate")]
+use flate2::write::DeflateEncoder;
+
 use super::metadata::FileMode;
 use super::store::Store;
 use super::stream::{Compression, FileReader};
@@ -186,12 +189,12 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// # Errors
     ///
     /// - [`Error::NotFound`]: This file does not exist.
+    /// - [`Error::CompressionNotSupported`]: This file is compressed, but the `deflate` Cargo
+    /// feature is disabled.
     ///
     /// [`Error::NotFound`]: crate::Error::NotFound
     pub fn reader(&mut self) -> crate::Result<FileReader> {
-        Ok(FileReader::new(
-            self.store.open_blob(&self.path, true)?.into_blob(),
-        ))
+        FileReader::new(self.store.open_blob(&self.path, true)?)
     }
 
     /// Copy the contents of the given `reader` into the file.
@@ -213,8 +216,16 @@ impl<'conn, 'a> File<'conn, 'a> {
 
             let mut blob = store.open_blob(&self.path, false)?.into_blob();
 
-            io::copy(&mut reader.take(len), &mut blob)?;
+            match self.compression {
+                Compression::None => io::copy(&mut reader.take(len), &mut blob),
+                #[cfg(feature = "deflate")]
+                Compression::Deflate { level } => io::copy(
+                    &mut reader.take(len),
+                    &mut DeflateEncoder::new(&mut blob, flate2::Compression::new(level)),
+                ),
+            }?;
 
+            #[cfg(not(feture = "deflate"))]
             store.set_size(&self.path, len)?;
 
             Ok(())

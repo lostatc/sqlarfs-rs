@@ -7,8 +7,6 @@ use rusqlite::{OptionalExtension, Savepoint};
 use super::metadata::FileMode;
 use super::util::u64_from_usize;
 
-const EMPTY_BLOB: &[u8] = &[];
-
 #[derive(Debug)]
 enum InnerTransaction<'conn> {
     Transaction(rusqlite::Transaction<'conn>),
@@ -59,7 +57,7 @@ impl<'conn> Store<'conn> {
         }
     }
 
-    fn savepoint(&'conn mut self) -> crate::Result<Savepoint<'conn>> {
+    fn savepoint(&mut self) -> crate::Result<Savepoint> {
         Ok(match &mut self.inner {
             InnerTransaction::Transaction(transaction) => transaction.savepoint()?,
             InnerTransaction::Savepoint(savepoint) => savepoint.savepoint()?,
@@ -67,7 +65,7 @@ impl<'conn> Store<'conn> {
     }
 
     /// Execute the given function inside of a savepoint.
-    pub fn exec<T, F>(&'conn mut self, f: F) -> crate::Result<T>
+    pub fn exec<T, F>(&mut self, f: F) -> crate::Result<T>
     where
         F: FnOnce(&mut Store) -> crate::Result<T>,
     {
@@ -113,8 +111,8 @@ impl<'conn> Store<'conn> {
             .as_secs();
 
         let result = self.tx().execute(
-            "INSERT INTO sqlar (name, mode, mtime, sz, data) VALUES (?1, ?2, ?3, 0, ?4)",
-            (path.to_string_lossy(), mode.bits(), unix_mtime, EMPTY_BLOB),
+            "INSERT INTO sqlar (name, mode, mtime, sz, data) VALUES (?1, ?2, ?3, 0, zeroblob(0))",
+            (path.to_string_lossy(), mode.bits(), unix_mtime),
         );
 
         match result {
@@ -153,10 +151,10 @@ impl<'conn> Store<'conn> {
         }
     }
 
-    pub fn truncate_blob(&self, path: &Path) -> crate::Result<()> {
+    pub fn truncate_blob(&self, path: &Path, len: u64) -> crate::Result<()> {
         let num_updated = self.tx().execute(
-            "UPDATE sqlar SET data = ?1 WHERE name = ?2",
-            (EMPTY_BLOB, path.to_string_lossy()),
+            "UPDATE sqlar SET data = zeroblob(?1) WHERE name = ?2",
+            (len, path.to_string_lossy()),
         )?;
 
         if num_updated == 0 {

@@ -21,6 +21,8 @@ impl<'conn> Archive<'conn> {
     }
 
     /// Create the `sqlar` table in the database if it doesn't already exist.
+    ///
+    /// You only need to do this once per database. This does not fail if the table already exists.
     pub fn init(&mut self) -> crate::Result<()> {
         self.store.create_table()
     }

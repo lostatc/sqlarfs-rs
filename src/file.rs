@@ -1,21 +1,14 @@
+use std::fs;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use super::metadata::FileMode;
-use super::seekable::SeekableFile;
 use super::store::Store;
 use super::stream::{FileReader, FileWriter};
+use super::util::u64_from_usize;
 
 /// A file in a SQL archive.
-///
-///
-/// If the file is uncompressed, you can get a [`SeekableFile`] with [`File::seekable`].
-/// [`SeekableFile`] implements [`Read`], [`Write`], and [`Seek`].
-///
-/// If the file is compressed, your options are:
-///
-/// - Start reading the file from the beginning using [`File::reader`].
-/// - Truncate the file and start writing using [`File::writer`].
 ///
 /// Unless you have an exclusive lock on the database, it may be possible for other writers to
 /// modify the file in the database out from under you. SQLite calls this situation an ["expired
@@ -52,7 +45,7 @@ impl<'conn, 'a> File<'conn, 'a> {
         &self.path
     }
 
-    /// Returns whether this file actually exists in the database.
+    /// Returns whether the file actually exists in the database.
     ///
     /// Unless you have an exclusive lock on the database, the file may be deleted between when you
     /// call this method and when you act on its result! If you need the file to exist, consider
@@ -63,7 +56,7 @@ impl<'conn, 'a> File<'conn, 'a> {
         todo!()
     }
 
-    /// Create this file if it doesn't already exist.
+    /// Create the file if it doesn't already exist.
     ///
     /// This accepts the initial [`FileMode`] of the file and sets the mtime to now.
     ///
@@ -77,11 +70,23 @@ impl<'conn, 'a> File<'conn, 'a> {
     }
 
     /// The file mode.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::NotFound`]: This file does not exist.
+    ///
+    /// [`Error::NotFound`]: crate::Error::NotFound
     pub fn mode(&self) -> crate::Result<FileMode> {
         todo!()
     }
 
     /// Set the file mode.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::NotFound`]: This file does not exist.
+    ///
+    /// [`Error::NotFound`]: crate::Error::NotFound
     pub fn set_mode(&mut self, _mode: FileMode) -> crate::Result<()> {
         todo!()
     }
@@ -89,6 +94,12 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// The time the file was last modified.
     ///
     /// This value has second precision.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::NotFound`]: This file does not exist.
+    ///
+    /// [`Error::NotFound`]: crate::Error::NotFound
     pub fn mtime(&self) -> crate::Result<SystemTime> {
         todo!()
     }
@@ -96,73 +107,58 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// Set the time the file was last modified.
     ///
     /// This rounds to the nearest second.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::NotFound`]: This file does not exist.
+    ///
+    /// [`Error::NotFound`]: crate::Error::NotFound
     pub fn set_mtime(&mut self, _mtime: SystemTime) -> crate::Result<()> {
         todo!()
     }
 
     /// The uncompressed size of the file.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::NotFound`]: This file does not exist.
+    ///
+    /// [`Error::NotFound`]: crate::Error::NotFound
     pub fn len(&self) -> crate::Result<u64> {
         todo!()
     }
 
     /// Whether the file is empty.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::NotFound`]: This file does not exist.
+    ///
+    /// [`Error::NotFound`]: crate::Error::NotFound
     pub fn is_empty(&self) -> crate::Result<bool> {
         Ok(self.len()? == 0)
     }
 
-    /// Truncate this file to zero bytes.
-    ///
-    /// If the file is seekable (not compressed), you can also use [`File::set_len`].
-    pub fn truncate(&mut self) -> crate::Result<()> {
-        self.store.truncate_blob(&self.path)
-    }
-
-    /// Truncate or extend the file to the given `len`.
-    ///
-    /// If the given `len` is greater than the current size of the file, the file will be extended
-    /// to `len` and the intermediate space will be filled with null bytes. This **does not**
-    /// create a sparse hole in the file, as sqlar archives do not support sparse files.
-    pub fn set_len(&mut self, _len: u64) -> crate::Result<()> {
-        todo!()
-    }
-
-    //
-    // Opening a seekable file, reader, or writer must take a mutable receiver to ensure that the
-    // user can't edit the row (e.g. mode or mtime) while the blob is open. This would generate an
-    // expired blob error.
-    //
-
-    /// Get a [`SeekableFile`] for reading and writing the contents of the file.
-    ///
-    /// A [`SeekableFile`] implements [`Read`], [`Write`], and [`Seek`] for reading and writing the
-    /// data in the file.
-    ///
-    /// You can only convert an uncompressed file into a [`SeekableFile`]. For compressed files,
-    /// you can use [`File::reader`] and [`File::writer`] instead.
+    /// Truncate the file to zero bytes.
     ///
     /// # Errors
     ///
-    /// - [`Error::NotSeekable`]: This file is compressed.
     /// - [`Error::NotFound`]: This file does not exist.
     ///
-    /// [`Read`]: std::io::Read
-    /// [`Write`]: std::io::Write
-    /// [`Seek`]: std::io::Seek
-    /// [`Error::NotSeekable`]: crate::Error::NotSeekable
     /// [`Error::NotFound`]: crate::Error::NotFound
-    pub fn seekable(&mut self) -> crate::Result<SeekableFile> {
-        let file_blob = self.store.open_blob(&self.path, false)?;
-
-        if file_blob.is_compressed() {
-            return Err(crate::Error::NotSeekable);
-        }
-
-        Ok(SeekableFile::new(file_blob.into_blob()))
+    pub fn truncate(&mut self) -> crate::Result<()> {
+        self.store.truncate_blob(&self.path, 0)
     }
+
+    //
+    // Opening a reader or writer must take a mutable receiver to ensure that the user can't edit
+    // the row (e.g. mode or mtime) while the blob is open. This would generate an expired blob
+    // error.
+    //
 
     /// Get a readable stream of the data in the file.
     ///
-    /// This starts reading from the beginning of the file.
+    /// This starts reading from the beginning of the file an does not support seeking.
     ///
     /// # Errors
     ///
@@ -179,16 +175,100 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// This truncates the file and starts writing from the beginning of the file.
     ///
+    /// This accepts the expected `len` of the file, which is the number of bytes that will be
+    /// allocated in the database for it. If you end up writing fewer than `len` bytes, the
+    /// remainder of the file will be filled with null bytes. This means that you generally only
+    /// want to write to a file when you know the size of the input ahead of time.
+    ///
+    /// See these methods as well:
+    ///
+    /// - [`File::write_bytes`]
+    /// - [`File::write_str`]
+    /// - [`File::write_file`]
+    ///
     /// # Errors
     ///
     /// - [`Error::NotFound`]: This file does not exist.
     ///
     /// [`Error::NotFound`]: crate::Error::NotFound
-    pub fn writer(&mut self) -> crate::Result<FileWriter> {
-        self.store.truncate_blob(&self.path)?;
+    pub fn writer(&mut self, len: u64) -> crate::Result<FileWriter> {
+        self.store.truncate_blob(&self.path, len)?;
 
         Ok(FileWriter::new(
             self.store.open_blob(&self.path, false)?.into_blob(),
         ))
+    }
+
+    /// Overwrite the file with the given bytes.
+    ///
+    /// This truncates the file and writes all of the given bytes to it.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::NotFound`]: This file does not exist.
+    ///
+    /// [`Error::NotFound`]: crate::Error::NotFound
+    pub fn write_bytes(&mut self, bytes: &[u8]) -> crate::Result<()> {
+        self.store.exec(|store| {
+            store.truncate_blob(&self.path, u64_from_usize(bytes.len()))?;
+
+            let mut blob = store.open_blob(&self.path, false)?.into_blob();
+
+            blob.write_all(bytes)?;
+
+            Ok(())
+        })?;
+
+        Ok(())
+    }
+
+    /// Overwrite the file with the given string.
+    ///
+    /// This truncates the file and writes the entire string to it.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::NotFound`]: This file does not exist.
+    ///
+    /// [`Error::NotFound`]: crate::Error::NotFound
+    pub fn write_str<S: AsRef<str>>(&mut self, s: S) -> crate::Result<()> {
+        self.store.exec(|store| {
+            let bytes = s.as_ref().as_bytes();
+
+            store.truncate_blob(&self.path, u64_from_usize(bytes.len()))?;
+
+            let mut blob = store.open_blob(&self.path, false)?.into_blob();
+
+            blob.write_all(bytes)?;
+
+            Ok(())
+        })?;
+
+        Ok(())
+    }
+
+    /// Copy the given `file` from the filesystem into this file.
+    ///
+    /// This truncates this file and writes the entire contents of the given `file` to it.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::NotFound`]: This file does not exist.
+    ///
+    /// [`Error::NotFound`]: crate::Error::NotFound
+    pub fn write_file(&mut self, file: &mut fs::File) -> crate::Result<()> {
+        self.store.exec(|store| {
+            let metadata = file.metadata()?;
+
+            store.truncate_blob(&self.path, metadata.len())?;
+
+            let mut blob = store.open_blob(&self.path, false)?.into_blob();
+
+            io::copy(file, &mut blob)?;
+
+            Ok(())
+        })?;
+
+        Ok(())
     }
 }

@@ -46,9 +46,9 @@ pub enum Error {
     #[error("Some arguments were invalid.")]
     InvalidArgs,
 
-    /// A file is not seekable because it's compressed.
-    #[error("This file is compressed and therefore not seekable.")]
-    NotSeekable,
+    /// Attempted to read a compressed file, but the `deflate` Cargo feature was disabled.
+    #[error("Attempted to read a compressed file, but the `deflate` Cargo feature was disabled.")]
+    CompressionNotSupported,
 
     /// A file was modified in the database while you were trying to read or write to it.
     ///
@@ -94,9 +94,7 @@ impl From<Error> for io::Error {
             Error::AlreadyExists => io::ErrorKind::AlreadyExists,
             Error::NotFound => io::ErrorKind::NotFound,
             Error::InvalidArgs => io::ErrorKind::InvalidInput,
-            // When it's stable, we can use `io::ErrorKind::NotSeekable`.
-            // https://doc.rust-lang.org/std/io/enum.ErrorKind.html#variant.NotSeekable
-            Error::NotSeekable => io::ErrorKind::Other,
+            Error::CompressionNotSupported => io::ErrorKind::InvalidInput,
             Error::BlobExpired => io::ErrorKind::Other,
             Error::ReadOnly => io::ErrorKind::Other,
             Error::Sqlite(_) => io::ErrorKind::Other,

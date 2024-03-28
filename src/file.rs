@@ -5,7 +5,7 @@ use std::time::SystemTime;
 
 use super::metadata::FileMode;
 use super::store::Store;
-use super::stream::{FileReader, FileWriter};
+use super::stream::{Compression, FileReader, FileWriter};
 use super::util::u64_from_usize;
 
 /// A file in a SQL archive.
@@ -15,19 +15,34 @@ use super::util::u64_from_usize;
 /// blob"](https://sqlite.org/c3ref/blob_open.html), and it will cause reads and writes to return
 /// an [`Error::BlobExpired`].
 ///
+/// Writes to a [`File`] can optionally be compressed with DEFLATE. You can change the compression
+/// method (compressed or uncompressed) via [`File::set_compression`]. The default is to compress
+/// writes if and only if the `deflate` Cargo feature is enabled. The selected compression method
+/// does not affect the ability to read compressed files, but attempting to read a compressed file
+/// will fail with [`Error::CompressionNotSupported`].
+///
 /// [`Read`]: std::io::Read
 /// [`Write`]: std::io::Write
 /// [`Seek`]: std::io::Seek
 /// [`Error::BlobExpired`]: crate::Error::BlobExpired
+/// [`Error::CompressionNotSupported`]: crate::Error::CompressionNotSupported
 #[derive(Debug)]
 pub struct File<'conn, 'a> {
     path: PathBuf,
+    compression: Compression,
     store: &'a mut Store<'conn>,
 }
 
 impl<'conn, 'a> File<'conn, 'a> {
     pub(super) fn new(path: PathBuf, store: &'a mut Store<'conn>) -> Self {
-        Self { path, store }
+        Self {
+            path,
+            store,
+            #[cfg(feature = "deflate")]
+            compression: Compression::FAST,
+            #[cfg(not(feature = "deflate"))]
+            compression: Compression::None,
+        }
     }
 
     //
@@ -67,6 +82,16 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// [`Error::AlreadyExists`]: crate::Error::AlreadyExists
     pub fn create(&mut self, mode: FileMode) -> crate::Result<()> {
         self.store.create_file(&self.path, mode, SystemTime::now())
+    }
+
+    /// The current compression method used when writing to the file.
+    pub fn compression(&mut self) -> Compression {
+        self.compression
+    }
+
+    /// Set the compression method used when writing to the file.
+    pub fn set_compression(&mut self, method: Compression) {
+        self.compression = method;
     }
 
     /// The file mode.
@@ -196,6 +221,7 @@ impl<'conn, 'a> File<'conn, 'a> {
 
         Ok(FileWriter::new(
             self.store.open_blob(&self.path, false)?.into_blob(),
+            self.compression,
         ))
     }
 

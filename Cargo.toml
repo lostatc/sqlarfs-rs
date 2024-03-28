@@ -5,5 +5,10 @@ edition = "2021"
 
 [dependencies]
 bitflags = "2.5.0"
+flate2 = { version = "1.0.28", optional = true }
 rusqlite = { version = "0.31.0", features = ["bundled", "blob"] }
 thiserror = "1.0.58"
+
+[features]
+default = ["deflate"]
+deflate = ["dep:flate2"]

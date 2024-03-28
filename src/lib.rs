@@ -13,5 +13,5 @@ pub use error::{Error, Result, SqliteError};
 pub use file::File;
 pub use metadata::FileMode;
 pub use open::OpenOptions;
-pub use stream::{FileReader, FileWriter};
+pub use stream::{Compression, FileReader, FileWriter};
 pub use transaction::{Connection, Transaction, TransactionBehavior};

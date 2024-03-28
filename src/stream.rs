@@ -1,5 +1,5 @@
 use std::fmt;
-use std::io::{self, Read, Write};
+use std::io::{self, Read};
 
 use rusqlite::blob::Blob;
 
@@ -66,51 +66,6 @@ impl<'a> FileReader<'a> {
 impl<'a> Read for FileReader<'a> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.blob.read(buf).map_err(|err| {
-            if io_err_has_sqlite_code(&err, rusqlite::ffi::ErrorCode::OperationAborted) {
-                return crate::Error::BlobExpired.into();
-            }
-
-            err
-        })
-    }
-}
-
-/// A writer for writing data to a [`File`].
-///
-/// This implements [`Write`] for writing data to a [`File`], and does not support seeking.
-///
-/// [`File`]: crate::File
-/// [`SeekableFile`]: crate::SeekableFile
-pub struct FileWriter<'a> {
-    blob: Blob<'a>,
-    compression: Compression,
-}
-
-impl<'a> fmt::Debug for FileWriter<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("FileWriter").finish_non_exhaustive()
-    }
-}
-
-impl<'a> FileWriter<'a> {
-    pub(super) fn new(blob: Blob<'a>, compression: Compression) -> Self {
-        Self { blob, compression }
-    }
-}
-
-impl<'a> Write for FileWriter<'a> {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.blob.write(buf).map_err(|err| {
-            if io_err_has_sqlite_code(&err, rusqlite::ffi::ErrorCode::OperationAborted) {
-                return crate::Error::BlobExpired.into();
-            }
-
-            err
-        })
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        self.blob.flush().map_err(|err| {
             if io_err_has_sqlite_code(&err, rusqlite::ffi::ErrorCode::OperationAborted) {
                 return crate::Error::BlobExpired.into();
             }

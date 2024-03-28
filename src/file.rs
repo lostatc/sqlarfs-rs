@@ -1,11 +1,11 @@
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use super::metadata::FileMode;
 use super::store::Store;
-use super::stream::{Compression, FileReader, FileWriter};
+use super::stream::{Compression, FileReader};
 use super::util::u64_from_usize;
 
 /// A file in a SQL archive.
@@ -176,9 +176,8 @@ impl<'conn, 'a> File<'conn, 'a> {
     }
 
     //
-    // Opening a reader or writer must take a mutable receiver to ensure that the user can't edit
-    // the row (e.g. mode or mtime) while the blob is open. This would generate an expired blob
-    // error.
+    // Opening a reader must take a mutable receiver to ensure that the user can't edit the row
+    // (e.g. mode or mtime) while the blob is open. This would generate an expired blob error.
     //
 
     /// Get a readable stream of the data in the file.
@@ -192,37 +191,35 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// [`Error::NotFound`]: crate::Error::NotFound
     pub fn reader(&mut self) -> crate::Result<FileReader> {
         Ok(FileReader::new(
-            self.store.open_blob(&self.path, false)?.into_blob(),
+            self.store.open_blob(&self.path, true)?.into_blob(),
         ))
     }
 
-    /// Get a writer for writing data to the file.
+    /// Copy the contents of the given `reader` into the file.
     ///
-    /// This truncates the file and starts writing from the beginning of the file.
+    /// This truncates the file and copies the entire `reader` into it.
     ///
-    /// This accepts the expected `len` of the file, which is the number of bytes that will be
-    /// allocated in the database for it. If you end up writing fewer than `len` bytes, the
-    /// remainder of the file will be filled with null bytes. This means that you generally only
-    /// want to write to a file when you know the size of the input ahead of time.
-    ///
-    /// See these methods as well:
-    ///
-    /// - [`File::write_bytes`]
-    /// - [`File::write_str`]
-    /// - [`File::write_file`]
+    /// This accepts the number of bytes `len` that will be read from the `reader` and written to
+    /// the file. You must know the number of bytes that will be written ahead of time because that
+    /// space needs to be allocated in the database.
     ///
     /// # Errors
     ///
     /// - [`Error::NotFound`]: This file does not exist.
     ///
     /// [`Error::NotFound`]: crate::Error::NotFound
-    pub fn writer(&mut self, len: u64) -> crate::Result<FileWriter> {
-        self.store.truncate_blob(&self.path, len)?;
+    pub fn write_from<R: Read>(&mut self, reader: R, len: u64) -> crate::Result<()> {
+        self.store.exec(|store| {
+            store.truncate_blob(&self.path, len)?;
 
-        Ok(FileWriter::new(
-            self.store.open_blob(&self.path, false)?.into_blob(),
-            self.compression,
-        ))
+            let mut blob = store.open_blob(&self.path, false)?.into_blob();
+
+            io::copy(&mut reader.take(len), &mut blob)?;
+
+            store.set_size(&self.path, len)?;
+
+            Ok(())
+        })
     }
 
     /// Overwrite the file with the given bytes.
@@ -235,17 +232,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// [`Error::NotFound`]: crate::Error::NotFound
     pub fn write_bytes(&mut self, bytes: &[u8]) -> crate::Result<()> {
-        self.store.exec(|store| {
-            store.truncate_blob(&self.path, u64_from_usize(bytes.len()))?;
-
-            let mut blob = store.open_blob(&self.path, false)?.into_blob();
-
-            blob.write_all(bytes)?;
-
-            Ok(())
-        })?;
-
-        Ok(())
+        self.write_from(bytes, u64_from_usize(bytes.len()))
     }
 
     /// Overwrite the file with the given string.
@@ -258,19 +245,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// [`Error::NotFound`]: crate::Error::NotFound
     pub fn write_str<S: AsRef<str>>(&mut self, s: S) -> crate::Result<()> {
-        self.store.exec(|store| {
-            let bytes = s.as_ref().as_bytes();
-
-            store.truncate_blob(&self.path, u64_from_usize(bytes.len()))?;
-
-            let mut blob = store.open_blob(&self.path, false)?.into_blob();
-
-            blob.write_all(bytes)?;
-
-            Ok(())
-        })?;
-
-        Ok(())
+        self.write_bytes(s.as_ref().as_bytes())
     }
 
     /// Copy the given `file` from the filesystem into this file.
@@ -283,18 +258,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// [`Error::NotFound`]: crate::Error::NotFound
     pub fn write_file(&mut self, file: &mut fs::File) -> crate::Result<()> {
-        self.store.exec(|store| {
-            let metadata = file.metadata()?;
-
-            store.truncate_blob(&self.path, metadata.len())?;
-
-            let mut blob = store.open_blob(&self.path, false)?.into_blob();
-
-            io::copy(file, &mut blob)?;
-
-            Ok(())
-        })?;
-
-        Ok(())
+        let metadata = file.metadata()?;
+        self.write_from(file, metadata.len())
     }
 }

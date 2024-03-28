@@ -163,4 +163,17 @@ impl<'conn> Store<'conn> {
 
         Ok(())
     }
+
+    pub fn set_size(&self, path: &Path, size: u64) -> crate::Result<()> {
+        let num_updated = self.tx().execute(
+            "UPDATE sqlar SET sz = ?1 WHERE name = ?2",
+            (size, path.to_string_lossy()),
+        )?;
+
+        if num_updated == 0 {
+            return Err(crate::Error::NotFound);
+        }
+
+        Ok(())
+    }
 }

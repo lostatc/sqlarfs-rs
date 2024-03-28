@@ -35,10 +35,12 @@ impl Compression {
 
 /// A readable stream of the data in a [`File`].
 ///
-/// This implements [`Read`] for reading a stream of data from a [`File`], and does not support
+/// This implements [`Read`] for reading a stream of data from a [`File`]. It does not support
 /// seeking.
 ///
-/// Attempting to read a file that has been modified out from under this reader will fail with
+/// Unless you have an exclusive lock on the database, it may be possible for other writers to
+/// modify the file in the database out from under you. SQLite calls this situation an ["expired
+/// blob"](https://sqlite.org/c3ref/blob_open.html), and it will cause reads to return an
 /// [`Error::BlobExpired`].
 ///
 /// Attempting to read a compressed file will fail with [`Error::CompressionNotSupported`] if the

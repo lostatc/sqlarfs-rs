@@ -10,21 +10,15 @@ use super::util::u64_from_usize;
 
 /// A file in a SQL archive.
 ///
-/// Unless you have an exclusive lock on the database, it may be possible for other writers to
-/// modify the file in the database out from under you. SQLite calls this situation an ["expired
-/// blob"](https://sqlite.org/c3ref/blob_open.html), and it will cause reads and writes to return
-/// an [`Error::BlobExpired`].
-///
 /// Writes to a [`File`] can optionally be compressed with DEFLATE. You can change the compression
 /// method (compressed or uncompressed) via [`File::set_compression`]. The default is to compress
 /// writes if and only if the `deflate` Cargo feature is enabled. The selected compression method
 /// does not affect the ability to read compressed files, but attempting to read a compressed file
-/// will fail with [`Error::CompressionNotSupported`].
+/// will fail with [`Error::CompressionNotSupported`] if the `deflate` feature is disabled.
 ///
 /// [`Read`]: std::io::Read
 /// [`Write`]: std::io::Write
 /// [`Seek`]: std::io::Seek
-/// [`Error::BlobExpired`]: crate::Error::BlobExpired
 /// [`Error::CompressionNotSupported`]: crate::Error::CompressionNotSupported
 #[derive(Debug)]
 pub struct File<'conn, 'a> {
@@ -172,7 +166,12 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// [`Error::NotFound`]: crate::Error::NotFound
     pub fn truncate(&mut self) -> crate::Result<()> {
-        self.store.truncate_blob(&self.path, 0)
+        self.store.exec(|store| {
+            store.truncate_blob(&self.path, 0)?;
+            store.set_size(&self.path, 0)?;
+
+            Ok(())
+        })
     }
 
     //
@@ -182,7 +181,7 @@ impl<'conn, 'a> File<'conn, 'a> {
 
     /// Get a readable stream of the data in the file.
     ///
-    /// This starts reading from the beginning of the file an does not support seeking.
+    /// This starts reading from the beginning of the file. It does not support seeking.
     ///
     /// # Errors
     ///

@@ -217,13 +217,19 @@ impl<'conn, 'a> File<'conn, 'a> {
             let mut blob = store.open_blob(&self.path, false)?.into_blob();
 
             match self.compression {
-                Compression::None => io::copy(&mut reader.take(len), &mut blob),
+                Compression::None => {
+                    io::copy(&mut reader.take(len), &mut blob)?;
+                }
                 #[cfg(feature = "deflate")]
-                Compression::Deflate { level } => io::copy(
-                    &mut reader.take(len),
-                    &mut DeflateEncoder::new(&mut blob, flate2::Compression::new(level)),
-                ),
-            }?;
+                Compression::Deflate { level } => {
+                    let mut encoder =
+                        DeflateEncoder::new(&mut blob, flate2::Compression::new(level));
+
+                    io::copy(&mut reader.take(len), &mut encoder)?;
+
+                    encoder.finish()?;
+                }
+            };
 
             #[cfg(not(feture = "deflate"))]
             store.set_size(&self.path, len)?;

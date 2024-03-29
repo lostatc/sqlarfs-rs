@@ -75,7 +75,7 @@ impl<'a> Read for InnerReader<'a> {
 /// [`Error::BlobExpired`].
 ///
 /// [`File`]: crate::File
-/// [`Error::BlobExpired`]: crate::BlobExpired
+/// [`Error::BlobExpired`]: crate::Error::BlobExpired
 pub struct FileReader<'a> {
     inner: InnerReader<'a>,
 }

@@ -1,10 +1,9 @@
-use std::fs;
-use std::io::{self, Read};
+use std::io::{self, Read, Seek};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 #[cfg(feature = "deflate")]
-use flate2::write::DeflateEncoder;
+use {flate2::write::ZlibEncoder, rand::prelude::*, rand::rngs::SmallRng};
 
 use super::metadata::FileMode;
 use super::store::Store;
@@ -78,7 +77,8 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// [`Error::AlreadyExists`]: crate::Error::AlreadyExists
     pub fn create(&mut self, mode: FileMode) -> crate::Result<()> {
-        self.store.create_file(&self.path, mode, SystemTime::now())
+        self.store
+            .create_file(&self.path, Some(mode), Some(SystemTime::now()))
     }
 
     /// The current compression method used when writing to the file.
@@ -170,7 +170,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// [`Error::NotFound`]: crate::Error::NotFound
     pub fn truncate(&mut self) -> crate::Result<()> {
         self.store.exec(|store| {
-            store.truncate_blob(&self.path, 0)?;
+            store.allocate_blob(&self.path, 0)?;
             store.set_size(&self.path, 0)?;
 
             Ok(())
@@ -205,6 +205,9 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// the file. You must know the number of bytes that will be written ahead of time because that
     /// space needs to be allocated in the database.
     ///
+    /// If you're using compression and the data you're trying to write will fit in memory,
+    /// [`File::write_bytes`] may be more efficient.
+    ///
     /// # Errors
     ///
     /// - [`Error::NotFound`]: This file does not exist.
@@ -212,22 +215,62 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// [`Error::NotFound`]: crate::Error::NotFound
     pub fn write_from<R: Read>(&mut self, reader: R, len: u64) -> crate::Result<()> {
         self.store.exec(|store| {
-            store.truncate_blob(&self.path, len)?;
-
-            let mut blob = store.open_blob(&self.path, false)?.into_blob();
-
             match self.compression {
                 Compression::None => {
+                    store.allocate_blob(&self.path, len)?;
+
+                    let mut blob = store.open_blob(&self.path, false)?.into_blob();
+
                     io::copy(&mut reader.take(len), &mut blob)?;
                 }
+
+                // When using compression, we have to do ✨ weird stuff ✨ in order to avoid
+                // reading the entire buffer into memory. This will almost certainly be less
+                // efficient than doing this in memory, which is what `File::write_bytes` is for.
                 #[cfg(feature = "deflate")]
                 Compression::Deflate { level } => {
-                    let mut encoder =
-                        DeflateEncoder::new(&mut blob, flate2::Compression::new(level));
+                    // Create a random string to act as the file path of the temporary row. This is
+                    // long enough to make collisions practically impossible.
+                    let rng = SmallRng::from_entropy();
+                    let temp_filename: String = rng
+                        .sample_iter(&rand::distributions::Alphanumeric)
+                        .take(32)
+                        .map(char::from)
+                        .collect();
+                    let temp_path = Path::new(&temp_filename);
 
+                    // Create a temporary row in the sqlar table that we will write the compressed
+                    // data to initially before copying it into its *actual* row.
+                    store.create_file(temp_path, None, None)?;
+
+                    // Allocate a blob with size equal to the length of the uncompressed data. This
+                    // will be too big, but we won't know the compressed size of the data until we
+                    // actually compress it. Once we know the compressed size, we'll copy just the
+                    // filled portion of this blob into its actual row.
+                    store.allocate_blob(temp_path, len)?;
+                    let temp_blob = store.open_blob(temp_path, false)?.into_blob();
+
+                    // Compress the data and write it to the temporary row.
+                    let mut encoder = ZlibEncoder::new(temp_blob, flate2::Compression::new(level));
                     io::copy(&mut reader.take(len), &mut encoder)?;
 
-                    encoder.finish()?;
+                    // Get the compressed size of the data.
+                    let mut temp_blob = encoder.finish()?;
+                    let compressed_size = temp_blob.stream_position()?;
+
+                    // Allocate a blob in the correct row (the row that corresponds to this `File`)
+                    // that's the same size as the compressed data, so we're not wasting space and
+                    // negating the benefits of compression.
+                    store.allocate_blob(&self.path, compressed_size)?;
+                    let mut target_blob = store.open_blob(&self.path, false)?.into_blob();
+
+                    // Copy only the filled portion of this blob (not the trailing null bytes) from
+                    // the temporary blob into the actual blob.
+                    temp_blob.seek(io::SeekFrom::Start(0))?;
+                    io::copy(&mut temp_blob.take(compressed_size), &mut target_blob)?;
+
+                    // Finally, delete the temporary blob/row.
+                    store.delete_file(temp_path)?;
                 }
             };
 
@@ -241,6 +284,9 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// Overwrite the file with the given bytes.
     ///
     /// This truncates the file and writes all of the given bytes to it.
+    ///
+    /// If you're using compression and the data you're trying to write will fit in memory, this
+    /// may be more efficient than [`File::write_from`].
     ///
     /// # Errors
     ///
@@ -262,19 +308,5 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// [`Error::NotFound`]: crate::Error::NotFound
     pub fn write_str<S: AsRef<str>>(&mut self, s: S) -> crate::Result<()> {
         self.write_bytes(s.as_ref().as_bytes())
-    }
-
-    /// Copy the given `file` from the filesystem into this file.
-    ///
-    /// This truncates this file and writes the entire contents of the given `file` to it.
-    ///
-    /// # Errors
-    ///
-    /// - [`Error::NotFound`]: This file does not exist.
-    ///
-    /// [`Error::NotFound`]: crate::Error::NotFound
-    pub fn write_file(&mut self, file: &mut fs::File) -> crate::Result<()> {
-        let metadata = file.metadata()?;
-        self.write_from(file, metadata.len())
     }
 }

@@ -104,15 +104,28 @@ impl<'conn> Store<'conn> {
         Ok(())
     }
 
-    pub fn create_file(&self, path: &Path, mode: FileMode, mtime: SystemTime) -> crate::Result<()> {
+    pub fn create_file(
+        &self,
+        path: &Path,
+        mode: Option<FileMode>,
+        mtime: Option<SystemTime>,
+    ) -> crate::Result<()> {
         let unix_mtime = mtime
-            .duration_since(time::UNIX_EPOCH)
-            .map_err(|_| crate::Error::InvalidArgs)?
-            .as_secs();
+            .map(|mtime| -> crate::Result<_> {
+                Ok(mtime
+                    .duration_since(time::UNIX_EPOCH)
+                    .map_err(|_| crate::Error::InvalidArgs)?
+                    .as_secs())
+            })
+            .transpose()?;
 
         let result = self.tx().execute(
             "INSERT INTO sqlar (name, mode, mtime, sz, data) VALUES (?1, ?2, ?3, 0, zeroblob(0))",
-            (path.to_string_lossy(), mode.bits(), unix_mtime),
+            (
+                path.to_string_lossy(),
+                mode.map(|mode| mode.bits()),
+                unix_mtime,
+            ),
         );
 
         match result {
@@ -124,6 +137,19 @@ impl<'conn> Store<'conn> {
             }
             Err(err) => Err(err.into()),
         }
+    }
+
+    pub fn delete_file(&self, path: &Path) -> crate::Result<()> {
+        let num_updated = self.tx().execute(
+            "DELETE FROM sqlar WHERE name = ?1",
+            (path.to_string_lossy(),),
+        )?;
+
+        if num_updated == 0 {
+            return Err(crate::Error::NotFound);
+        }
+
+        Ok(())
     }
 
     pub fn open_blob(&self, path: &Path, read_only: bool) -> crate::Result<FileBlob> {
@@ -151,7 +177,7 @@ impl<'conn> Store<'conn> {
         }
     }
 
-    pub fn truncate_blob(&self, path: &Path, len: u64) -> crate::Result<()> {
+    pub fn allocate_blob(&self, path: &Path, len: u64) -> crate::Result<()> {
         let num_updated = self.tx().execute(
             "UPDATE sqlar SET data = zeroblob(?1) WHERE name = ?2",
             (len, path.to_string_lossy()),

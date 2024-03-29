@@ -2,7 +2,7 @@ use std::fmt;
 use std::io::{self, Read};
 
 #[cfg(feature = "deflate")]
-use flate2::read::DeflateDecoder;
+use flate2::read::ZlibDecoder;
 use rusqlite::blob::Blob;
 
 use super::error::io_err_has_sqlite_code;
@@ -40,7 +40,7 @@ impl Compression {
 
 enum InnerReader<'a> {
     #[cfg(feature = "deflate")]
-    Compressed(DeflateDecoder<Blob<'a>>),
+    Compressed(ZlibDecoder<Blob<'a>>),
     Uncompressed(Blob<'a>),
 }
 
@@ -91,7 +91,7 @@ impl<'a> FileReader<'a> {
         if blob.is_compressed() {
             #[cfg(feature = "deflate")]
             return Ok(Self {
-                inner: InnerReader::Compressed(DeflateDecoder::new(blob.into_blob())),
+                inner: InnerReader::Compressed(ZlibDecoder::new(blob.into_blob())),
             });
 
             #[cfg(not(feature = "deflate"))]

@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::{self, Read, Seek, Write};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -199,31 +199,16 @@ impl<'conn, 'a> File<'conn, 'a> {
         FileReader::new(self.store.open_blob(&self.path, true)?)
     }
 
-    // This accepts an optional number of bytes `len` that will be read from the `reader`. If
-    // provided, this acts as a performance hint for how much space to allocate in the database. If
-    // `reader` produces fewer than `len` bytes, this may result in an unnecessarily large
-    // allocation.
-    fn write_stream<R, Buf>(
-        &mut self,
-        reader: &mut R,
-        buf: &mut Buf,
-        len: Option<u64>,
-    ) -> crate::Result<()>
+    fn write_stream<R>(&mut self, reader: &mut R, size_hint: Option<u64>) -> crate::Result<()>
     where
         R: ?Sized + Read,
-        Buf: ?Sized + Read + Write + Seek,
     {
-        // The buffer might not start out with the seek position at the beginning of the stream,
-        // and rather than change it, we just mark where it started.
-        let buf_start = buf.stream_position()?;
-
         self.store.exec(|store| {
             let original_size = match self.compression {
-                Compression::None => match len {
+                Compression::None => match size_hint {
                     Some(len) => {
                         // We have the length of the input stream, so we can allocate a blob in the
-                        // database of that size and write to the database directly, bypassing
-                        // `buf`.
+                        // database of that size and write to the database directly.
 
                         store.allocate_blob(&self.path, len)?;
                         let mut blob = store.open_blob(&self.path, false)?.into_blob();
@@ -231,39 +216,45 @@ impl<'conn, 'a> File<'conn, 'a> {
                         io::copy(reader, &mut blob)?
                     }
                     None => {
-                        // We do not have the length of the input stream, so we need to write to
-                        // the buffer find out how large of a blob to allocate in the database.
+                        // We do not have the length of the input stream, so we need to write it to
+                        // an in-memory buffer to find out how large of a blob to allocate in the
+                        // database.
 
-                        let bytes_read = io::copy(reader, buf)?;
+                        let mut buf = Vec::new();
+                        reader.read_to_end(&mut buf)?;
 
-                        store.allocate_blob(&self.path, bytes_read)?;
+                        store.allocate_blob(&self.path, u64_from_usize(buf.len()))?;
                         let mut blob = store.open_blob(&self.path, false)?.into_blob();
 
-                        // The buffer could have *anything* in it when we get it, so we need to
-                        // make sure we don't read past the bytes we've written to it.
-                        buf.seek(io::SeekFrom::Start(buf_start))?;
-                        io::copy(&mut buf.take(bytes_read), &mut blob)?
+                        blob.write_all(&buf)?;
+
+                        u64_from_usize(buf.len())
                     }
                 },
 
                 #[cfg(feature = "deflate")]
                 Compression::Deflate { level } => {
                     // We have no way of knowing the compressed size of the data until we actually
-                    // compress it, so we must write it to the buffer first. Knowing the `len` (the
-                    // uncompressed size) doesn't help us here.
+                    // compress it, so we need to write it to an in-memory buffer to find out how
+                    // large of a blob to allocate in the database.
+
+                    let buf = match size_hint {
+                        Some(len) => Vec::with_capacity(
+                            len.try_into().map_err(|_| crate::Error::FileTooLarge)?,
+                        ),
+                        None => Vec::new(),
+                    };
 
                     let mut encoder = ZlibEncoder::new(buf, flate2::Compression::new(level));
 
                     let bytes_read = io::copy(reader, &mut encoder)?;
 
-                    let buf = encoder.finish()?;
-                    let compressed_size = buf.stream_position()?;
+                    let compressed_data = encoder.finish()?;
 
-                    store.allocate_blob(&self.path, compressed_size)?;
+                    store.allocate_blob(&self.path, u64_from_usize(compressed_data.len()))?;
                     let mut target_blob = store.open_blob(&self.path, false)?.into_blob();
 
-                    buf.seek(io::SeekFrom::Start(buf_start))?;
-                    io::copy(&mut buf.take(compressed_size), &mut target_blob)?;
+                    target_blob.write_all(&compressed_data)?;
 
                     bytes_read
                 }
@@ -279,22 +270,16 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// This truncates the file and copies the entire `reader` into it.
     ///
-    /// This accepts a buffer `buf` that data may need to be written to before hitting the
-    /// database. This could be an in-memory buffer like [`std::io::Cursor`], a [`std::fs::File`]
-    /// on the disk, or something else. Consider how much data you expect `reader` to produce and
-    /// whether keeping that much data in memory is appropriate.
-    ///
     /// # Errors
     ///
     /// - [`Error::NotFound`]: This file does not exist.
     ///
     /// [`Error::NotFound`]: crate::Error::NotFound
-    pub fn write_from<R, Buf>(&mut self, reader: &mut R, buf: &mut Buf) -> crate::Result<()>
+    pub fn write_from<R>(&mut self, reader: &mut R) -> crate::Result<()>
     where
         R: ?Sized + Read,
-        Buf: ?Sized + Read + Write + Seek,
     {
-        self.write_stream(reader, buf, None)
+        self.write_stream(reader, None)
     }
 
     /// Overwrite the file with the given bytes.
@@ -348,20 +333,14 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// This truncates this file and copies the entire `file` into it.
     ///
-    /// The `buf` parameter serves the same purpose as in [`File::write_from`].
-    ///
     /// # Errors
     ///
     /// - [`Error::NotFound`]: This file does not exist.
     ///
     /// [`Error::NotFound`]: crate::Error::NotFound
-    pub fn write_file<Buf>(&mut self, file: &mut fs::File, buf: &mut Buf) -> crate::Result<()>
-    where
-        Buf: ?Sized + Read + Write + Seek,
-    {
-        // We know the size of the file, so we can optimize for the case where compression is
-        // disabled.
+    pub fn write_file(&mut self, file: &mut fs::File) -> crate::Result<()> {
+        // We know the size of the file, which enabled some optimizations.
         let metadata = file.metadata()?;
-        self.write_stream(file, buf, Some(metadata.len()))
+        self.write_stream(file, Some(metadata.len()))
     }
 }

@@ -59,6 +59,12 @@ pub enum Error {
     )]
     BlobExpired,
 
+    /// Attempted to write more data to the SQLite archive than its maximum blob size will allow.
+    #[error(
+        "Attempted to write more data to the SQLite archive than its maximum blob size will allow."
+    )]
+    FileTooLarge,
+
     /// Attempted to write to a read-only archive or read-only file.
     #[error("Attempted to write to a read-only archive or read-only file.")]
     ReadOnly,
@@ -96,6 +102,7 @@ impl From<Error> for io::Error {
             Error::InvalidArgs => io::ErrorKind::InvalidInput,
             Error::CompressionNotSupported => io::ErrorKind::InvalidInput,
             Error::BlobExpired => io::ErrorKind::Other,
+            Error::FileTooLarge => io::ErrorKind::Other,
             Error::ReadOnly => io::ErrorKind::Other,
             Error::Sqlite(_) => io::ErrorKind::Other,
             Error::Io(err) => return err,

@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 #[cfg(feature = "deflate")]
-use {flate2::write::ZlibEncoder, rand::prelude::*, rand::rngs::SmallRng};
+use flate2::write::ZlibEncoder;
 
 use super::metadata::FileMode;
 use super::store::Store;
@@ -201,81 +201,88 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// This truncates the file and copies the entire `reader` into it.
     ///
-    /// This accepts the number of bytes `len` that will be read from the `reader` and written to
-    /// the file. You must know the number of bytes that will be written ahead of time because that
-    /// space needs to be allocated in the database.
+    /// This accepts a buffer `buf` that data may need to be written to before hitting the
+    /// database. This could be an in-memory buffer like [`std::io::Cursor`], a [`std::fs::File`]
+    /// on the disk, or something else. Consider how much data you expect `reader` to produce and
+    /// whether keeping that much data in memory is appropriate.
     ///
-    /// This does not read the entire stream into memory. However, if you're using compression and
-    /// the data you're trying to write will fit in memory, [`File::write_bytes`] may be more
-    /// efficient.
+    /// This also accepts an optional number of bytes `len` that will be read from the `reader`. If
+    /// provided, this acts as a performance hint for how much space to allocate in the database.
+    /// If `reader` produces fewer than `len` bytes, this may result in an unnecessarily large
+    /// allocation.
     ///
     /// # Errors
     ///
     /// - [`Error::NotFound`]: This file does not exist.
     ///
     /// [`Error::NotFound`]: crate::Error::NotFound
-    pub fn write_stream<R: Read>(&mut self, reader: R, len: u64) -> crate::Result<()> {
+    pub fn write_stream<R, Buf>(
+        &mut self,
+        mut reader: R,
+        mut buf: Buf,
+        len: Option<u64>,
+    ) -> crate::Result<()>
+    where
+        R: Read,
+        Buf: Read + Write + Seek,
+    {
+        // The buffer might not start out with the seek position at the beginning of the stream,
+        // and rather than change it, we just mark where it started.
+        let buf_start = buf.stream_position()?;
+
         self.store.exec(|store| {
-            match self.compression {
-                Compression::None => {
-                    store.allocate_blob(&self.path, len)?;
+            let original_size = match self.compression {
+                Compression::None => match len {
+                    Some(len) => {
+                        // We have the length of the input stream, so we can allocate a blob in the
+                        // database of that size and write to the database directly, bypassing
+                        // `buf`.
 
-                    let mut blob = store.open_blob(&self.path, false)?.into_blob();
+                        store.allocate_blob(&self.path, len)?;
+                        let mut blob = store.open_blob(&self.path, false)?.into_blob();
 
-                    io::copy(&mut reader.take(len), &mut blob)?;
-                }
+                        io::copy(&mut reader.take(len), &mut blob)?
+                    }
+                    None => {
+                        // We do not have the length of the input stream, so we need to write to
+                        // the buffer find out how large of a blob to allocate in the database.
 
-                // When using compression, we have to do ✨ weird stuff ✨ in order to avoid
-                // reading the entire buffer into memory. This will almost certainly be less
-                // efficient than doing this in memory, which is what `File::write_bytes` is for.
+                        let bytes_read = io::copy(&mut reader, &mut buf)?;
+
+                        store.allocate_blob(&self.path, bytes_read)?;
+                        let mut blob = store.open_blob(&self.path, false)?.into_blob();
+
+                        buf.seek(io::SeekFrom::Start(buf_start))?;
+                        io::copy(&mut buf.take(bytes_read), &mut blob)?
+                    }
+                },
+
                 #[cfg(feature = "deflate")]
                 Compression::Deflate { level } => {
-                    // Create a random string to act as the file path of the temporary row. This is
-                    // long enough to make collisions practically impossible.
-                    let rng = SmallRng::from_entropy();
-                    let temp_filename: String = rng
-                        .sample_iter(&rand::distributions::Alphanumeric)
-                        .take(16)
-                        .map(char::from)
-                        .collect();
-                    let temp_path = Path::new(&temp_filename);
+                    // We have no way of knowing the compressed size of the data until we actually
+                    // compress it, so we must write it to the buffer first.
 
-                    // Create a temporary row in the sqlar table that we will write the compressed
-                    // data to initially before copying it into its *actual* row.
-                    store.create_file(temp_path, None, None)?;
+                    let mut encoder = ZlibEncoder::new(buf, flate2::Compression::new(level));
 
-                    // Allocate a blob with size equal to the length of the uncompressed data. This
-                    // will be too big, but we won't know the compressed size of the data until we
-                    // actually compress it. Once we know the compressed size, we'll copy just the
-                    // filled portion of this blob into its actual row.
-                    store.allocate_blob(temp_path, len)?;
-                    let temp_blob = store.open_blob(temp_path, false)?.into_blob();
+                    let bytes_read = match len {
+                        Some(len) => io::copy(&mut reader.take(len), &mut encoder)?,
+                        None => io::copy(&mut reader, &mut encoder)?,
+                    };
 
-                    // Compress the data and write it to the temporary row.
-                    let mut encoder = ZlibEncoder::new(temp_blob, flate2::Compression::new(level));
-                    io::copy(&mut reader.take(len), &mut encoder)?;
+                    let mut buf = encoder.finish()?;
+                    let compressed_size = buf.stream_position()?;
 
-                    // Get the compressed size of the data.
-                    let mut temp_blob = encoder.finish()?;
-                    let compressed_size = temp_blob.stream_position()?;
-
-                    // Allocate a blob in the correct row (the row that corresponds to this `File`)
-                    // that's the same size as the compressed data, so we're not wasting space and
-                    // negating the benefits of compression.
                     store.allocate_blob(&self.path, compressed_size)?;
                     let mut target_blob = store.open_blob(&self.path, false)?.into_blob();
 
-                    // Copy only the filled portion of this blob (not the trailing null bytes) from
-                    // the temporary blob into the actual blob.
-                    temp_blob.seek(io::SeekFrom::Start(0))?;
-                    io::copy(&mut temp_blob.take(compressed_size), &mut target_blob)?;
+                    buf.seek(io::SeekFrom::Start(buf_start))?;
+                    io::copy(&mut buf.take(compressed_size), &mut target_blob)?;
 
-                    // Finally, delete the temporary blob/row.
-                    store.delete_file(temp_path)?;
+                    bytes_read
                 }
             };
 
-            store.set_size(&self.path, len)?;
+            store.set_size(&self.path, original_size)?;
 
             Ok(())
         })
@@ -284,9 +291,6 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// Overwrite the file with the given bytes.
     ///
     /// This truncates the file and writes all of the given bytes to it.
-    ///
-    /// If you're using compression and the data you're trying to write will fit in memory, this
-    /// may be more efficient than [`File::write_stream`].
     ///
     /// # Errors
     ///

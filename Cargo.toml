@@ -6,10 +6,9 @@ edition = "2021"
 [dependencies]
 bitflags = "2.5.0"
 flate2 = { version = "1.0.28", optional = true }
-rand = { version = "0.8.5", features = ["small_rng"], optional = true }
 rusqlite = { version = "0.31.0", features = ["bundled", "blob"] }
 thiserror = "1.0.58"
 
 [features]
 default = ["deflate"]
-deflate = ["dep:flate2", "dep:rand"]
+deflate = ["dep:flate2"]

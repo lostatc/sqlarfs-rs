@@ -1,4 +1,4 @@
-use std::io::{self, Read, Seek};
+use std::io::{self, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -205,15 +205,16 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// the file. You must know the number of bytes that will be written ahead of time because that
     /// space needs to be allocated in the database.
     ///
-    /// If you're using compression and the data you're trying to write will fit in memory,
-    /// [`File::write_bytes`] may be more efficient.
+    /// This does not read the entire stream into memory. However, if you're using compression and
+    /// the data you're trying to write will fit in memory, [`File::write_bytes`] may be more
+    /// efficient.
     ///
     /// # Errors
     ///
     /// - [`Error::NotFound`]: This file does not exist.
     ///
     /// [`Error::NotFound`]: crate::Error::NotFound
-    pub fn write_from<R: Read>(&mut self, reader: R, len: u64) -> crate::Result<()> {
+    pub fn write_stream<R: Read>(&mut self, reader: R, len: u64) -> crate::Result<()> {
         self.store.exec(|store| {
             match self.compression {
                 Compression::None => {
@@ -234,7 +235,7 @@ impl<'conn, 'a> File<'conn, 'a> {
                     let rng = SmallRng::from_entropy();
                     let temp_filename: String = rng
                         .sample_iter(&rand::distributions::Alphanumeric)
-                        .take(32)
+                        .take(16)
                         .map(char::from)
                         .collect();
                     let temp_path = Path::new(&temp_filename);
@@ -274,7 +275,6 @@ impl<'conn, 'a> File<'conn, 'a> {
                 }
             };
 
-            #[cfg(not(feture = "deflate"))]
             store.set_size(&self.path, len)?;
 
             Ok(())
@@ -286,7 +286,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// This truncates the file and writes all of the given bytes to it.
     ///
     /// If you're using compression and the data you're trying to write will fit in memory, this
-    /// may be more efficient than [`File::write_from`].
+    /// may be more efficient than [`File::write_stream`].
     ///
     /// # Errors
     ///
@@ -294,7 +294,28 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// [`Error::NotFound`]: crate::Error::NotFound
     pub fn write_bytes(&mut self, bytes: &[u8]) -> crate::Result<()> {
-        self.write_from(bytes, u64_from_usize(bytes.len()))
+        self.store.exec(|store| {
+            match self.compression {
+                Compression::None => {
+                    store.store_blob(&self.path, bytes)?;
+                }
+                #[cfg(feature = "deflate")]
+                Compression::Deflate { level } => {
+                    let mut encoder = ZlibEncoder::new(
+                        Vec::with_capacity(bytes.len()),
+                        flate2::Compression::new(level),
+                    );
+                    encoder.write_all(bytes)?;
+                    let compressed_bytes = encoder.finish()?;
+
+                    store.store_blob(&self.path, &compressed_bytes)?;
+                }
+            };
+
+            store.set_size(&self.path, u64_from_usize(bytes.len()))?;
+
+            Ok(())
+        })
     }
 
     /// Overwrite the file with the given string.

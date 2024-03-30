@@ -11,6 +11,8 @@ use xpct::{
     be_true, be_zero, eq_diff, equal, expect, fields, match_fields, match_pattern, pattern,
 };
 
+const WRITE_DATA_SIZE: usize = 64;
+
 fn connection() -> sqlarfs::Result<Connection> {
     let mut conn = Connection::open_in_memory()?;
 
@@ -356,7 +358,7 @@ fn write_bytes_without_compression() -> sqlarfs::Result<()> {
 
         file.set_compression(Compression::None);
 
-        let expected = random_bytes(32);
+        let expected = random_bytes(WRITE_DATA_SIZE);
 
         expect!(file.write_bytes(&expected)).to(be_ok());
 
@@ -448,7 +450,7 @@ fn write_bytes_when_file_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open(Path::new("file"));
 
-        let expected = random_bytes(32);
+        let expected = random_bytes(WRITE_DATA_SIZE);
 
         expect!(file.write_bytes(&expected))
             .to(be_err())
@@ -500,7 +502,7 @@ fn truncated_file_returns_no_bytes() -> sqlarfs::Result<()> {
         let mut file = archive.open(Path::new("file"));
         file.create(None)?;
 
-        let expected = random_bytes(32);
+        let expected = random_bytes(WRITE_DATA_SIZE);
 
         file.write_bytes(&expected)?;
 
@@ -548,7 +550,7 @@ fn write_from_reader_without_compression() -> sqlarfs::Result<()> {
 
         file.set_compression(Compression::None);
 
-        let expected = random_bytes(32);
+        let expected = random_bytes(WRITE_DATA_SIZE);
 
         file.write_from(&mut expected.as_slice())?;
 
@@ -613,6 +615,113 @@ fn write_compressible_data_from_reader_with_compression() -> sqlarfs::Result<()>
         let expected = compressible_bytes();
 
         file.write_from(&mut expected.as_slice())?;
+
+        let mut reader = file.reader()?;
+        let mut actual = Vec::with_capacity(expected.len());
+
+        reader.read_to_end(&mut actual)?;
+
+        expect!(&actual).to(eq_diff(&expected));
+
+        drop(reader);
+
+        expect!(file.metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.size)
+            .try_into::<usize>()
+            .to(equal(expected.len()));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn write_from_file_without_compression() -> sqlarfs::Result<()> {
+    let mut temp_file = tempfile::tempfile()?;
+
+    connection()?.exec(|archive| {
+        let mut file = archive.open(Path::new("file"));
+        file.create(None)?;
+
+        file.set_compression(Compression::None);
+
+        let expected = random_bytes(WRITE_DATA_SIZE);
+
+        temp_file.write_all(&expected)?;
+
+        file.write_file(&mut temp_file)?;
+
+        let mut reader = file.reader()?;
+        let mut actual = Vec::with_capacity(expected.len());
+
+        reader.read_to_end(&mut actual)?;
+
+        expect!(&actual).to(eq_diff(&expected));
+
+        drop(reader);
+
+        expect!(file.metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.size)
+            .try_into::<usize>()
+            .to(equal(expected.len()));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn write_incompressible_data_from_file_with_compression() -> sqlarfs::Result<()> {
+    let mut temp_file = tempfile::tempfile()?;
+
+    connection()?.exec(|archive| {
+        let mut file = archive.open(Path::new("file"));
+        file.create(None)?;
+
+        file.set_compression(Compression::FAST);
+
+        let expected = incompressible_bytes();
+
+        temp_file.write_all(&expected)?;
+        temp_file.seek(io::SeekFrom::Start(0))?;
+
+        file.write_file(&mut temp_file)?;
+
+        let mut reader = file.reader()?;
+        let mut actual = Vec::with_capacity(expected.len());
+
+        reader.read_to_end(&mut actual)?;
+
+        expect!(&actual).to(eq_diff(&expected));
+
+        drop(reader);
+
+        expect!(file.metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.size)
+            .try_into::<usize>()
+            .to(equal(expected.len()));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn write_compressible_data_from_file_with_compression() -> sqlarfs::Result<()> {
+    let mut temp_file = tempfile::tempfile()?;
+
+    connection()?.exec(|archive| {
+        let mut file = archive.open(Path::new("file"));
+        file.create(None)?;
+
+        file.set_compression(Compression::FAST);
+
+        let expected = compressible_bytes();
+
+        temp_file.write_all(&expected)?;
+        temp_file.seek(io::SeekFrom::Start(0))?;
+
+        file.write_file(&mut temp_file)?;
 
         let mut reader = file.reader()?;
         let mut actual = Vec::with_capacity(expected.len());

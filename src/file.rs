@@ -98,9 +98,9 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// - [`ErrorKind::AlreadyExists`]: This file already exists in the archive.
     ///
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
-    pub fn create(&mut self, mode: FileMode) -> crate::Result<()> {
+    pub fn create(&mut self, mode: Option<FileMode>) -> crate::Result<()> {
         self.store
-            .create_file(&self.path, Some(mode), Some(SystemTime::now()))
+            .create_file(&self.path, mode, Some(SystemTime::now()))
     }
 
     /// Delete the file from the archive.

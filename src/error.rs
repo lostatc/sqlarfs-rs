@@ -177,5 +177,5 @@ pub fn io_err_has_sqlite_code(err: &io::Error, code: rusqlite::ErrorCode) -> boo
     false
 }
 
-/// The result type for operations with a repository.
+/// The result type for sqlarfs.
 pub type Result<T> = result::Result<T, Error>;

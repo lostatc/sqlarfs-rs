@@ -48,7 +48,7 @@ impl Connection {
         OpenOptions::new()
     }
 
-    /// Open a SQLite connection to the file at [`path`].
+    /// Open a SQLite connection to the file at `path`.
     pub fn open<P: AsRef<Path>>(path: P) -> crate::Result<Self> {
         OpenOptions::new().open(path)
     }

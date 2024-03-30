@@ -51,6 +51,7 @@ pub struct FileMetadata {
 /// [`Read`]: std::io::Read
 /// [`Write`]: std::io::Write
 /// [`Seek`]: std::io::Seek
+/// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
 /// [`ErrorKind::CompressionNotSupported`]: crate::ErrorKind::CompressionNotSupported
 #[derive(Debug)]
 pub struct File<'conn, 'a> {

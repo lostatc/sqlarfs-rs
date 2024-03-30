@@ -2,6 +2,7 @@ use std::io::{self, prelude::*};
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+#[cfg(feature = "deflate")]
 use flate2::write::ZlibEncoder;
 use rand::rngs::SmallRng;
 use rand::{prelude::*, SeedableRng};
@@ -48,6 +49,7 @@ fn incompressible_bytes() -> Vec<u8> {
 // Some of our tests require inputs that we know for sure are compressible via zlib. Let's make
 // absolutely sure that the test data we are using is in fact compressible.
 #[test]
+#[cfg(feature = "deflate")]
 fn validate_compressible_bytes_are_actually_zlib_compressible() -> io::Result<()> {
     let compressible_bytes = compressible_bytes();
 
@@ -67,6 +69,7 @@ fn validate_compressible_bytes_are_actually_zlib_compressible() -> io::Result<()
 // Some of our tests require inputs that we know for sure are **not** compressible via zlib. Let's
 // make absolutely sure that the test data we are using is in fact not compressible.
 #[test]
+#[cfg(feature = "deflate")]
 fn validate_incompressible_bytes_are_actually_not_zlib_compressible() -> io::Result<()> {
     let incompressible_bytes = incompressible_bytes();
 
@@ -574,6 +577,7 @@ fn write_from_reader_without_compression() -> sqlarfs::Result<()> {
 }
 
 #[test]
+#[cfg(feature = "deflate")]
 fn write_incompressible_data_from_reader_with_compression() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open(Path::new("file"));
@@ -605,6 +609,7 @@ fn write_incompressible_data_from_reader_with_compression() -> sqlarfs::Result<(
 }
 
 #[test]
+#[cfg(feature = "deflate")]
 fn write_compressible_data_from_reader_with_compression() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open(Path::new("file"));
@@ -671,6 +676,7 @@ fn write_from_file_without_compression() -> sqlarfs::Result<()> {
 }
 
 #[test]
+#[cfg(feature = "deflate")]
 fn write_incompressible_data_from_file_with_compression() -> sqlarfs::Result<()> {
     let mut temp_file = tempfile::tempfile()?;
 
@@ -707,6 +713,7 @@ fn write_incompressible_data_from_file_with_compression() -> sqlarfs::Result<()>
 }
 
 #[test]
+#[cfg(feature = "deflate")]
 fn write_compressible_data_from_file_with_compression() -> sqlarfs::Result<()> {
     let mut temp_file = tempfile::tempfile()?;
 

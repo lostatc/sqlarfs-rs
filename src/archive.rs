@@ -3,7 +3,12 @@ use std::path::Path;
 use super::file::File;
 use super::store::Store;
 
-/// A SQLite archive file.
+/// A SQLite archive.
+///
+/// A SQLite archive is a SQLite database with a table named `sqlar` that conforms to a specific
+/// schema. A SQLite archive may contain other tables, and this library will ignore them. If the
+/// database you've opened does not contain a `sqlar` table, you'll need to call [`Archive::init`]
+/// to create one.
 #[derive(Debug)]
 pub struct Archive<'conn> {
     store: Store<'conn>,

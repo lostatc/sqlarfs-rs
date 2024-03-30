@@ -19,3 +19,8 @@ xpct = { version = "0.5.1", features = ["diff"] }
 [features]
 default = ["deflate"]
 deflate = ["dep:flate2"]
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+missing_docs = "warn"

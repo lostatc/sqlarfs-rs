@@ -29,7 +29,10 @@ impl TransactionBehavior {
     }
 }
 
-/// A connection to a SQLite database holding a sqlar archive.
+/// A connection to a SQLite database.
+///
+/// All operations on an [`Archive`] must happen within the context of a [`Transaction`]. You can
+/// use this connection to begin a transaction.
 #[derive(Debug)]
 pub struct Connection {
     conn: rusqlite::Connection,
@@ -45,18 +48,22 @@ impl Connection {
         OpenOptions::new()
     }
 
+    /// Open a SQLite connection to the file at [`path`].
     pub fn open<P: AsRef<Path>>(path: P) -> crate::Result<Self> {
         OpenOptions::new().open(path)
     }
 
+    /// Open a SQLite connection to an in-memory database.
     pub fn open_in_memory() -> crate::Result<Self> {
         OpenOptions::new().open_in_memory()
     }
 
+    /// Start a new transaction.
     pub fn transaction(&mut self) -> crate::Result<Transaction> {
         Ok(Transaction::new(self.conn.transaction()?))
     }
 
+    /// Start a new transaction with the given [`TransactionBehavior`].
     pub fn transaction_with(
         &mut self,
         behavior: TransactionBehavior,
@@ -66,6 +73,9 @@ impl Connection {
         ))
     }
 
+    /// Execute the given function within a new transaction.
+    ///
+    /// See [`Transaction::exec`].
     pub fn exec<T, E, F>(&mut self, f: F) -> Result<T, E>
     where
         F: FnOnce(&mut Archive) -> Result<T, E>,
@@ -74,6 +84,10 @@ impl Connection {
         self.transaction()?.exec(f)
     }
 
+    /// Execute the given function within a new transaction with the given
+    /// [`TransactionBehavior`].,
+    ///
+    /// See [`Transaction::exec`].
     pub fn exec_with<T, E, F>(&mut self, behavior: TransactionBehavior, f: F) -> Result<T, E>
     where
         F: FnOnce(&mut Archive) -> Result<T, E>,
@@ -98,7 +112,7 @@ impl<'conn> Transaction<'conn> {
         }
     }
 
-    /// Execute this transaction.
+    /// Execute the given function within this transaction.
     ///
     /// This calls the given function, passing the [`Archive`] holding this transaction. If the
     /// function returns `Ok`, this transaction is committed. If the function returns `Err`, this

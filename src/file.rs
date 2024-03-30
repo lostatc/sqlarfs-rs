@@ -29,7 +29,18 @@ pub struct FileMetadata {
     pub size: u64,
 }
 
-/// A file in a SQL archive.
+/// A file in a SQLite archive.
+///
+/// A [`File`] is a handle to a file that may or may not exist in the SQLite archive. Attempting to
+/// read or write data or metadata on this file will generally return an error of
+/// [`ErrorKind::NotFound`] if the file doesn't exist. You can use [`File::exists`] to check if it
+/// exists, [`File::create`] to create it if it doesn't exist, and [`File::delete`] to delete it if
+/// it does.
+///
+/// You can read from the beginning of a file, but cannot seek through it. You can truncate and
+/// overwrite the file's contents, but cannot append to it.
+///
+/// Writing to a file does not automatically update its [`FileMetadata::mtime`].
 ///
 /// Writes to a [`File`] can optionally be compressed with DEFLATE. You can change the compression
 /// method (compressed or uncompressed) via [`File::set_compression`]. The default is to compress

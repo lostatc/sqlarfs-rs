@@ -17,6 +17,7 @@ pub struct Error {
 }
 
 impl Error {
+    /// Create a new [`Error`] wrapping the given `source` error.
     pub fn new<E>(kind: ErrorKind, source: E) -> Self
     where
         E: std::error::Error + Send + Sync + 'static,
@@ -27,10 +28,12 @@ impl Error {
         }
     }
 
+    /// The [`ErrorKind`] of this error.
     pub fn kind(&self) -> &ErrorKind {
         &self.kind
     }
 
+    /// Consume this error and return its [`ErrorKind`].
     pub fn into_kind(self) -> ErrorKind {
         self.kind
     }
@@ -140,7 +143,10 @@ pub enum ErrorKind {
     Sqlite,
 
     /// An I/O error occurred.
-    Io { kind: io::ErrorKind },
+    Io {
+        /// The [`std::io::ErrorKind`] of the I/O error.
+        kind: io::ErrorKind,
+    },
 }
 
 impl fmt::Display for ErrorKind {

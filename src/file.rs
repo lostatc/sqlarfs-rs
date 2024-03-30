@@ -19,10 +19,10 @@ pub struct FileMetadata {
     /// The time the file was last modified.
     ///
     /// This value has second precision.
-    pub mtime: SystemTime,
+    pub mtime: Option<SystemTime>,
 
     /// The file mode (permissions).
-    pub mode: FileMode,
+    pub mode: Option<FileMode>,
 
     /// The uncompressed size of the file.
     pub size: u64,
@@ -103,6 +103,16 @@ impl<'conn, 'a> File<'conn, 'a> {
             .create_file(&self.path, Some(mode), Some(SystemTime::now()))
     }
 
+    /// Delete the file from the archive.
+    ///
+    /// This does not consume its receiver and does not invalidate the file handle; you can still
+    /// call [`File::create`] to create the file again.
+    ///
+    /// # Errors
+    ///
+    /// - [`ErrorKind::NotFound`]: This file does not exist.
+    ///
+    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     pub fn delete(&mut self) -> crate::Result<()> {
         self.store.delete_file(&self.path)
     }
@@ -130,12 +140,14 @@ impl<'conn, 'a> File<'conn, 'a> {
 
     /// Set the file mode.
     ///
+    /// The file mode is nullable, so it's possible to set this to `None`.
+    ///
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
-    pub fn set_mode(&mut self, mode: FileMode) -> crate::Result<()> {
+    pub fn set_mode(&mut self, mode: Option<FileMode>) -> crate::Result<()> {
         self.store.set_mode(&self.path, mode)
     }
 
@@ -143,12 +155,14 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// This rounds to the nearest second.
     ///
+    /// The file mtime is nullable, so it's possible to set this to `None`.
+    ///
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
-    pub fn set_mtime(&mut self, mtime: SystemTime) -> crate::Result<()> {
+    pub fn set_mtime(&mut self, mtime: Option<SystemTime>) -> crate::Result<()> {
         self.store.set_mtime(&self.path, mtime)
     }
 

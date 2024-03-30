@@ -212,8 +212,12 @@ impl<'conn> Store<'conn> {
                 (path.to_string_lossy(),),
                 |row| {
                     Ok(FileMetadata {
-                        mode: FileMode::from_bits_truncate(row.get(0)?),
-                        mtime: UNIX_EPOCH + Duration::from_secs(row.get(1)?),
+                        mode: row
+                            .get::<_, Option<u32>>(0)?
+                            .map(FileMode::from_bits_truncate),
+                        mtime: row
+                            .get::<_, Option<u64>>(1)?
+                            .map(|mtime_secs| UNIX_EPOCH + Duration::from_secs(mtime_secs)),
                         size: u64_from_usize(row.get(2)?),
                     })
                 },
@@ -222,10 +226,10 @@ impl<'conn> Store<'conn> {
             .ok_or(crate::ErrorKind::NotFound.into())
     }
 
-    pub fn set_mode(&self, path: &Path, mode: FileMode) -> crate::Result<()> {
+    pub fn set_mode(&self, path: &Path, mode: Option<FileMode>) -> crate::Result<()> {
         let num_updated = self.tx().execute(
             "UPDATE sqlar SET mode = ?1 WHERE name = ?2",
-            (mode.bits(), path.to_string_lossy()),
+            (mode.map(|mode| mode.bits()), path.to_string_lossy()),
         )?;
 
         if num_updated == 0 {
@@ -235,11 +239,15 @@ impl<'conn> Store<'conn> {
         Ok(())
     }
 
-    pub fn set_mtime(&self, path: &Path, mtime: SystemTime) -> crate::Result<()> {
+    pub fn set_mtime(&self, path: &Path, mtime: Option<SystemTime>) -> crate::Result<()> {
         let mtime_secs = mtime
-            .duration_since(time::UNIX_EPOCH)
-            .map_err(|err| crate::Error::new(crate::ErrorKind::InvalidArgs, err))?
-            .as_secs();
+            .map(|mtime| -> crate::Result<_> {
+                Ok(mtime
+                    .duration_since(time::UNIX_EPOCH)
+                    .map_err(|err| crate::Error::new(crate::ErrorKind::InvalidArgs, err))?
+                    .as_secs())
+            })
+            .transpose()?;
 
         let num_updated = self.tx().execute(
             "UPDATE sqlar SET mtime = ?1 WHERE name = ?2",

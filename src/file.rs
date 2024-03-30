@@ -13,6 +13,21 @@ use super::util::u64_from_usize;
 
 const COPY_BUF_SIZE: usize = 1024 * 8;
 
+/// Metadata for a [`File`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileMetadata {
+    /// The time the file was last modified.
+    ///
+    /// This value has second precision.
+    pub mtime: SystemTime,
+
+    /// The file mode (permissions).
+    pub mode: FileMode,
+
+    /// The uncompressed size of the file.
+    pub size: u64,
+}
+
 /// A file in a SQL archive.
 ///
 /// Writes to a [`File`] can optionally be compressed with DEFLATE. You can change the compression
@@ -94,15 +109,15 @@ impl<'conn, 'a> File<'conn, 'a> {
         self.compression = method;
     }
 
-    /// The file mode.
+    /// The file metadata.
     ///
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
-    pub fn mode(&self) -> crate::Result<FileMode> {
-        todo!()
+    pub fn metadata(&self) -> crate::Result<FileMetadata> {
+        self.store.read_metadata(&self.path)
     }
 
     /// Set the file mode.
@@ -113,19 +128,6 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     pub fn set_mode(&mut self, _mode: FileMode) -> crate::Result<()> {
-        todo!()
-    }
-
-    /// The time the file was last modified.
-    ///
-    /// This value has second precision.
-    ///
-    /// # Errors
-    ///
-    /// - [`ErrorKind::NotFound`]: This file does not exist.
-    ///
-    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
-    pub fn mtime(&self) -> crate::Result<SystemTime> {
         todo!()
     }
 

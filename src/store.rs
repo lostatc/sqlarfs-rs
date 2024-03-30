@@ -1,9 +1,10 @@
 use std::path::Path;
-use std::time::{self, SystemTime};
+use std::time::{self, Duration, SystemTime, UNIX_EPOCH};
 
 use rusqlite::blob::Blob;
 use rusqlite::{OptionalExtension, Savepoint};
 
+use super::file::FileMetadata;
 use super::metadata::FileMode;
 use super::util::u64_from_usize;
 
@@ -26,13 +27,6 @@ impl<'conn> FileBlob<'conn> {
     pub fn into_blob(self) -> Blob<'conn> {
         self.blob
     }
-}
-
-#[derive(Debug)]
-pub struct FileMetadata {
-    pub mtime: SystemTime,
-    pub mode: FileMode,
-    pub size: u64,
 }
 
 // Methods on this type map 1:1 to SQL queries. rusqlite errors are handled and converted to
@@ -209,6 +203,23 @@ impl<'conn> Store<'conn> {
         }
 
         Ok(())
+    }
+
+    pub fn read_metadata(&self, path: &Path) -> crate::Result<FileMetadata> {
+        self.tx()
+            .query_row(
+                "SELECT mode, mtime, sz FROM sqlar WHERE name = ?1;",
+                (path.to_string_lossy(),),
+                |row| {
+                    Ok(FileMetadata {
+                        mode: FileMode::from_bits_truncate(row.get(0)?),
+                        mtime: UNIX_EPOCH + Duration::from_secs(row.get(1)?),
+                        size: u64_from_usize(row.get(2)?),
+                    })
+                },
+            )
+            .optional()?
+            .ok_or(crate::ErrorKind::NotFound.into())
     }
 
     pub fn set_size(&self, path: &Path, size: u64) -> crate::Result<()> {

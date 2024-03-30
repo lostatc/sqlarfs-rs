@@ -11,6 +11,7 @@ use super::store::Store;
 use super::stream::{Compression, FileReader};
 use super::util::u64_from_usize;
 
+#[cfg(feature = "deflate")]
 const COPY_BUF_SIZE: usize = 1024 * 8;
 
 /// Metadata for a [`File`].

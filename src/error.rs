@@ -2,80 +2,60 @@ use std::fmt;
 use std::io;
 use std::result;
 
-use thiserror::Error as DeriveError;
-
-/// An opaque type that represents a SQLite error.
-///
-/// This type implements [`Debug`] and [`Display`], but not [`std::error::Error`]. Rather than try
-/// to use this as an error type, you should use [`sqlarfs::Error::Sqlite`].
-///
-/// [`Debug`]: fmt::Debug
-/// [`Display`]: fmt::Display
-/// [`sqlarfs::Error::Sqlite`]: crate::Error::Sqlite
-#[derive(Debug)]
-pub struct SqliteError {
-    inner: rusqlite::Error,
-}
-
-impl fmt::Display for SqliteError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.inner.fmt(f)
-    }
-}
-
 /// The error type for sqlarfs.
 ///
 /// This type can be converted [`From`] an [`std::io::Error`]. If the value the [`std::io::Error`]
 /// wraps can be downcast into a [`sqlarfs::Error`], it will be. Otherwise, it will be converted
-/// into [`sqlarfs::Error::Io`].
+/// into a new [`sqlarfs::Error`] with the [`sqlarfs::ErrorKind::Io`] kind.
 ///
 /// [`sqlarfs::Error`]: crate::Error
-/// [`sqlarfs::Error::Io`]: crate::Error::Io
-#[derive(Debug, DeriveError)]
-#[non_exhaustive]
-pub enum Error {
-    /// A resource already exists.
-    #[error("A resource already exists.")]
-    AlreadyExists,
+/// [`sqlarfs::ErrorKind::Io`]: crate::ErrorKind::Io
+#[derive(Debug)]
+pub struct Error {
+    kind: ErrorKind,
+    source: Option<anyhow::Error>,
+}
 
-    /// A resource was not found.
-    #[error("A resource was not found.")]
-    NotFound,
+impl Error {
+    pub fn new<E>(kind: ErrorKind, source: E) -> Self
+    where
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        Self {
+            kind,
+            source: Some(source.into()),
+        }
+    }
 
-    /// Some arguments were invalid.
-    #[error("Some arguments were invalid.")]
-    InvalidArgs,
+    pub fn kind(&self) -> &ErrorKind {
+        &self.kind
+    }
 
-    /// Attempted to read a compressed file, but the `deflate` Cargo feature was disabled.
-    #[error("Attempted to read a compressed file, but the `deflate` Cargo feature was disabled.")]
-    CompressionNotSupported,
+    pub fn into_kind(self) -> ErrorKind {
+        self.kind
+    }
+}
 
-    /// A file was modified in the database while you were trying to read or write to it.
-    ///
-    /// In SQLite parlance, this is called an ["expired
-    /// blob"](https://sqlite.org/c3ref/blob_open.html).
-    #[error(
-        "This file was modified in the database while you were trying to read or write to it."
-    )]
-    BlobExpired,
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.kind.fmt(f)
+    }
+}
 
-    /// Attempted to write more data to the SQLite archive than its maximum blob size will allow.
-    #[error(
-        "Attempted to write more data to the SQLite archive than its maximum blob size will allow."
-    )]
-    FileTooBig,
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.source.as_ref().map(|err| err.as_ref())
+    }
 
-    /// Attempted to write to a read-only archive or read-only file.
-    #[error("Attempted to write to a read-only archive or read-only file.")]
-    ReadOnly,
+    fn cause(&self) -> Option<&dyn std::error::Error> {
+        self.source()
+    }
+}
 
-    /// There was an error with the underlying SQLite database.
-    #[error("{0}")]
-    Sqlite(SqliteError),
-
-    /// An I/O error occurred.
-    #[error("{0}")]
-    Io(io::Error),
+impl From<ErrorKind> for Error {
+    fn from(kind: ErrorKind) -> Self {
+        Self { kind, source: None }
+    }
 }
 
 impl From<io::Error> for Error {
@@ -84,9 +64,11 @@ impl From<io::Error> for Error {
         match error.into_inner() {
             Some(payload) => match payload.downcast::<Error>() {
                 Ok(crate_error) => *crate_error,
-                Err(other_error) => Error::Io(io::Error::new(kind, other_error)),
+                Err(other_error) => {
+                    Error::new(ErrorKind::Io { kind }, io::Error::new(kind, other_error))
+                }
             },
-            None => Error::Io(io::Error::from(kind)),
+            None => Error::new(ErrorKind::Io { kind }, io::Error::from(kind)),
         }
     }
 }
@@ -94,18 +76,18 @@ impl From<io::Error> for Error {
 impl From<Error> for io::Error {
     fn from(err: Error) -> Self {
         // Don't use a default match arm here. We want to be explicit about how we're mapping
-        // `Error` variants to `io::ErrorKind` variants and make sure we remember to update this
-        // when we add new ones.
-        let kind = match err {
-            Error::AlreadyExists => io::ErrorKind::AlreadyExists,
-            Error::NotFound => io::ErrorKind::NotFound,
-            Error::InvalidArgs => io::ErrorKind::InvalidInput,
-            Error::CompressionNotSupported => io::ErrorKind::InvalidInput,
-            Error::BlobExpired => io::ErrorKind::Other,
-            Error::FileTooBig => io::ErrorKind::Other,
-            Error::ReadOnly => io::ErrorKind::Other,
-            Error::Sqlite(_) => io::ErrorKind::Other,
-            Error::Io(err) => return err,
+        // `ErrorKind` variants to `io::ErrorKind` variants and make sure we remember to update
+        // this when we add new ones.
+        let kind = match err.kind() {
+            ErrorKind::AlreadyExists => io::ErrorKind::AlreadyExists,
+            ErrorKind::NotFound => io::ErrorKind::NotFound,
+            ErrorKind::InvalidArgs => io::ErrorKind::InvalidInput,
+            ErrorKind::CompressionNotSupported => io::ErrorKind::InvalidInput,
+            ErrorKind::BlobExpired => io::ErrorKind::Other,
+            ErrorKind::FileTooBig => io::ErrorKind::Other,
+            ErrorKind::ReadOnly => io::ErrorKind::Other,
+            ErrorKind::Sqlite => io::ErrorKind::Other,
+            ErrorKind::Io { kind } => *kind,
         };
 
         io::Error::new(kind, err)
@@ -114,11 +96,68 @@ impl From<Error> for io::Error {
 
 impl From<rusqlite::Error> for Error {
     fn from(err: rusqlite::Error) -> Self {
-        match err.sqlite_error_code() {
-            Some(rusqlite::ErrorCode::ReadOnly) => Self::ReadOnly,
-            Some(rusqlite::ErrorCode::TooBig) => Self::FileTooBig,
-            _ => Self::Sqlite(SqliteError { inner: err }),
-        }
+        let kind = match err.sqlite_error_code() {
+            Some(rusqlite::ErrorCode::ReadOnly) => ErrorKind::ReadOnly,
+            Some(rusqlite::ErrorCode::TooBig) => ErrorKind::FileTooBig,
+            _ => ErrorKind::Sqlite,
+        };
+
+        Self::new(kind, err)
+    }
+}
+
+/// A category of [`Error`].
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum ErrorKind {
+    // If you update one of these doc comments, you may also want to update the
+    // [`std::fmt::Display`] impl.
+    /// A resource already exists.
+    AlreadyExists,
+
+    /// A resource was not found.
+    NotFound,
+
+    /// Some arguments were invalid.
+    InvalidArgs,
+
+    /// Attempted to read a compressed file, but the `deflate` Cargo feature was disabled.
+    CompressionNotSupported,
+
+    /// A file was modified in the database while you were trying to read or write to it.
+    ///
+    /// In SQLite parlance, this is called an ["expired
+    /// blob"](https://sqlite.org/c3ref/blob_open.html).
+    BlobExpired,
+
+    /// Attempted to write more data to the SQLite archive than its maximum blob size will allow.
+    FileTooBig,
+
+    /// Attempted to write to a read-only database.
+    ReadOnly,
+
+    /// There was an error from the underlying SQLite database.
+    Sqlite,
+
+    /// An I/O error occurred.
+    Io { kind: io::ErrorKind },
+}
+
+impl fmt::Display for ErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            // If you update one of these descriptions, you may also want to update the doc comment
+            // on the `ErrorKind` variant.
+            ErrorKind::AlreadyExists => "A resource already exists.",
+            ErrorKind::NotFound => "A resource was not found.",
+            ErrorKind::InvalidArgs => "Some arguments were invalid.",
+            ErrorKind::CompressionNotSupported => "Attempted to read a compressed file, but the `deflate` Cargo feature was disabled.",
+            ErrorKind::BlobExpired => "A file was modified in the database while you were trying to read or write to it.",
+            ErrorKind::FileTooBig => "Attempted to write more data to the SQLite archive than its maximum blob size will allow.",
+            ErrorKind::ReadOnly => "Attempted to write to a read-only database.",
+            ErrorKind::Sqlite => "There was an error from the underlying SQLite database.",
+            ErrorKind::Io { .. } => "An I/O error occurred.",
+        })
     }
 }
 

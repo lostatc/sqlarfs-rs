@@ -72,10 +72,10 @@ impl<'a> Read for InnerReader<'a> {
 /// Unless you have an exclusive lock on the database, it may be possible for other writers to
 /// modify the file in the database out from under you. SQLite calls this situation an ["expired
 /// blob"](https://sqlite.org/c3ref/blob_open.html), and it will cause reads to return an
-/// [`Error::BlobExpired`].
+/// [`ErrorKind::BlobExpired`].
 ///
 /// [`File`]: crate::File
-/// [`Error::BlobExpired`]: crate::Error::BlobExpired
+/// [`ErrorKind::BlobExpired`]: crate::ErrorKind::BlobExpired
 pub struct FileReader<'a> {
     inner: InnerReader<'a>,
 }
@@ -95,7 +95,7 @@ impl<'a> FileReader<'a> {
             });
 
             #[cfg(not(feature = "deflate"))]
-            return Err(crate::Error::CompressionNotSupported);
+            return Err(crate::ErrorKind::CompressionNotSupported.into());
         }
 
         Ok(Self {
@@ -108,7 +108,7 @@ impl<'a> Read for FileReader<'a> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.inner.read(buf).map_err(|err| {
             if io_err_has_sqlite_code(&err, rusqlite::ffi::ErrorCode::OperationAborted) {
-                return crate::Error::BlobExpired.into();
+                return crate::Error::new(crate::ErrorKind::BlobExpired, err).into();
             }
 
             err

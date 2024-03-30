@@ -28,6 +28,13 @@ impl<'conn> FileBlob<'conn> {
     }
 }
 
+#[derive(Debug)]
+pub struct FileMetadata {
+    pub mtime: SystemTime,
+    pub mode: FileMode,
+    pub size: u64,
+}
+
 // Methods on this type map 1:1 to SQL queries. rusqlite errors are handled and converted to
 // sqlarfs errors.
 #[derive(Debug)]
@@ -114,7 +121,7 @@ impl<'conn> Store<'conn> {
             .map(|mtime| -> crate::Result<_> {
                 Ok(mtime
                     .duration_since(time::UNIX_EPOCH)
-                    .map_err(|_| crate::Error::InvalidArgs)?
+                    .map_err(|err| crate::Error::new(crate::ErrorKind::InvalidArgs, err))?
                     .as_secs())
             })
             .transpose()?;
@@ -133,7 +140,7 @@ impl<'conn> Store<'conn> {
             Err(err)
                 if err.sqlite_error_code() == Some(rusqlite::ErrorCode::ConstraintViolation) =>
             {
-                Err(crate::Error::AlreadyExists)
+                Err(crate::Error::new(crate::ErrorKind::AlreadyExists, err))
             }
             Err(err) => Err(err.into()),
         }
@@ -146,7 +153,7 @@ impl<'conn> Store<'conn> {
         )?;
 
         if num_updated == 0 {
-            return Err(crate::Error::NotFound);
+            return Err(crate::ErrorKind::NotFound.into());
         }
 
         Ok(())
@@ -173,7 +180,7 @@ impl<'conn> Store<'conn> {
                 )?,
                 original_size,
             }),
-            None => Err(crate::Error::NotFound),
+            None => Err(crate::ErrorKind::NotFound.into()),
         }
     }
 
@@ -184,7 +191,7 @@ impl<'conn> Store<'conn> {
         )?;
 
         if num_updated == 0 {
-            return Err(crate::Error::NotFound);
+            return Err(crate::ErrorKind::NotFound.into());
         }
 
         Ok(())
@@ -197,7 +204,7 @@ impl<'conn> Store<'conn> {
         )?;
 
         if num_updated == 0 {
-            return Err(crate::Error::NotFound);
+            return Err(crate::ErrorKind::NotFound.into());
         }
 
         Ok(())
@@ -210,7 +217,7 @@ impl<'conn> Store<'conn> {
         )?;
 
         if num_updated == 0 {
-            return Err(crate::Error::NotFound);
+            return Err(crate::ErrorKind::NotFound.into());
         }
 
         Ok(())

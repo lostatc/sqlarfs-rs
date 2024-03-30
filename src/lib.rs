@@ -9,7 +9,7 @@ mod transaction;
 mod util;
 
 pub use archive::Archive;
-pub use error::{Error, Result, SqliteError};
+pub use error::{Error, ErrorKind, Result};
 pub use file::File;
 pub use metadata::FileMode;
 pub use open::OpenOptions;

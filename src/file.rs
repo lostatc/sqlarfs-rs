@@ -17,12 +17,12 @@ use super::util::u64_from_usize;
 /// method (compressed or uncompressed) via [`File::set_compression`]. The default is to compress
 /// writes if and only if the `deflate` Cargo feature is enabled. The selected compression method
 /// does not affect the ability to read compressed files, but attempting to read a compressed file
-/// will fail with [`Error::CompressionNotSupported`] if the `deflate` feature is disabled.
+/// will fail with [`ErrorKind::CompressionNotSupported`] if the `deflate` feature is disabled.
 ///
 /// [`Read`]: std::io::Read
 /// [`Write`]: std::io::Write
 /// [`Seek`]: std::io::Seek
-/// [`Error::CompressionNotSupported`]: crate::Error::CompressionNotSupported
+/// [`ErrorKind::CompressionNotSupported`]: crate::ErrorKind::CompressionNotSupported
 #[derive(Debug)]
 pub struct File<'conn, 'a> {
     path: PathBuf,
@@ -61,9 +61,9 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// Unless you have an exclusive lock on the database, the file may be deleted between when you
     /// call this method and when you act on its result! If you need the file to exist, consider
-    /// calling [`File::create`] and handling the potential [`Error::AlreadyExists`].
+    /// calling [`File::create`] and handling the potential [`ErrorKind::AlreadyExists`].
     ///
-    /// [`Error::AlreadyExists`]: crate::Error::AlreadyExists
+    /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
     pub fn exists(&self) -> crate::Result<bool> {
         todo!()
     }
@@ -74,9 +74,9 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// # Errors
     ///
-    /// - [`Error::AlreadyExists`]: This file already exists in the archive.
+    /// - [`ErrorKind::AlreadyExists`]: This file already exists in the archive.
     ///
-    /// [`Error::AlreadyExists`]: crate::Error::AlreadyExists
+    /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
     pub fn create(&mut self, mode: FileMode) -> crate::Result<()> {
         self.store
             .create_file(&self.path, Some(mode), Some(SystemTime::now()))
@@ -96,9 +96,9 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// # Errors
     ///
-    /// - [`Error::NotFound`]: This file does not exist.
+    /// - [`ErrorKind::NotFound`]: This file does not exist.
     ///
-    /// [`Error::NotFound`]: crate::Error::NotFound
+    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     pub fn mode(&self) -> crate::Result<FileMode> {
         todo!()
     }
@@ -107,9 +107,9 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// # Errors
     ///
-    /// - [`Error::NotFound`]: This file does not exist.
+    /// - [`ErrorKind::NotFound`]: This file does not exist.
     ///
-    /// [`Error::NotFound`]: crate::Error::NotFound
+    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     pub fn set_mode(&mut self, _mode: FileMode) -> crate::Result<()> {
         todo!()
     }
@@ -120,9 +120,9 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// # Errors
     ///
-    /// - [`Error::NotFound`]: This file does not exist.
+    /// - [`ErrorKind::NotFound`]: This file does not exist.
     ///
-    /// [`Error::NotFound`]: crate::Error::NotFound
+    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     pub fn mtime(&self) -> crate::Result<SystemTime> {
         todo!()
     }
@@ -133,9 +133,9 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// # Errors
     ///
-    /// - [`Error::NotFound`]: This file does not exist.
+    /// - [`ErrorKind::NotFound`]: This file does not exist.
     ///
-    /// [`Error::NotFound`]: crate::Error::NotFound
+    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     pub fn set_mtime(&mut self, _mtime: SystemTime) -> crate::Result<()> {
         todo!()
     }
@@ -144,9 +144,9 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// # Errors
     ///
-    /// - [`Error::NotFound`]: This file does not exist.
+    /// - [`ErrorKind::NotFound`]: This file does not exist.
     ///
-    /// [`Error::NotFound`]: crate::Error::NotFound
+    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     pub fn len(&self) -> crate::Result<u64> {
         todo!()
     }
@@ -155,9 +155,9 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// # Errors
     ///
-    /// - [`Error::NotFound`]: This file does not exist.
+    /// - [`ErrorKind::NotFound`]: This file does not exist.
     ///
-    /// [`Error::NotFound`]: crate::Error::NotFound
+    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     pub fn is_empty(&self) -> crate::Result<bool> {
         Ok(self.len()? == 0)
     }
@@ -166,9 +166,9 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// # Errors
     ///
-    /// - [`Error::NotFound`]: This file does not exist.
+    /// - [`ErrorKind::NotFound`]: This file does not exist.
     ///
-    /// [`Error::NotFound`]: crate::Error::NotFound
+    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     pub fn truncate(&mut self) -> crate::Result<()> {
         self.store.exec(|store| {
             store.allocate_blob(&self.path, 0)?;
@@ -189,12 +189,12 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// # Errors
     ///
-    /// - [`Error::NotFound`]: This file does not exist.
-    /// - [`Error::CompressionNotSupported`]: This file is compressed, but the `deflate` Cargo
+    /// - [`ErrorKind::NotFound`]: This file does not exist.
+    /// - [`ErrorKind::CompressionNotSupported`]: This file is compressed, but the `deflate` Cargo
     /// feature is disabled.
     ///
-    /// [`Error::NotFound`]: crate::Error::NotFound
-    /// [`Error::CompressionNotSupported`]: crate::Error::CompressionNotSupported
+    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
+    /// [`ErrorKind::CompressionNotSupported`]: crate::ErrorKind::CompressionNotSupported
     pub fn reader(&mut self) -> crate::Result<FileReader> {
         FileReader::new(self.store.open_blob(&self.path, true)?)
     }
@@ -238,12 +238,13 @@ impl<'conn, 'a> File<'conn, 'a> {
                     // compress it, so we need to write it to an in-memory buffer to find out how
                     // large of a blob to allocate in the database.
 
-                    let buf = match size_hint {
-                        Some(len) => Vec::with_capacity(
-                            len.try_into().map_err(|_| crate::Error::FileTooLarge)?,
-                        ),
-                        None => Vec::new(),
-                    };
+                    let buf =
+                        match size_hint {
+                            Some(len) => Vec::with_capacity(len.try_into().map_err(|err| {
+                                crate::Error::new(crate::ErrorKind::FileTooBig, err)
+                            })?),
+                            None => Vec::new(),
+                        };
 
                     let mut encoder = ZlibEncoder::new(buf, flate2::Compression::new(level));
 
@@ -272,9 +273,9 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// # Errors
     ///
-    /// - [`Error::NotFound`]: This file does not exist.
+    /// - [`ErrorKind::NotFound`]: This file does not exist.
     ///
-    /// [`Error::NotFound`]: crate::Error::NotFound
+    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     pub fn write_from<R>(&mut self, reader: &mut R) -> crate::Result<()>
     where
         R: ?Sized + Read,
@@ -288,9 +289,9 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// # Errors
     ///
-    /// - [`Error::NotFound`]: This file does not exist.
+    /// - [`ErrorKind::NotFound`]: This file does not exist.
     ///
-    /// [`Error::NotFound`]: crate::Error::NotFound
+    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     pub fn write_bytes(&mut self, bytes: &[u8]) -> crate::Result<()> {
         self.store.exec(|store| {
             match self.compression {
@@ -322,9 +323,9 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// # Errors
     ///
-    /// - [`Error::NotFound`]: This file does not exist.
+    /// - [`ErrorKind::NotFound`]: This file does not exist.
     ///
-    /// [`Error::NotFound`]: crate::Error::NotFound
+    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     pub fn write_str<S: AsRef<str>>(&mut self, s: S) -> crate::Result<()> {
         self.write_bytes(s.as_ref().as_bytes())
     }
@@ -335,9 +336,9 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// # Errors
     ///
-    /// - [`Error::NotFound`]: This file does not exist.
+    /// - [`ErrorKind::NotFound`]: This file does not exist.
     ///
-    /// [`Error::NotFound`]: crate::Error::NotFound
+    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     pub fn write_file(&mut self, file: &mut fs::File) -> crate::Result<()> {
         // We know the size of the file, which enabled some optimizations.
         let metadata = file.metadata()?;

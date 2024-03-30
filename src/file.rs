@@ -82,7 +82,11 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
     pub fn exists(&self) -> crate::Result<bool> {
-        todo!()
+        match self.metadata() {
+            Ok(_) => Ok(true),
+            Err(err) if err.kind() == &crate::ErrorKind::NotFound => Ok(false),
+            Err(err) => Err(err),
+        }
     }
 
     /// Create the file if it doesn't already exist.

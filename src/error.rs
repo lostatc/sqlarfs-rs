@@ -107,7 +107,7 @@ impl From<rusqlite::Error> for Error {
 }
 
 /// A category of [`Error`].
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ErrorKind {
     // If you update one of these doc comments, you may also want to update the

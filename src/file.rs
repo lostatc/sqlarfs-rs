@@ -11,6 +11,8 @@ use super::store::Store;
 use super::stream::{Compression, FileReader};
 use super::util::u64_from_usize;
 
+const COPY_BUF_SIZE: usize = 1024 * 8;
+
 /// A file in a SQL archive.
 ///
 /// Writes to a [`File`] can optionally be compressed with DEFLATE. You can change the compression
@@ -237,27 +239,111 @@ impl<'conn, 'a> File<'conn, 'a> {
                     // We have no way of knowing the compressed size of the data until we actually
                     // compress it, so we need to write it to an in-memory buffer to find out how
                     // large of a blob to allocate in the database.
+                    //
+                    // Additionally, we need to know whether the compressed data is smaller than
+                    // the uncompressed data or not, but we want to avoid keeping both the full
+                    // uncompressed data and the full compressed data in memory, because the
+                    // `reader` could potentially return a large amount of data.
+                    //
+                    // This implementation tries to strike a balance between minimizing the amount
+                    // of data we're keeping in memory and avoiding the need to do extra work
+                    // compressing data multiple times.
+                    //
+                    // The worst-case scenario is that we find out the input is compressible only
+                    // after we've compressed a lot of it, after which we end up compressing it
+                    // again.
+                    //
+                    // However, if the input is compressible, we'll probably figure that out pretty
+                    // quickly. As files get larger, the probability that they can't be compressed
+                    // *at all* decreases.
+                    //
+                    // We're also relying on the user to disable compression if they know they're
+                    // going to be writing a lot of data that's mostly incompressible (e.g. photos
+                    // and videos that are already compressed).
 
-                    let buf =
+                    let compression_level = flate2::Compression::new(level);
+
+                    let allocation_size =
                         match size_hint {
-                            Some(len) => Vec::with_capacity(len.try_into().map_err(|err| {
+                            Some(len) => Some(len.try_into().map_err(|err| {
                                 crate::Error::new(crate::ErrorKind::FileTooBig, err)
                             })?),
-                            None => Vec::new(),
+                            None => None,
                         };
 
-                    let mut encoder = ZlibEncoder::new(buf, flate2::Compression::new(level));
+                    let mut uncompressed_buf = if let Some(capacity) = allocation_size {
+                        Vec::with_capacity(capacity)
+                    } else {
+                        Vec::new()
+                    };
 
-                    let bytes_read = io::copy(reader, &mut encoder)?;
+                    let mut copy_buf = vec![0u8; COPY_BUF_SIZE];
 
-                    let compressed_data = encoder.finish()?;
+                    // This encoder doesn't write the compressed data anywhere; we're only using it
+                    // to determine the compressed size of the data.
+                    let mut test_encoder = ZlibEncoder::new(io::sink(), compression_level);
 
-                    store.allocate_blob(&self.path, u64_from_usize(compressed_data.len()))?;
+                    let mut is_compressible = false;
+
+                    // We need to keep track of the total uncompressed size of the input, because
+                    // the uncompressed size of the file goes in the database.
+                    let mut bytes_read_so_far = 0;
+
+                    // Determine whether this file is compressible by writing the data to the
+                    // encoder until it says the output size is smaller than the input size.
+                    loop {
+                        let bytes_read = reader.read(&mut copy_buf)?;
+                        bytes_read_so_far += u64_from_usize(bytes_read);
+
+                        if bytes_read == 0 {
+                            break;
+                        }
+
+                        uncompressed_buf.extend_from_slice(&copy_buf[..bytes_read]);
+
+                        test_encoder.write_all(&copy_buf[..bytes_read])?;
+
+                        if test_encoder.total_out() < test_encoder.total_in() {
+                            is_compressible = true;
+                            break;
+                        }
+                    }
+
+                    let bytes_to_write = if is_compressible {
+                        // Now that we know the file is compressible, and we have the full contents
+                        // of the `reader` in memory, we can compress it and keep the result to
+                        // write to the blob.
+
+                        let compressed_buf = if let Some(capacity) = allocation_size {
+                            Vec::with_capacity(capacity)
+                        } else {
+                            Vec::new()
+                        };
+
+                        let mut encoder = ZlibEncoder::new(compressed_buf, compression_level);
+
+                        // Copy the data we've read from the `reader` so far into the encoder.
+                        encoder.write_all(&uncompressed_buf)?;
+
+                        // Drop the uncompressed data to free that memory; we don't need it
+                        // anymore.
+                        drop(uncompressed_buf);
+
+                        // Copy the rest of the data—the data we have not read yet—into the
+                        // encoder.
+                        bytes_read_so_far += io::copy(reader, &mut encoder)?;
+
+                        encoder.finish()?
+                    } else {
+                        uncompressed_buf
+                    };
+
+                    store.allocate_blob(&self.path, u64_from_usize(bytes_to_write.len()))?;
                     let mut target_blob = store.open_blob(&self.path, false)?.into_blob();
 
-                    target_blob.write_all(&compressed_data)?;
+                    target_blob.write_all(&bytes_to_write)?;
 
-                    bytes_read
+                    bytes_read_so_far
                 }
             };
 
@@ -307,7 +393,13 @@ impl<'conn, 'a> File<'conn, 'a> {
                     encoder.write_all(bytes)?;
                     let compressed_bytes = encoder.finish()?;
 
-                    store.store_blob(&self.path, &compressed_bytes)?;
+                    // Only use the compressed data if it's smaller than the uncompressed data. The
+                    // sqlar spec requires this.
+                    if compressed_bytes.len() < bytes.len() {
+                        store.store_blob(&self.path, &compressed_bytes)?;
+                    } else {
+                        store.store_blob(&self.path, bytes)?;
+                    }
                 }
             };
 
@@ -333,6 +425,8 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// Copy the contents of the given `file` into this file.
     ///
     /// This truncates this file and copies the entire `file` into it.
+    ///
+    /// Prefer this to [`File::write_from`] if the input is a [`std::fs::File`].
     ///
     /// # Errors
     ///

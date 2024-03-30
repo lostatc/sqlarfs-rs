@@ -52,7 +52,8 @@ impl<'conn> Store<'conn> {
     pub fn into_tx(self) -> rusqlite::Transaction<'conn> {
         match self.inner {
             InnerTransaction::Transaction(tx) => tx,
-            // TODO: Document
+            // This will only ever be the case in the middle of a [`Store::exec`] block, where it's
+            // not possible call this method.
             InnerTransaction::Savepoint(_) => unreachable!(),
         }
     }

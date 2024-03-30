@@ -63,14 +63,14 @@ pub enum Error {
     #[error(
         "Attempted to write more data to the SQLite archive than its maximum blob size will allow."
     )]
-    FileTooLarge,
+    FileTooBig,
 
     /// Attempted to write to a read-only archive or read-only file.
     #[error("Attempted to write to a read-only archive or read-only file.")]
     ReadOnly,
 
     /// There was an error with the underlying SQLite database.
-    #[error("There was an error with the underlying SQLite database.\n{0}")]
+    #[error("{0}")]
     Sqlite(SqliteError),
 
     /// An I/O error occurred.
@@ -102,7 +102,7 @@ impl From<Error> for io::Error {
             Error::InvalidArgs => io::ErrorKind::InvalidInput,
             Error::CompressionNotSupported => io::ErrorKind::InvalidInput,
             Error::BlobExpired => io::ErrorKind::Other,
-            Error::FileTooLarge => io::ErrorKind::Other,
+            Error::FileTooBig => io::ErrorKind::Other,
             Error::ReadOnly => io::ErrorKind::Other,
             Error::Sqlite(_) => io::ErrorKind::Other,
             Error::Io(err) => return err,
@@ -116,6 +116,7 @@ impl From<rusqlite::Error> for Error {
     fn from(err: rusqlite::Error) -> Self {
         match err.sqlite_error_code() {
             Some(rusqlite::ErrorCode::ReadOnly) => Self::ReadOnly,
+            Some(rusqlite::ErrorCode::TooBig) => Self::FileTooBig,
             _ => Self::Sqlite(SqliteError { inner: err }),
         }
     }

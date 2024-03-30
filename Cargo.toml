@@ -12,7 +12,8 @@ flate2 = { version = "1.0.28", optional = true }
 rusqlite = { version = "0.31.0", features = ["bundled", "blob"] }
 
 [dev-dependencies]
-xpct = "0.5.1"
+rand = { version = "0.8.5", features = ["small_rng"] }
+xpct = { version = "0.5.1", features = ["diff"] }
 
 [features]
 default = ["deflate"]

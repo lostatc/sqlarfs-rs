@@ -1,13 +1,14 @@
-use std::io::prelude::*;
+use std::io::{self, prelude::*};
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use flate2::write::ZlibEncoder;
 use rand::rngs::SmallRng;
 use rand::{prelude::*, SeedableRng};
 use sqlarfs::{Compression, Connection, ErrorKind, FileMetadata, FileMode};
 use xpct::{
-    all, approx_eq_time, be_err, be_false, be_none, be_ok, be_some, be_true, be_zero, eq_diff,
-    equal, expect, fields, match_fields, match_pattern, pattern,
+    all, approx_eq_time, be_empty, be_err, be_false, be_ge, be_lt, be_none, be_ok, be_some,
+    be_true, be_zero, eq_diff, equal, expect, fields, match_fields, match_pattern, pattern,
 };
 
 fn connection() -> sqlarfs::Result<Connection> {
@@ -23,6 +24,61 @@ fn random_bytes(len: usize) -> Vec<u8> {
     let mut rng = SmallRng::from_entropy();
     rng.fill_bytes(&mut buf);
     buf
+}
+
+// A buffer of bytes that can be compressed to a smaller size.
+fn compressible_bytes() -> Vec<u8> {
+    vec![0u8; 64]
+}
+
+// A buffer of bytes that cannot be compressed to a smaller size.
+fn incompressible_bytes() -> Vec<u8> {
+    // Make it deterministic to ensure tests don't flake, just in case zlib *can* manage to
+    // compress these random non-repeating bytes.
+    let mut rng = SmallRng::seed_from_u64(0);
+
+    // No repeating bytes.
+    let pool = (0..255).collect::<Vec<u8>>();
+
+    pool.choose_multiple(&mut rng, 64).copied().collect()
+}
+
+// Some of our tests require inputs that we know for sure are compressible via zlib. Let's make
+// absolutely sure that the test data we are using is in fact compressible.
+#[test]
+fn validate_compressible_bytes_are_actually_zlib_compressible() -> io::Result<()> {
+    let compressible_bytes = compressible_bytes();
+
+    let output_buf = Vec::with_capacity(compressible_bytes.len());
+
+    let mut encoder = ZlibEncoder::new(output_buf, flate2::Compression::fast());
+
+    encoder.write_all(&compressible_bytes)?;
+
+    let compressed_bytes = encoder.finish()?;
+
+    expect!(compressed_bytes.len()).to(be_lt(compressible_bytes.len()));
+
+    Ok(())
+}
+
+// Some of our tests require inputs that we know for sure are **not** compressible via zlib. Let's
+// make absolutely sure that the test data we are using is in fact not compressible.
+#[test]
+fn validate_incompressible_bytes_are_actually_not_zlib_compressible() -> io::Result<()> {
+    let incompressible_bytes = incompressible_bytes();
+
+    let output_buf = Vec::with_capacity(incompressible_bytes.len());
+
+    let mut encoder = ZlibEncoder::new(output_buf, flate2::Compression::fast());
+
+    encoder.write_all(&incompressible_bytes)?;
+
+    let compressed_bytes = encoder.finish()?;
+
+    expect!(compressed_bytes.len()).to(be_ge(incompressible_bytes.len()));
+
+    Ok(())
 }
 
 #[test]
@@ -332,7 +388,7 @@ fn write_incompressible_bytes_with_compression() -> sqlarfs::Result<()> {
 
         file.set_compression(Compression::FAST);
 
-        let expected = random_bytes(32);
+        let expected = incompressible_bytes();
 
         expect!(file.write_bytes(&expected)).to(be_ok());
 
@@ -364,7 +420,7 @@ fn write_compressible_bytes_with_compression() -> sqlarfs::Result<()> {
 
         file.set_compression(Compression::FAST);
 
-        let expected = vec![0u8; 32];
+        let expected = compressible_bytes();
 
         expect!(file.write_bytes(&expected)).to(be_ok());
 
@@ -433,6 +489,145 @@ fn write_string() -> sqlarfs::Result<()> {
         reader.read_to_string(&mut actual)?;
 
         expect!(actual.as_str()).to(eq_diff(expected));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn truncated_file_returns_no_bytes() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut file = archive.open(Path::new("file"));
+        file.create(None)?;
+
+        let expected = random_bytes(32);
+
+        file.write_bytes(&expected)?;
+
+        expect!(file.truncate()).to(be_ok());
+
+        let mut reader = file.reader()?;
+        let mut actual = Vec::new();
+
+        expect!(reader.read_to_end(&mut actual))
+            .to(be_ok())
+            .to(be_zero());
+
+        expect!(&actual).to(be_empty());
+
+        drop(reader);
+
+        expect!(file.metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.size)
+            .to(be_zero());
+
+        Ok(())
+    })
+}
+
+#[test]
+fn truncate_file_when_it_does_not_exist() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut file = archive.open(Path::new("file"));
+
+        expect!(file.truncate())
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::NotFound));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn write_from_reader_without_compression() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut file = archive.open(Path::new("file"));
+        file.create(None)?;
+
+        file.set_compression(Compression::None);
+
+        let expected = random_bytes(32);
+
+        file.write_from(&mut expected.as_slice())?;
+
+        let mut reader = file.reader()?;
+        let mut actual = Vec::with_capacity(expected.len());
+
+        reader.read_to_end(&mut actual)?;
+
+        expect!(&actual).to(eq_diff(&expected));
+
+        drop(reader);
+
+        expect!(file.metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.size)
+            .try_into::<usize>()
+            .to(equal(expected.len()));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn write_incompressible_data_from_reader_with_compression() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut file = archive.open(Path::new("file"));
+        file.create(None)?;
+
+        file.set_compression(Compression::FAST);
+
+        let expected = incompressible_bytes();
+
+        file.write_from(&mut expected.as_slice())?;
+
+        let mut reader = file.reader()?;
+        let mut actual = Vec::with_capacity(expected.len());
+
+        reader.read_to_end(&mut actual)?;
+
+        expect!(&actual).to(eq_diff(&expected));
+
+        drop(reader);
+
+        expect!(file.metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.size)
+            .try_into::<usize>()
+            .to(equal(expected.len()));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn write_compressible_data_from_reader_with_compression() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut file = archive.open(Path::new("file"));
+        file.create(None)?;
+
+        file.set_compression(Compression::FAST);
+
+        let expected = compressible_bytes();
+
+        file.write_from(&mut expected.as_slice())?;
+
+        let mut reader = file.reader()?;
+        let mut actual = Vec::with_capacity(expected.len());
+
+        reader.read_to_end(&mut actual)?;
+
+        expect!(&actual).to(eq_diff(&expected));
+
+        drop(reader);
+
+        expect!(file.metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.size)
+            .try_into::<usize>()
+            .to(equal(expected.len()));
 
         Ok(())
     })

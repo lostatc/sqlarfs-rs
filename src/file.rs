@@ -103,6 +103,10 @@ impl<'conn, 'a> File<'conn, 'a> {
             .create_file(&self.path, Some(mode), Some(SystemTime::now()))
     }
 
+    pub fn delete(&mut self) -> crate::Result<()> {
+        self.store.delete_file(&self.path)
+    }
+
     /// The current compression method used when writing to the file.
     pub fn compression(&mut self) -> Compression {
         self.compression

@@ -144,17 +144,6 @@ impl<'conn, 'a> File<'conn, 'a> {
         self.store.set_mtime(&self.path, mtime)
     }
 
-    /// The uncompressed size of the file.
-    ///
-    /// # Errors
-    ///
-    /// - [`ErrorKind::NotFound`]: This file does not exist.
-    ///
-    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
-    pub fn len(&self) -> crate::Result<u64> {
-        todo!()
-    }
-
     /// Whether the file is empty.
     ///
     /// # Errors
@@ -163,7 +152,8 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     pub fn is_empty(&self) -> crate::Result<bool> {
-        Ok(self.len()? == 0)
+        let metadata = self.metadata()?;
+        Ok(metadata.size == 0)
     }
 
     /// Truncate the file to zero bytes.

@@ -127,8 +127,8 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// - [`ErrorKind::NotFound`]: This file does not exist.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
-    pub fn set_mode(&mut self, _mode: FileMode) -> crate::Result<()> {
-        todo!()
+    pub fn set_mode(&mut self, mode: FileMode) -> crate::Result<()> {
+        self.store.set_mode(&self.path, mode)
     }
 
     /// Set the time the file was last modified.
@@ -140,8 +140,8 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// - [`ErrorKind::NotFound`]: This file does not exist.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
-    pub fn set_mtime(&mut self, _mtime: SystemTime) -> crate::Result<()> {
-        todo!()
+    pub fn set_mtime(&mut self, mtime: SystemTime) -> crate::Result<()> {
+        self.store.set_mtime(&self.path, mtime)
     }
 
     /// The uncompressed size of the file.

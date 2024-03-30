@@ -222,6 +222,37 @@ impl<'conn> Store<'conn> {
             .ok_or(crate::ErrorKind::NotFound.into())
     }
 
+    pub fn set_mode(&self, path: &Path, mode: FileMode) -> crate::Result<()> {
+        let num_updated = self.tx().execute(
+            "UPDATE sqlar SET mode = ?1 WHERE name = ?2",
+            (mode.bits(), path.to_string_lossy()),
+        )?;
+
+        if num_updated == 0 {
+            return Err(crate::ErrorKind::NotFound.into());
+        }
+
+        Ok(())
+    }
+
+    pub fn set_mtime(&self, path: &Path, mtime: SystemTime) -> crate::Result<()> {
+        let mtime_secs = mtime
+            .duration_since(time::UNIX_EPOCH)
+            .map_err(|err| crate::Error::new(crate::ErrorKind::InvalidArgs, err))?
+            .as_secs();
+
+        let num_updated = self.tx().execute(
+            "UPDATE sqlar SET mtime = ?1 WHERE name = ?2",
+            (mtime_secs, path.to_string_lossy()),
+        )?;
+
+        if num_updated == 0 {
+            return Err(crate::ErrorKind::NotFound.into());
+        }
+
+        Ok(())
+    }
+
     pub fn set_size(&self, path: &Path, size: u64) -> crate::Result<()> {
         let num_updated = self.tx().execute(
             "UPDATE sqlar SET sz = ?1 WHERE name = ?2",

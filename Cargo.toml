@@ -2,6 +2,8 @@
 name = "sqlarfs"
 version = "0.1.0"
 edition = "2021"
+# If you update this, update the GitHub Actions workflow as well.
+rust-version = "1.70.0"
 
 [dependencies]
 anyhow = "1.0.81"

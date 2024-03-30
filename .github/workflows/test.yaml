@@ -1,0 +1,74 @@
+name: "Test"
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  check:
+    name: "Check"
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: "-D warnings"
+    steps:
+      - name: "Checkout sources"
+        uses: actions/checkout@v4
+
+        # We check against the MSRV to ensure we're not using Rust features
+        # from a later version of Rust. If you update the MSRV here, update the
+        # Cargo.toml as well.
+      - name: "Install MSRV toolchain"
+        run: rustup toolchain install --profile minimal 1.70.0
+
+      - name: "Run cargo check --all-features"
+        run: cargo check --all-features
+
+      - name: "Run cargo check --no-default-features"
+        run: cargo check --no-default-features
+
+  test:
+    name: "Test"
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: "-D warnings"
+    steps:
+      - name: "Checkout sources"
+        uses: actions/checkout@v4
+
+      - name: "Install stable toolchain"
+        run: rustup toolchain install --profile minimal stable
+
+      - name: "Run cargo test --all-features"
+        run: cargo test --all-features
+
+  lints:
+    name: "Lint"
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: "-D warnings"
+    steps:
+      - name: "Checkout sources"
+        uses: actions/checkout@v4
+
+      - name: "Install stable toolchain"
+        run: rustup toolchain install --profile minimal --component rustfmt --component clippy stable
+
+      - name: "Run cargo fmt"
+        run: cargo fmt --all -- --check
+
+      - name: "Run cargo clippy"
+        run: cargo clippy --all-features
+
+  docs:
+    name: "Docs"
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: "-D warnings"
+    steps:
+      - name: "Checkout sources"
+        uses: actions/checkout@v4
+
+        # We use the nightly toolchain because that's the one used by docs.rs.
+      - name: "Install nightly toolchain"
+        run: rustup toolchain install --profile minimal nightly
+
+      - name: "Run cargo doc"
+        run: cargo +nightly doc --all-features --no-deps

@@ -197,3 +197,45 @@ fn set_file_mtime() -> sqlarfs::Result<()> {
         Ok(())
     })
 }
+
+#[test]
+fn file_size_is_zero_when_file_is_empty() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut file = archive.open(Path::new("existing-file"));
+
+        file.create(None)?;
+
+        let metadata = file.metadata()?;
+
+        expect!(metadata.size).to(be_zero());
+
+        Ok(())
+    })
+}
+
+#[test]
+fn file_correctly_reports_being_empty() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut file = archive.open(Path::new("existing-file"));
+
+        file.create(None)?;
+
+        expect!(file.is_empty()).to(be_ok()).to(be_true());
+
+        Ok(())
+    })
+}
+
+#[test]
+fn file_correctly_reports_being_not_empty() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut file = archive.open(Path::new("existing-file"));
+
+        file.create(None)?;
+        file.write_str("file contents")?;
+
+        expect!(file.is_empty()).to(be_ok()).to(be_false());
+
+        Ok(())
+    })
+}

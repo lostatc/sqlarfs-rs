@@ -40,6 +40,7 @@ impl Error {
 }
 
 impl fmt::Display for Error {
+    #[cfg_attr(coverage_nightly, coverage(off))]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.kind.fmt(f)
     }
@@ -73,6 +74,7 @@ impl From<io::Error> for Error {
 }
 
 impl From<Error> for io::Error {
+    #[cfg_attr(coverage_nightly, coverage(off))]
     fn from(err: Error) -> Self {
         // Don't use a default match arm here. We want to be explicit about how we're mapping
         // `ErrorKind` variants to `io::ErrorKind` variants and make sure we remember to update
@@ -152,6 +154,7 @@ pub enum ErrorKind {
 }
 
 impl fmt::Display for ErrorKind {
+    #[cfg_attr(coverage_nightly, coverage(off))]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             // If you update one of these descriptions, you may also want to update the doc comment

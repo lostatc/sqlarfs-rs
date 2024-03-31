@@ -748,16 +748,3 @@ fn write_compressible_data_from_file_with_compression() -> sqlarfs::Result<()> {
         Ok(())
     })
 }
-
-// We test the debug impl to avoid it affecting our coverage report.
-#[test]
-fn file_reader_debug_impl() -> sqlarfs::Result<()> {
-    connection()?.exec(|archive| {
-        let mut file = archive.open("file");
-        file.create(None)?;
-
-        format!("{:?}", file.reader()?);
-
-        Ok(())
-    })
-}

@@ -3,6 +3,9 @@
 //! This library is a Rust implementation of the [sqlar](https://sqlite.org/sqlar.html) format for
 //! SQLite archive files.
 
+// This requires the nightly toolchain.
+#![cfg_attr(coverage_nightly, feature(coverage_attribute))]
+
 mod archive;
 mod error;
 mod file;

@@ -44,6 +44,7 @@ enum InnerReader<'a> {
 }
 
 impl<'a> fmt::Debug for InnerReader<'a> {
+    #[cfg_attr(coverage_nightly, coverage(off))]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             #[cfg(feature = "deflate")]

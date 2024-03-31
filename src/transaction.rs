@@ -152,3 +152,120 @@ impl<'conn> Transaction<'conn> {
         Ok(self.archive.into_tx().commit()?)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use xpct::{be_err, be_ok, expect};
+
+    use super::*;
+
+    fn test_transaction_commits_successfully(
+        conn: &mut Connection,
+        behavior: TransactionBehavior,
+    ) -> crate::Result<()> {
+        let mut tx = conn.transaction_with(behavior)?;
+
+        tx.archive_mut().init()?;
+
+        tx.commit()?;
+
+        conn.exec(|archive| {
+            expect!(archive.open("file").create(None)).to(be_ok());
+
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn transaction_with_deferred_and_commit() -> crate::Result<()> {
+        let mut conn = Connection::open_in_memory()?;
+
+        test_transaction_commits_successfully(&mut conn, TransactionBehavior::Deferred)
+    }
+
+    #[test]
+    fn transaction_with_immediate_and_commit() -> crate::Result<()> {
+        let mut conn = Connection::open_in_memory()?;
+
+        test_transaction_commits_successfully(&mut conn, TransactionBehavior::Immediate)
+    }
+
+    #[test]
+    fn transaction_with_exclusive_and_commit() -> crate::Result<()> {
+        let mut conn = Connection::open_in_memory()?;
+
+        test_transaction_commits_successfully(&mut conn, TransactionBehavior::Exclusive)
+    }
+
+    fn test_transaction_rolls_back_successfully(
+        conn: &mut Connection,
+        behavior: TransactionBehavior,
+    ) -> crate::Result<()> {
+        let mut tx = conn.transaction_with(behavior)?;
+
+        tx.archive_mut().init()?;
+
+        tx.rollback()?;
+
+        conn.exec(|archive| {
+            expect!(archive.open("file").create(None)).to(be_err());
+
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn transaction_with_deferred_and_rollback() -> crate::Result<()> {
+        let mut conn = Connection::open_in_memory()?;
+
+        test_transaction_rolls_back_successfully(&mut conn, TransactionBehavior::Deferred)
+    }
+
+    #[test]
+    fn transaction_with_immediate_and_rollback() -> crate::Result<()> {
+        let mut conn = Connection::open_in_memory()?;
+
+        test_transaction_rolls_back_successfully(&mut conn, TransactionBehavior::Immediate)
+    }
+
+    #[test]
+    fn transaction_with_exclusive_and_rollback() -> crate::Result<()> {
+        let mut conn = Connection::open_in_memory()?;
+
+        test_transaction_rolls_back_successfully(&mut conn, TransactionBehavior::Exclusive)
+    }
+
+    fn test_exec_commits_successfully(
+        conn: &mut Connection,
+        behavior: TransactionBehavior,
+    ) -> crate::Result<()> {
+        conn.exec_with(behavior, |archive| archive.init())?;
+
+        conn.exec(|archive| {
+            expect!(archive.open("file").create(None)).to(be_ok());
+
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn exec_with_deferred_and_commit() -> crate::Result<()> {
+        let mut conn = Connection::open_in_memory()?;
+
+        test_exec_commits_successfully(&mut conn, TransactionBehavior::Deferred)
+    }
+
+    #[test]
+    fn exec_with_immediate_and_commit() -> crate::Result<()> {
+        let mut conn = Connection::open_in_memory()?;
+
+        test_exec_commits_successfully(&mut conn, TransactionBehavior::Immediate)
+    }
+
+    #[test]
+    fn exec_with_exclusive_and_commit() -> crate::Result<()> {
+        let mut conn = Connection::open_in_memory()?;
+
+        test_exec_commits_successfully(&mut conn, TransactionBehavior::Exclusive)
+    }
+}

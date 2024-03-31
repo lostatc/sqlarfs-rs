@@ -86,7 +86,6 @@ impl From<Error> for io::Error {
             ErrorKind::NotFound => io::ErrorKind::NotFound,
             ErrorKind::InvalidArgs => io::ErrorKind::InvalidInput,
             ErrorKind::CompressionNotSupported => io::ErrorKind::InvalidInput,
-            ErrorKind::BlobExpired => io::ErrorKind::Other,
             ErrorKind::FileTooBig => io::ErrorKind::Other,
             ErrorKind::ReadOnly => io::ErrorKind::Other,
             ErrorKind::Sqlite => io::ErrorKind::Other,
@@ -127,12 +126,6 @@ pub enum ErrorKind {
     /// Attempted to read a compressed file, but the `deflate` Cargo feature was disabled.
     CompressionNotSupported,
 
-    /// A file was modified in the database while you were trying to read or write to it.
-    ///
-    /// In SQLite parlance, this is called an ["expired
-    /// blob"](https://sqlite.org/c3ref/blob_open.html).
-    BlobExpired,
-
     /// Attempted to write more data to the SQLite archive than its maximum blob size will allow.
     FileTooBig,
 
@@ -158,23 +151,12 @@ impl fmt::Display for ErrorKind {
             ErrorKind::NotFound => "A resource was not found.",
             ErrorKind::InvalidArgs => "Some arguments were invalid.",
             ErrorKind::CompressionNotSupported => "Attempted to read a compressed file, but the `deflate` Cargo feature was disabled.",
-            ErrorKind::BlobExpired => "A file was modified in the database while you were trying to read or write to it.",
             ErrorKind::FileTooBig => "Attempted to write more data to the SQLite archive than its maximum blob size will allow.",
             ErrorKind::ReadOnly => "Attempted to write to a read-only database.",
             ErrorKind::Sqlite => "There was an error from the underlying SQLite database.",
             ErrorKind::Io { .. } => "An I/O error occurred.",
         })
     }
-}
-
-pub fn io_err_has_sqlite_code(err: &io::Error, code: rusqlite::ErrorCode) -> bool {
-    if let Some(payload) = err.get_ref() {
-        if let Some(sqlite_err) = payload.downcast_ref::<rusqlite::Error>() {
-            return sqlite_err.sqlite_error_code() == Some(code);
-        }
-    }
-
-    false
 }
 
 /// The result type for sqlarfs.

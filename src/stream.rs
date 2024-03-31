@@ -5,7 +5,6 @@ use std::io::{self, Read};
 use flate2::read::ZlibDecoder;
 use rusqlite::blob::Blob;
 
-use super::error::io_err_has_sqlite_code;
 use super::store::FileBlob;
 
 /// The compression method to use when writing to a [`File`].
@@ -69,13 +68,7 @@ impl<'a> Read for InnerReader<'a> {
 /// This implements [`Read`] for reading a stream of data from a [`File`]. It does not support
 /// seeking.
 ///
-/// Unless you have an exclusive lock on the database, it may be possible for other writers to
-/// modify the file in the database out from under you. SQLite calls this situation an ["expired
-/// blob"](https://sqlite.org/c3ref/blob_open.html), and it will cause reads to return an
-/// [`ErrorKind::BlobExpired`].
-///
 /// [`File`]: crate::File
-/// [`ErrorKind::BlobExpired`]: crate::ErrorKind::BlobExpired
 pub struct FileReader<'a> {
     inner: InnerReader<'a>,
 }
@@ -106,12 +99,6 @@ impl<'a> FileReader<'a> {
 
 impl<'a> Read for FileReader<'a> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.inner.read(buf).map_err(|err| {
-            if io_err_has_sqlite_code(&err, rusqlite::ffi::ErrorCode::OperationAborted) {
-                return crate::Error::new(crate::ErrorKind::BlobExpired, err).into();
-            }
-
-            err
-        })
+        self.inner.read(buf)
     }
 }

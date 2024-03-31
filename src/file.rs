@@ -209,7 +209,10 @@ impl<'conn, 'a> File<'conn, 'a> {
 
     //
     // Opening a reader must take a mutable receiver to ensure that the user can't edit the row
-    // (e.g. mode or mtime) while the blob is open. This would generate an expired blob error.
+    // (e.g. mode or mtime) while the blob is open. This would generate an "expired blob" error.
+    //
+    // Read about expired blobs:
+    // https://sqlite.org/c3ref/blob_open.html
     //
 
     /// Get a readable stream of the data in the file.

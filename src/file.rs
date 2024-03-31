@@ -61,15 +61,19 @@ pub struct File<'conn, 'a> {
 }
 
 impl<'conn, 'a> File<'conn, 'a> {
-    pub(super) fn new(path: PathBuf, store: &'a mut Store<'conn>) -> Self {
-        Self {
+    pub(super) fn new(path: PathBuf, store: &'a mut Store<'conn>) -> crate::Result<Self> {
+        if path.is_absolute() {
+            return Err(crate::ErrorKind::PathIsAbsolute.into());
+        }
+
+        Ok(Self {
             path,
             store,
             #[cfg(feature = "deflate")]
             compression: Compression::FAST,
             #[cfg(not(feature = "deflate"))]
             compression: Compression::None,
-        }
+        })
     }
 
     //

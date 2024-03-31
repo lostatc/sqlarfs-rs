@@ -88,6 +88,7 @@ impl From<Error> for io::Error {
             ErrorKind::ReadOnly => io::ErrorKind::Other,
             ErrorKind::CannotOpen => io::ErrorKind::Other,
             ErrorKind::NotADatabase => io::ErrorKind::Other,
+            ErrorKind::PathIsAbsolute => io::ErrorKind::Other,
             ErrorKind::Sqlite { .. } => io::ErrorKind::Other,
             ErrorKind::Io { kind } => *kind,
         };
@@ -140,6 +141,9 @@ pub enum ErrorKind {
     /// The given file is not a SQLite database.
     NotADatabase,
 
+    /// Tried to open a file with an absolute path.
+    PathIsAbsolute,
+
     /// There was an error from the underlying SQLite database.
     Sqlite {
         /// The underlying SQLite error code, if there is one.
@@ -167,6 +171,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::ReadOnly => "Attempted to write to a read-only database.",
             ErrorKind::CannotOpen => "Could not open the database file.",
             ErrorKind::NotADatabase => "The given file is not a SQLite database.",
+            ErrorKind::PathIsAbsolute => "Tried to open a file with an absolute path.",
             ErrorKind::Sqlite { .. } => "There was an error from the underlying SQLite database.",
             ErrorKind::Io { .. } => "An I/O error occurred.",
         })

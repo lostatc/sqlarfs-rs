@@ -69,14 +69,9 @@ impl<'a> Read for InnerReader<'a> {
 /// seeking.
 ///
 /// [`File`]: crate::File
+#[derive(Debug)]
 pub struct FileReader<'a> {
     inner: InnerReader<'a>,
-}
-
-impl<'a> fmt::Debug for FileReader<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("FileReader").finish_non_exhaustive()
-    }
 }
 
 impl<'a> FileReader<'a> {

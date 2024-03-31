@@ -29,6 +29,9 @@ impl OpenOptions {
 
     /// Set whether the database should be read-only.
     ///
+    /// If this is set to `true`, then [`OpenOptions::create`] must be set to `false` or
+    /// [`OpenOptions::open`] will return an error.
+    ///
     /// The default is `false`.
     pub fn read_only(&mut self, read_only: bool) -> &mut Self {
         self.read_only = read_only;
@@ -37,6 +40,15 @@ impl OpenOptions {
     }
 
     /// Open a new database [`Connection`] at the given `path`.
+    ///
+    /// # Errors
+    ///
+    /// - [`ErrorKind::CannotOpen`]: The database does not exist and [`OpenOptions::create`] was
+    /// `false`.
+    /// - [`ErrorKind::InvalidArgs`]: [`OpenOptions::read_only`] and [`OpenOptions::create`] were both set to `true`.
+    ///
+    /// [`ErrorKind::CannotOpen`]: crate::ErrorKind::CannotOpen
+    /// [`ErrorKind::InvalidArgs`]: crate::ErrorKind::InvalidArgs
     pub fn open<P: AsRef<Path>>(&mut self, path: P) -> crate::Result<Connection> {
         use rusqlite::OpenFlags;
 
@@ -53,7 +65,15 @@ impl OpenOptions {
             flags |= OpenFlags::SQLITE_OPEN_CREATE;
         }
 
-        let conn = rusqlite::Connection::open_with_flags(path, flags)?;
+        let conn = match rusqlite::Connection::open_with_flags(path, flags) {
+            Ok(conn) => conn,
+            Err(err) => match err.sqlite_error_code() {
+                Some(rusqlite::ErrorCode::ApiMisuse) => {
+                    return Err(crate::Error::new(crate::ErrorKind::InvalidArgs, err))
+                }
+                _ => return Err(err.into()),
+            },
+        };
 
         Ok(Connection::new(conn))
     }

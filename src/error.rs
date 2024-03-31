@@ -49,10 +49,6 @@ impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         self.source.as_ref().map(|err| err.as_ref())
     }
-
-    fn cause(&self) -> Option<&dyn std::error::Error> {
-        self.source()
-    }
 }
 
 impl From<ErrorKind> for Error {
@@ -88,7 +84,9 @@ impl From<Error> for io::Error {
             ErrorKind::CompressionNotSupported => io::ErrorKind::InvalidInput,
             ErrorKind::FileTooBig => io::ErrorKind::Other,
             ErrorKind::ReadOnly => io::ErrorKind::Other,
-            ErrorKind::Sqlite => io::ErrorKind::Other,
+            ErrorKind::CannotOpen => io::ErrorKind::Other,
+            ErrorKind::NotADatabase => io::ErrorKind::Other,
+            ErrorKind::Sqlite { .. } => io::ErrorKind::Other,
             ErrorKind::Io { kind } => *kind,
         };
 
@@ -98,13 +96,15 @@ impl From<Error> for io::Error {
 
 impl From<rusqlite::Error> for Error {
     fn from(err: rusqlite::Error) -> Self {
-        let kind = match err.sqlite_error_code() {
+        let code = match err.sqlite_error_code() {
             Some(rusqlite::ErrorCode::ReadOnly) => ErrorKind::ReadOnly,
             Some(rusqlite::ErrorCode::TooBig) => ErrorKind::FileTooBig,
-            _ => ErrorKind::Sqlite,
+            Some(rusqlite::ErrorCode::CannotOpen) => ErrorKind::CannotOpen,
+            Some(rusqlite::ErrorCode::NotADatabase) => ErrorKind::NotADatabase,
+            code => ErrorKind::Sqlite { code },
         };
 
-        Self::new(kind, err)
+        Self::new(code, err)
     }
 }
 
@@ -132,8 +132,17 @@ pub enum ErrorKind {
     /// Attempted to write to a read-only database.
     ReadOnly,
 
+    /// Could not open the database file.
+    CannotOpen,
+
+    /// The given file is not a SQLite database.
+    NotADatabase,
+
     /// There was an error from the underlying SQLite database.
-    Sqlite,
+    Sqlite {
+        /// The underlying SQLite error code, if there is one.
+        code: Option<rusqlite::ErrorCode>,
+    },
 
     /// An I/O error occurred.
     Io {
@@ -153,7 +162,9 @@ impl fmt::Display for ErrorKind {
             ErrorKind::CompressionNotSupported => "Attempted to read a compressed file, but the `deflate` Cargo feature was disabled.",
             ErrorKind::FileTooBig => "Attempted to write more data to the SQLite archive than its maximum blob size will allow.",
             ErrorKind::ReadOnly => "Attempted to write to a read-only database.",
-            ErrorKind::Sqlite => "There was an error from the underlying SQLite database.",
+            ErrorKind::CannotOpen => "Could not open the database file.",
+            ErrorKind::NotADatabase => "The given file is not a SQLite database.",
+            ErrorKind::Sqlite { .. } => "There was an error from the underlying SQLite database.",
             ErrorKind::Io { .. } => "An I/O error occurred.",
         })
     }
@@ -161,3 +172,103 @@ impl fmt::Display for ErrorKind {
 
 /// The result type for sqlarfs.
 pub type Result<T> = result::Result<T, Error>;
+
+#[cfg(test)]
+mod tests {
+    use std::error::Error as StdError;
+    use std::io;
+
+    use xpct::{be_ok, be_some, equal, expect};
+
+    use super::*;
+
+    #[test]
+    fn get_error_kind() {
+        let err = Error::new(
+            ErrorKind::Io {
+                kind: io::ErrorKind::Other,
+            },
+            io::Error::new(io::ErrorKind::Other, "inner error"),
+        );
+
+        expect!(err.kind()).to(equal(&ErrorKind::Io {
+            kind: io::ErrorKind::Other,
+        }));
+        expect!(err.into_kind()).to(equal(ErrorKind::Io {
+            kind: io::ErrorKind::Other,
+        }));
+    }
+
+    #[test]
+    fn get_wrapped_source_error() {
+        let err = Error::new(
+            ErrorKind::Io {
+                kind: io::ErrorKind::Other,
+            },
+            io::Error::new(io::ErrorKind::Other, "inner error"),
+        );
+
+        expect!(err.source())
+            .to(be_some())
+            .map(|source| source.downcast_ref::<io::Error>())
+            .to(be_some())
+            .map(|err| err.kind())
+            .to(equal(io::ErrorKind::Other));
+    }
+
+    #[test]
+    fn convert_io_kind_into_io_error() {
+        let err = Error::new(
+            ErrorKind::Io {
+                kind: io::ErrorKind::NotFound,
+            },
+            io::Error::new(io::ErrorKind::NotFound, "inner error"),
+        );
+
+        let io_err: io::Error = err.into();
+
+        expect!(io_err.kind()).to(equal(io::ErrorKind::NotFound));
+
+        expect!(io_err.into_inner())
+            .to(be_some())
+            .map(|err| err.downcast::<Error>())
+            .to(be_ok())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::Io {
+                kind: io::ErrorKind::NotFound,
+            }));
+    }
+
+    #[test]
+    fn convert_into_io_error_kind() {
+        let err: Error = ErrorKind::NotFound.into();
+        let io_err: io::Error = err.into();
+
+        expect!(io_err.kind()).to(equal(io::ErrorKind::NotFound));
+    }
+
+    #[test]
+    fn convert_from_io_error_kind() {
+        let io_err: io::Error = io::ErrorKind::NotFound.into();
+        let err: Error = io_err.into();
+
+        expect!(err.kind()).to(equal(&ErrorKind::Io {
+            kind: io::ErrorKind::NotFound,
+        }));
+    }
+
+    #[test]
+    fn convert_from_rusqlite_error() {
+        let rusqlite_err = rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error {
+                code: rusqlite::ErrorCode::ReadOnly,
+                extended_code: 0,
+            },
+            None,
+        );
+
+        let err: Error = rusqlite_err.into();
+
+        expect!(err.kind()).to(equal(&ErrorKind::ReadOnly));
+    }
+}

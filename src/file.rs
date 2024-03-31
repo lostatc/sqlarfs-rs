@@ -333,6 +333,10 @@ impl<'conn, 'a> File<'conn, 'a> {
 
                         test_encoder.write_all(&copy_buf[..bytes_read])?;
 
+                        // Flush the encoder's internal buffer to ensure we get an accurate count
+                        // of the total number of bytes input and output.
+                        test_encoder.flush()?;
+
                         if test_encoder.total_out() < test_encoder.total_in() {
                             is_compressible = true;
                             break;

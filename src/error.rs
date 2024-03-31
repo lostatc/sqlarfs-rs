@@ -2,6 +2,31 @@ use std::fmt;
 use std::io;
 use std::result;
 
+/// An opaque type representing a SQLite error code.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SqliteErrorCode {
+    extended_code: std::ffi::c_int,
+}
+
+impl fmt::Display for SqliteErrorCode {
+    #[cfg_attr(coverage_nightly, coverage(off))]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        rusqlite::ffi::Error::new(self.extended_code).fmt(f)
+    }
+}
+
+impl SqliteErrorCode {
+    /// The raw extended error code from the SQLite C API.
+    ///
+    /// See the [SQLite docs](https://www.sqlite.org/rescode.html) for more information.
+    #[cfg_attr(coverage_nightly, coverage(off))]
+    pub fn raw_code(&self) -> std::ffi::c_int {
+        // We're not including rusqlite in our public API, so we're only exposing the raw error
+        // code from the SQLite C API as opposed to any rusqlite types.
+        self.extended_code
+    }
+}
+
 /// The error type for sqlarfs.
 ///
 /// This type can be converted [`From`] an [`std::io::Error`]. If the value the [`std::io::Error`]
@@ -100,12 +125,28 @@ impl From<Error> for io::Error {
 impl From<rusqlite::Error> for Error {
     #[cfg_attr(coverage_nightly, coverage(off))]
     fn from(err: rusqlite::Error) -> Self {
-        let code = match err.sqlite_error_code() {
-            Some(rusqlite::ErrorCode::ReadOnly) => ErrorKind::ReadOnly,
-            Some(rusqlite::ErrorCode::TooBig) => ErrorKind::FileTooBig,
-            Some(rusqlite::ErrorCode::CannotOpen) => ErrorKind::CannotOpen,
-            Some(rusqlite::ErrorCode::NotADatabase) => ErrorKind::NotADatabase,
-            code => ErrorKind::Sqlite { code },
+        let code = match err.sqlite_error() {
+            Some(rusqlite::ffi::Error {
+                code: rusqlite::ErrorCode::ReadOnly,
+                ..
+            }) => ErrorKind::ReadOnly,
+            Some(rusqlite::ffi::Error {
+                code: rusqlite::ErrorCode::TooBig,
+                ..
+            }) => ErrorKind::FileTooBig,
+            Some(rusqlite::ffi::Error {
+                code: rusqlite::ErrorCode::CannotOpen,
+                ..
+            }) => ErrorKind::CannotOpen,
+            Some(rusqlite::ffi::Error {
+                code: rusqlite::ErrorCode::NotADatabase,
+                ..
+            }) => ErrorKind::NotADatabase,
+            code => ErrorKind::Sqlite {
+                code: code.map(|code| SqliteErrorCode {
+                    extended_code: code.extended_code,
+                }),
+            },
         };
 
         Self::new(code, err)
@@ -148,7 +189,7 @@ pub enum ErrorKind {
     /// There was an error from the underlying SQLite database.
     Sqlite {
         /// The underlying SQLite error code, if there is one.
-        code: Option<rusqlite::ErrorCode>,
+        code: Option<SqliteErrorCode>,
     },
 
     /// An I/O error occurred.

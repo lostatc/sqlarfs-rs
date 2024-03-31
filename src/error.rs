@@ -98,6 +98,7 @@ impl From<Error> for io::Error {
 }
 
 impl From<rusqlite::Error> for Error {
+    #[cfg_attr(coverage_nightly, coverage(off))]
     fn from(err: rusqlite::Error) -> Self {
         let code = match err.sqlite_error_code() {
             Some(rusqlite::ErrorCode::ReadOnly) => ErrorKind::ReadOnly,
@@ -186,6 +187,7 @@ mod tests {
     use std::error::Error as StdError;
     use std::io;
 
+    use anyhow::anyhow;
     use xpct::{be_ok, be_some, equal, expect};
 
     use super::*;
@@ -225,7 +227,7 @@ mod tests {
     }
 
     #[test]
-    fn convert_io_kind_into_io_error() {
+    fn convert_sqlarfs_io_err_into_std_io_error() {
         let err = Error::new(
             ErrorKind::Io {
                 kind: io::ErrorKind::NotFound,
@@ -248,7 +250,7 @@ mod tests {
     }
 
     #[test]
-    fn convert_into_io_error_kind() {
+    fn convert_into_io_error_with_kind() {
         let err: Error = ErrorKind::NotFound.into();
         let io_err: io::Error = err.into();
 
@@ -256,12 +258,32 @@ mod tests {
     }
 
     #[test]
-    fn convert_from_io_error_kind() {
+    fn convert_from_io_error_with_kind() {
         let io_err: io::Error = io::ErrorKind::NotFound.into();
         let err: Error = io_err.into();
 
         expect!(err.kind()).to(equal(&ErrorKind::Io {
             kind: io::ErrorKind::NotFound,
+        }));
+    }
+
+    #[test]
+    fn convert_from_io_error_wrapping_a_sqlarfs_error() {
+        let original_err: Error = ErrorKind::PathIsAbsolute.into();
+        let io_err: io::Error = original_err.into();
+        let unwrapped_error: Error = io_err.into();
+
+        expect!(unwrapped_error.kind()).to(equal(&ErrorKind::PathIsAbsolute));
+    }
+
+    #[test]
+    fn convert_from_io_error_wrapping_some_other_error() {
+        let original_err = anyhow!("some error");
+        let io_err = io::Error::new(io::ErrorKind::PermissionDenied, original_err);
+        let unwrapped_error: Error = io_err.into();
+
+        expect!(unwrapped_error.kind()).to(equal(&ErrorKind::Io {
+            kind: io::ErrorKind::PermissionDenied,
         }));
     }
 

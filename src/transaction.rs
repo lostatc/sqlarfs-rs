@@ -49,11 +49,15 @@ impl Connection {
     }
 
     /// Open a SQLite connection to the file at `path`.
+    ///
+    /// You can access more options for how the connection is opened with [`Connection::builder`].
     pub fn open<P: AsRef<Path>>(path: P) -> crate::Result<Self> {
         OpenOptions::new().open(path)
     }
 
     /// Open a SQLite connection to an in-memory database.
+    ///
+    /// You can access more options for how the connection is opened with [`Connection::builder`].
     pub fn open_in_memory() -> crate::Result<Self> {
         OpenOptions::new().open_in_memory()
     }
@@ -155,7 +159,7 @@ impl<'conn> Transaction<'conn> {
 
 #[cfg(test)]
 mod tests {
-    use xpct::{be_err, be_ok, expect};
+    use xpct::{be_err, be_ok, equal, expect};
 
     use super::*;
 
@@ -203,12 +207,17 @@ mod tests {
     ) -> crate::Result<()> {
         let mut tx = conn.transaction_with(behavior)?;
 
-        tx.archive_mut().init()?;
+        let mut file = tx.archive_mut().open("file");
+        file.create(None)?;
 
         tx.rollback()?;
 
         conn.exec(|archive| {
-            expect!(archive.open("file").create(None)).to(be_err());
+            let file = archive.open("file");
+            expect!(file.metadata())
+                .to(be_err())
+                .map(|err| err.into_kind())
+                .to(equal(crate::ErrorKind::NotFound));
 
             Ok(())
         })

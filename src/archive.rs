@@ -6,9 +6,7 @@ use super::store::Store;
 /// A SQLite archive.
 ///
 /// A SQLite archive is a SQLite database with a table named `sqlar` that conforms to a specific
-/// schema. A SQLite archive may contain other tables, and this library will ignore them. If the
-/// database you've opened does not contain a `sqlar` table, you'll need to call [`Archive::init`]
-/// to create one.
+/// schema. A SQLite archive may contain other tables, and this library will ignore them.
 #[derive(Debug)]
 pub struct Archive<'conn> {
     store: Store<'conn>,
@@ -25,10 +23,7 @@ impl<'conn> Archive<'conn> {
         self.store.into_tx()
     }
 
-    /// Create the `sqlar` table in the database if it doesn't already exist.
-    ///
-    /// You only need to do this once per database. This does not fail if the table already exists.
-    pub fn init(&mut self) -> crate::Result<()> {
+    pub(super) fn init(&mut self) -> crate::Result<()> {
         self.store.create_table()
     }
 

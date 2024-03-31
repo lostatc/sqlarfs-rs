@@ -15,11 +15,7 @@ use xpct::{
 const WRITE_DATA_SIZE: usize = 64;
 
 fn connection() -> sqlarfs::Result<Connection> {
-    let mut conn = Connection::open_in_memory()?;
-
-    conn.exec(|archive| archive.init())?;
-
-    Ok(conn)
+    Connection::open_in_memory()
 }
 
 fn random_bytes(len: usize) -> Vec<u8> {

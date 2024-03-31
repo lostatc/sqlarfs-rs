@@ -46,7 +46,7 @@ pub struct FileMetadata {
 /// method (compressed or uncompressed) via [`File::set_compression`]. The default is to compress
 /// writes if and only if the `deflate` Cargo feature is enabled. The selected compression method
 /// does not affect the ability to read compressed files, but attempting to read a compressed file
-/// will fail with [`ErrorKind::CompressionNotSupported`] if the `deflate` feature is disabled.
+/// will return an error if the `deflate` feature is disabled.
 ///
 /// [`Read`]: std::io::Read
 /// [`Write`]: std::io::Write
@@ -104,16 +104,29 @@ impl<'conn, 'a> File<'conn, 'a> {
 
     /// Create the file if it doesn't already exist.
     ///
-    /// This accepts the initial [`FileMode`] of the file and sets the mtime to now.
+    /// This does not set the file mode or mtime. You can set the file metadata using
+    /// [`File::create_with`], or with [`File::set_mode`] and [`File::set_mtime`].
     ///
     /// # Errors
     ///
     /// - [`ErrorKind::AlreadyExists`]: This file already exists in the archive.
     ///
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
-    pub fn create(&mut self, mode: Option<FileMode>) -> crate::Result<()> {
-        self.store
-            .create_file(&self.path, mode, Some(SystemTime::now()))
+    pub fn create(&mut self) -> crate::Result<()> {
+        self.store.create_file(&self.path, None, None)
+    }
+
+    /// Create the file if it doesn't already exist and set its metadata.
+    ///
+    /// This accepts the initial file `mode` and `mtime`.
+    ///
+    /// # Errors
+    ///
+    /// - [`ErrorKind::AlreadyExists`]: This file already exists in the archive.
+    ///
+    /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
+    pub fn create_with(&mut self, mode: FileMode, mtime: SystemTime) -> crate::Result<()> {
+        self.store.create_file(&self.path, Some(mode), Some(mtime))
     }
 
     /// Delete the file from the archive.
@@ -128,16 +141,6 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     pub fn delete(&mut self) -> crate::Result<()> {
         self.store.delete_file(&self.path)
-    }
-
-    /// The current compression method used when writing to the file.
-    pub fn compression(&mut self) -> Compression {
-        self.compression
-    }
-
-    /// Set the compression method used when writing to the file.
-    pub fn set_compression(&mut self, method: Compression) {
-        self.compression = method;
     }
 
     /// The file metadata.
@@ -166,9 +169,9 @@ impl<'conn, 'a> File<'conn, 'a> {
 
     /// Set the time the file was last modified.
     ///
-    /// This rounds to the nearest second.
-    ///
     /// The file mtime is nullable, so it's possible to set this to `None`.
+    ///
+    /// This rounds to the nearest second.
     ///
     /// # Errors
     ///
@@ -471,5 +474,15 @@ impl<'conn, 'a> File<'conn, 'a> {
         // We know the size of the file, which enabled some optimizations.
         let metadata = file.metadata()?;
         self.write_stream(file, Some(metadata.len()))
+    }
+
+    /// The current compression method used when writing to the file.
+    pub fn compression(&mut self) -> Compression {
+        self.compression
+    }
+
+    /// Set the compression method used when writing to the file.
+    pub fn set_compression(&mut self, method: Compression) {
+        self.compression = method;
     }
 }

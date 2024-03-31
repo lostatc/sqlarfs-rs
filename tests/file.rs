@@ -8,14 +8,20 @@ use rand::rngs::SmallRng;
 use rand::{prelude::*, SeedableRng};
 use sqlarfs::{Compression, Connection, ErrorKind, FileMetadata, FileMode};
 use xpct::{
-    all, approx_eq_time, be_empty, be_err, be_false, be_ge, be_lt, be_none, be_ok, be_some,
-    be_true, be_zero, eq_diff, equal, expect, fields, match_fields, match_pattern, pattern,
+    be_empty, be_err, be_false, be_ge, be_lt, be_none, be_ok, be_some, be_true, be_zero, eq_diff,
+    equal, expect, fields, match_fields, match_pattern, pattern,
 };
 
 const WRITE_DATA_SIZE: usize = 64;
 
 fn connection() -> sqlarfs::Result<Connection> {
     Connection::open_in_memory()
+}
+
+// This is for rounding a file mtime to the nearest second, because that's what SQLite archives do.
+fn rounded_time(time: SystemTime) -> SystemTime {
+    let unix_time_secs = time.duration_since(UNIX_EPOCH).unwrap().as_secs();
+    UNIX_EPOCH + Duration::from_secs(unix_time_secs)
 }
 
 fn random_bytes(len: usize) -> Vec<u8> {
@@ -98,7 +104,7 @@ fn create_file_when_it_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open(Path::new("nonexistent-file"));
 
-        expect!(file.create(None)).to(be_ok());
+        expect!(file.create()).to(be_ok());
 
         Ok(())
     })
@@ -109,9 +115,9 @@ fn create_file_when_it_already_exists() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open(Path::new("existing-file"));
 
-        file.create(None)?;
+        file.create()?;
 
-        expect!(file.create(None))
+        expect!(file.create())
             .to(be_err())
             .map(|err| err.into_kind())
             .to(equal(ErrorKind::AlreadyExists));
@@ -121,20 +127,20 @@ fn create_file_when_it_already_exists() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn file_metadata_when_creating_file() -> sqlarfs::Result<()> {
+fn file_metadata_when_creating_file_with_metadata() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open(Path::new("file"));
 
         let mode = FileMode::OWNER_R | FileMode::OWNER_W | FileMode::GROUP_R | FileMode::OTHER_R;
+        let precise_mtime = SystemTime::now();
+        let rounded_mtime = rounded_time(precise_mtime);
 
-        file.create(Some(mode))?;
+        file.create_with(mode, precise_mtime)?;
 
         expect!(file.metadata())
             .to(be_ok())
             .to(match_fields(fields!(FileMetadata {
-                mtime: all(|ctx| ctx
-                    .to(be_some())?
-                    .to(approx_eq_time(SystemTime::now(), Duration::from_secs(1)))),
+                mtime: equal(Some(rounded_mtime)),
                 mode: equal(Some(mode)),
                 size: be_zero(),
             })));
@@ -148,7 +154,7 @@ fn file_correctly_reports_that_it_exists() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open(Path::new("existing-file"));
 
-        file.create(None)?;
+        file.create()?;
 
         expect!(file.exists()).to(be_ok()).to(be_true());
 
@@ -186,7 +192,7 @@ fn deleting_file_when_it_does_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open(Path::new("existing-file"));
 
-        file.create(None)?;
+        file.create()?;
 
         expect!(file.delete()).to(be_ok());
 
@@ -217,7 +223,7 @@ fn set_file_mode() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open(Path::new("file"));
 
-        file.create(None)?;
+        file.create()?;
 
         expect!(file.metadata())
             .to(be_ok())
@@ -257,17 +263,12 @@ fn set_file_mtime() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open(Path::new("file"));
 
-        file.create(None)?;
+        file.create()?;
 
-        // Some time in the past so it's different from the default mtime for new files (now). We
-        // need to round it to the nearest second, because that's what SQLite archives do.
-        let unix_time_secs = (SystemTime::now() - Duration::from_secs(60))
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        let rounded_mtime = UNIX_EPOCH + Duration::from_secs(unix_time_secs);
+        let precise_mtime = SystemTime::now();
+        let rounded_mtime = rounded_time(precise_mtime);
 
-        file.set_mtime(Some(rounded_mtime))?;
+        file.set_mtime(Some(precise_mtime))?;
 
         expect!(file.metadata())
             .to(be_ok())
@@ -298,7 +299,7 @@ fn file_size_is_zero_when_file_is_empty() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open(Path::new("file"));
 
-        file.create(None)?;
+        file.create()?;
 
         let metadata = file.metadata()?;
 
@@ -313,7 +314,7 @@ fn file_correctly_reports_being_empty() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open(Path::new("file"));
 
-        file.create(None)?;
+        file.create()?;
 
         expect!(file.is_empty()).to(be_ok()).to(be_true());
 
@@ -326,7 +327,7 @@ fn file_correctly_reports_being_not_empty() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open(Path::new("file"));
 
-        file.create(None)?;
+        file.create()?;
         file.write_str("file contents")?;
 
         expect!(file.is_empty()).to(be_ok()).to(be_false());
@@ -353,7 +354,7 @@ fn is_file_empty_when_it_does_not_exist() -> sqlarfs::Result<()> {
 fn write_bytes_without_compression() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open(Path::new("file"));
-        file.create(None)?;
+        file.create()?;
 
         file.set_compression(Compression::None);
 
@@ -385,7 +386,7 @@ fn write_bytes_without_compression() -> sqlarfs::Result<()> {
 fn write_incompressible_bytes_with_compression() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open(Path::new("file"));
-        file.create(None)?;
+        file.create()?;
 
         file.set_compression(Compression::FAST);
 
@@ -417,7 +418,7 @@ fn write_incompressible_bytes_with_compression() -> sqlarfs::Result<()> {
 fn write_compressible_bytes_with_compression() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open(Path::new("file"));
-        file.create(None)?;
+        file.create()?;
 
         file.set_compression(Compression::FAST);
 
@@ -478,7 +479,7 @@ fn open_reader_when_file_does_not_exist() -> sqlarfs::Result<()> {
 fn write_string() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open(Path::new("file"));
-        file.create(None)?;
+        file.create()?;
 
         let expected = "hello world";
 
@@ -499,7 +500,7 @@ fn write_string() -> sqlarfs::Result<()> {
 fn truncated_file_returns_no_bytes() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open(Path::new("file"));
-        file.create(None)?;
+        file.create()?;
 
         let expected = random_bytes(WRITE_DATA_SIZE);
 
@@ -545,7 +546,7 @@ fn truncate_file_when_it_does_not_exist() -> sqlarfs::Result<()> {
 fn write_from_reader_without_compression() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open(Path::new("file"));
-        file.create(None)?;
+        file.create()?;
 
         file.set_compression(Compression::None);
 
@@ -577,7 +578,7 @@ fn write_from_reader_without_compression() -> sqlarfs::Result<()> {
 fn write_incompressible_data_from_reader_with_compression() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open(Path::new("file"));
-        file.create(None)?;
+        file.create()?;
 
         file.set_compression(Compression::FAST);
 
@@ -609,7 +610,7 @@ fn write_incompressible_data_from_reader_with_compression() -> sqlarfs::Result<(
 fn write_compressible_data_from_reader_with_compression() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open(Path::new("file"));
-        file.create(None)?;
+        file.create()?;
 
         file.set_compression(Compression::FAST);
 
@@ -642,7 +643,7 @@ fn write_from_file_without_compression() -> sqlarfs::Result<()> {
 
     connection()?.exec(|archive| {
         let mut file = archive.open(Path::new("file"));
-        file.create(None)?;
+        file.create()?;
 
         file.set_compression(Compression::None);
 
@@ -678,7 +679,7 @@ fn write_incompressible_data_from_file_with_compression() -> sqlarfs::Result<()>
 
     connection()?.exec(|archive| {
         let mut file = archive.open(Path::new("file"));
-        file.create(None)?;
+        file.create()?;
 
         file.set_compression(Compression::FAST);
 
@@ -715,7 +716,7 @@ fn write_compressible_data_from_file_with_compression() -> sqlarfs::Result<()> {
 
     connection()?.exec(|archive| {
         let mut file = archive.open(Path::new("file"));
-        file.create(None)?;
+        file.create()?;
 
         file.set_compression(Compression::FAST);
 

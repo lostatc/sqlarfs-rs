@@ -174,7 +174,7 @@ mod tests {
         tx.commit()?;
 
         conn.exec(|archive| {
-            expect!(archive.open("file").create(None)).to(be_ok());
+            expect!(archive.open("file").create()).to(be_ok());
 
             Ok(())
         })
@@ -208,7 +208,7 @@ mod tests {
         let mut tx = conn.transaction_with(behavior)?;
 
         let mut file = tx.archive_mut().open("file");
-        file.create(None)?;
+        file.create()?;
 
         tx.rollback()?;
 
@@ -251,7 +251,7 @@ mod tests {
         conn.exec_with(behavior, |archive| archive.init())?;
 
         conn.exec(|archive| {
-            expect!(archive.open("file").create(None)).to(be_ok());
+            expect!(archive.open("file").create()).to(be_ok());
 
             Ok(())
         })

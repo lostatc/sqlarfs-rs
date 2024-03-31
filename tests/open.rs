@@ -85,7 +85,7 @@ fn any_write_operation_fails_when_db_is_read_only() -> sqlarfs::Result<()> {
 
     let result = conn.exec(|archive| {
         let mut file = archive.open("file");
-        file.create(None)
+        file.create()
     });
 
     expect!(result)
@@ -114,7 +114,7 @@ fn any_write_operation_fails_when_in_memory_db_is_read_only() -> sqlarfs::Result
 
     conn.exec(|archive| {
         let mut file = archive.open("file");
-        let result = file.create(None);
+        let result = file.create();
 
         expect!(result)
             .to(be_err())
@@ -139,7 +139,7 @@ fn writing_to_uninitialized_db_errors() -> sqlarfs::Result<()> {
     conn.exec(|archive| {
         let mut file = archive.open("file");
 
-        expect!(file.create(None)).to(be_err());
+        expect!(file.create()).to(be_err());
 
         Ok(())
     })

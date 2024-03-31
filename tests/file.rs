@@ -563,6 +563,8 @@ fn write_from_reader_without_compression() -> sqlarfs::Result<()> {
 
         drop(reader);
 
+        expect!(file.is_compressed()).to(be_ok()).to(be_false());
+
         expect!(file.metadata())
             .to(be_ok())
             .map(|metadata| metadata.size)
@@ -595,6 +597,8 @@ fn write_incompressible_data_from_reader_with_compression() -> sqlarfs::Result<(
 
         drop(reader);
 
+        expect!(file.is_compressed()).to(be_ok()).to(be_false());
+
         expect!(file.metadata())
             .to(be_ok())
             .map(|metadata| metadata.size)
@@ -626,6 +630,8 @@ fn write_compressible_data_from_reader_with_compression() -> sqlarfs::Result<()>
         expect!(&actual).to(eq_diff(&expected));
 
         drop(reader);
+
+        expect!(file.is_compressed()).to(be_ok()).to(be_true());
 
         expect!(file.metadata())
             .to(be_ok())
@@ -661,6 +667,8 @@ fn write_from_file_without_compression() -> sqlarfs::Result<()> {
         expect!(&actual).to(eq_diff(&expected));
 
         drop(reader);
+
+        expect!(file.is_compressed()).to(be_ok()).to(be_false());
 
         expect!(file.metadata())
             .to(be_ok())
@@ -699,6 +707,8 @@ fn write_incompressible_data_from_file_with_compression() -> sqlarfs::Result<()>
 
         drop(reader);
 
+        expect!(file.is_compressed()).to(be_ok()).to(be_false());
+
         expect!(file.metadata())
             .to(be_ok())
             .map(|metadata| metadata.size)
@@ -735,6 +745,8 @@ fn write_compressible_data_from_file_with_compression() -> sqlarfs::Result<()> {
         expect!(&actual).to(eq_diff(&expected));
 
         drop(reader);
+
+        expect!(file.is_compressed()).to(be_ok()).to(be_true());
 
         expect!(file.metadata())
             .to(be_ok())

@@ -44,9 +44,12 @@ pub struct FileMetadata {
 ///
 /// Writes to a [`File`] can optionally be compressed with DEFLATE. You can change the compression
 /// method (compressed or uncompressed) via [`File::set_compression`]. The default is to compress
-/// writes if and only if the `deflate` Cargo feature is enabled. The selected compression method
-/// does not affect the ability to read compressed files, but attempting to read a compressed file
-/// will return an error if the `deflate` feature is disabled.
+/// writes if and only if the `deflate` Cargo feature is enabled. You can read compressed files
+/// regardless of the selected compression method, but doing so will return an error if the
+/// `deflate` feature is disabled.
+///
+/// Consider disabling compression if you know you're going to be writing a lot of incompressible
+/// data, such as files that are already compressed (e.g. photos and videos).
 ///
 /// [`Read`]: std::io::Read
 /// [`Write`]: std::io::Write
@@ -196,6 +199,20 @@ impl<'conn, 'a> File<'conn, 'a> {
     pub fn is_empty(&self) -> crate::Result<bool> {
         let metadata = self.metadata()?;
         Ok(metadata.size == 0)
+    }
+
+    /// Whether the contents of this file are compressed.
+    ///
+    /// Even if compression is enabled via [`File::set_compression`], a file may not be compressed
+    /// if it's incompressible or if compressing it would *increase* its size.
+    ///
+    /// # Errors
+    ///
+    /// - [`ErrorKind::NotFound`]: This file does not exist.
+    ///
+    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
+    pub fn is_compressed(&self) -> crate::Result<bool> {
+        Ok(self.store.blob_size(&self.path)?.is_compressed())
     }
 
     /// Truncate the file to zero bytes.

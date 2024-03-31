@@ -29,6 +29,21 @@ impl<'conn> FileBlob<'conn> {
     }
 }
 
+#[derive(Debug)]
+pub struct BlobSize {
+    // The original size of the blob (the `sz` column).
+    pub original: u64,
+
+    // The actual size of the blob (the compressed size, if it's compressed).
+    pub actual: u64,
+}
+
+impl BlobSize {
+    pub fn is_compressed(&self) -> bool {
+        self.actual != self.original
+    }
+}
+
 // Methods on this type map 1:1 to SQL queries. rusqlite errors are handled and converted to
 // sqlarfs errors.
 #[derive(Debug)]
@@ -272,5 +287,21 @@ impl<'conn> Store<'conn> {
         }
 
         Ok(())
+    }
+
+    pub fn blob_size(&self, path: &Path) -> crate::Result<BlobSize> {
+        self.tx()
+            .query_row(
+                "SELECT sz, length(data) FROM sqlar WHERE name = ?1;",
+                (path.to_string_lossy(),),
+                |row| {
+                    Ok(BlobSize {
+                        original: row.get(0)?,
+                        actual: row.get(1)?,
+                    })
+                },
+            )
+            .optional()?
+            .ok_or(crate::ErrorKind::NotFound.into())
     }
 }

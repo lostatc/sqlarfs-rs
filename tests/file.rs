@@ -337,11 +337,25 @@ fn file_correctly_reports_being_not_empty() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn is_file_empty_when_it_does_not_exist() -> sqlarfs::Result<()> {
+fn is_file_empty_errors_when_it_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let file = archive.open(Path::new("file"))?;
 
         expect!(file.is_empty())
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::NotFound));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn is_file_compressed_errors_when_it_does_not_exist() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let file = archive.open(Path::new("file"))?;
+
+        expect!(file.is_compressed())
             .to(be_err())
             .map(|err| err.into_kind())
             .to(equal(ErrorKind::NotFound));

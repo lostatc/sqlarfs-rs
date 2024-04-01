@@ -342,10 +342,11 @@ impl<'conn> Store<'conn> {
                 ancestor: None,
                 direction,
             } => {
-                let stmt = self.tx().prepare(if direction == &SortDirection::Asc {
-                    "SELECT name, mode, mtime, sz FROM sqlar ORDER BY sz ASC"
-                } else {
-                    "SELECT name, mode, mtime, sz FROM sqlar ORDER BY sz DESC"
+                let stmt = self.tx().prepare(match direction {
+                    SortDirection::Asc => "SELECT name, mode, mtime, sz FROM sqlar ORDER BY sz ASC",
+                    SortDirection::Desc => {
+                        "SELECT name, mode, mtime, sz FROM sqlar ORDER BY sz DESC"
+                    }
                 })?;
 
                 (stmt, Vec::new())
@@ -355,10 +356,13 @@ impl<'conn> Store<'conn> {
                 ancestor: None,
                 direction,
             } => {
-                let stmt = self.tx().prepare(if direction == &SortDirection::Asc {
-                    "SELECT name, mode, mtime, sz FROM sqlar ORDER BY mtime ASC"
-                } else {
-                    "SELECT name, mode, mtime, sz FROM sqlar ORDER BY mtime DESC"
+                let stmt = self.tx().prepare(match direction {
+                    SortDirection::Asc => {
+                        "SELECT name, mode, mtime, sz FROM sqlar ORDER BY mtime ASC"
+                    }
+                    SortDirection::Desc => {
+                        "SELECT name, mode, mtime, sz FROM sqlar ORDER BY mtime DESC"
+                    }
                 })?;
 
                 (stmt, vec![])
@@ -368,10 +372,9 @@ impl<'conn> Store<'conn> {
                 ancestor: Some(ancestor),
                 direction,
             } => {
-                let stmt = self.tx().prepare(if direction == &SortDirection::Asc {
-                    "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' ORDER BY sz ASC"
-                } else {
-                    "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' ORDER BY sz DESC"
+                let stmt = self.tx().prepare(match direction {
+                    SortDirection::Asc => "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' ORDER BY sz ASC",
+                    SortDirection::Desc => "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' ORDER BY sz DESC",
                 })?;
 
                 (
@@ -384,10 +387,9 @@ impl<'conn> Store<'conn> {
                 ancestor: Some(ancestor),
                 direction,
             } => {
-                let stmt = self.tx().prepare(if direction == &SortDirection::Asc {
-                    "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' ORDER BY mtime ASC"
-                } else {
-                    "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' ORDER BY mtime DESC"
+                let stmt = self.tx().prepare(match direction {
+                    SortDirection::Asc => "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' ORDER BY mtime ASC",
+                    SortDirection::Desc => "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' ORDER BY mtime DESC",
                 })?;
 
                 (

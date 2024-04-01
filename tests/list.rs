@@ -119,11 +119,9 @@ fn list_with_sort_by_mtime() -> sqlarfs::Result<()> {
             .open("three_sec_behind")?
             .create_with(FileMode::empty(), base_time - Duration::from_secs(3))?;
 
-        let opts = ListOptions::new()
-            .sort(ListSort::Mtime)
-            .direction(SortDirection::Asc);
+        let opts = ListOptions::new().sort(ListSort::Mtime);
 
-        expect!(archive.list_with(&opts))
+        expect!(archive.list_with(&opts.clone().direction(SortDirection::Asc)))
             .to(be_ok())
             .iter_try_map(|entry| Ok(entry?.into_path()))
             .to(equal(&[
@@ -133,11 +131,7 @@ fn list_with_sort_by_mtime() -> sqlarfs::Result<()> {
                 PathBuf::from("now"),
             ]));
 
-        let opts = ListOptions::new()
-            .sort(ListSort::Mtime)
-            .direction(SortDirection::Desc);
-
-        expect!(archive.list_with(&opts))
+        expect!(archive.list_with(&opts.direction(SortDirection::Desc)))
             .to(be_ok())
             .iter_try_map(|entry| Ok(entry?.into_path()))
             .to(equal(&[

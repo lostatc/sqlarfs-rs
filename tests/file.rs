@@ -4,8 +4,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[cfg(feature = "deflate")]
 use flate2::write::ZlibEncoder;
-use rand::rngs::SmallRng;
-use rand::{prelude::*, SeedableRng};
+use rand::prelude::*;
 use sqlarfs::{Compression, Connection, ErrorKind, FileMetadata, FileMode};
 use xpct::{
     be_empty, be_err, be_false, be_ge, be_lt, be_none, be_ok, be_some, be_true, be_zero, eq_diff,

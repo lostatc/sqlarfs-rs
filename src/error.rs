@@ -226,7 +226,6 @@ pub type Result<T> = result::Result<T, Error>;
 #[cfg(test)]
 mod tests {
     use std::error::Error as StdError;
-    use std::io;
 
     use anyhow::anyhow;
     use xpct::{be_ok, be_some, equal, expect};

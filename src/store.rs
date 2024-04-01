@@ -414,6 +414,7 @@ impl<'conn> Store<'conn> {
         });
 
         for (i, param) in params.iter().enumerate() {
+            // Parameter bindings start at 1.
             stmt.raw_bind_parameter(i + 1, param)?;
         }
 

@@ -104,6 +104,11 @@ impl ListEntry {
         &self.path
     }
 
+    /// Consume this entry and return the owned file path.
+    pub fn into_path(self) -> PathBuf {
+        self.path
+    }
+
     /// The file mode (permissions).
     pub fn mode(&self) -> Option<FileMode> {
         self.mode

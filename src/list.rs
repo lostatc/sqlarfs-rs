@@ -1,17 +1,25 @@
+use std::fmt;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
+
+use crate::FileMode;
 
 /// How to sort a list of file paths.
+///
+/// This is used with [`ListOptions`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
-pub enum SortCritera {
-    /// The file's size.
+pub enum ListSort {
+    /// Sort by the file's size.
     Size,
 
-    /// The file's mtime.
+    /// Sort by the file's mtime.
     Mtime,
 }
 
 /// Which direction to sort a list of file paths in.
+///
+/// This is used with [`ListOptions`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SortDirection {
     /// Ascending
@@ -23,14 +31,16 @@ pub enum SortDirection {
 
 /// Options for sorting and filtering a list of files.
 ///
-/// This is used with [`File::list_with`].
+/// This is used with [`Archive::list_with`].
 ///
 /// The default sort order is unspecified.
+///
+/// [`Archive::list_with`]: crate::Archive::list_with
 #[derive(Debug, Clone)]
 pub struct ListOptions {
-    direction: SortDirection,
-    sort: Option<SortCritera>,
-    ancestor: Option<PathBuf>,
+    pub(super) direction: SortDirection,
+    pub(super) sort: Option<ListSort>,
+    pub(super) ancestor: Option<PathBuf>,
 }
 
 impl Default for ListOptions {
@@ -50,8 +60,8 @@ impl ListOptions {
     }
 
     /// Choose how to sort the list of files.
-    pub fn sort(&mut self, criteria: SortCritera) -> &mut Self {
-        self.sort = Some(criteria);
+    pub fn sort(&mut self, sort: ListSort) -> &mut Self {
+        self.sort = Some(sort);
 
         self
     }
@@ -70,5 +80,80 @@ impl ListOptions {
         self.ancestor = Some(directory.as_ref().to_path_buf());
 
         self
+    }
+}
+
+/// An entry when iterating over a list of files.
+///
+/// You can use [`Archive::list`] and [`Archive::list_with`] to iterate over the files in an
+/// archive.
+///
+/// [`Archive::list`]: crate::Archive::list
+/// [`Archive::list_with`]: crate::Archive::list_with
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListEntry {
+    pub(super) path: PathBuf,
+    pub(super) mode: Option<FileMode>,
+    pub(super) mtime: Option<SystemTime>,
+    pub(super) size: u64,
+}
+
+impl ListEntry {
+    /// The file path.
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// The file mode (permissions).
+    pub fn mode(&self) -> Option<FileMode> {
+        self.mode
+    }
+
+    /// The file's last modification time.
+    pub fn mtime(&self) -> Option<SystemTime> {
+        self.mtime
+    }
+
+    /// The original uncompressed size of the file.
+    pub fn size(&self) -> u64 {
+        self.size
+    }
+}
+
+pub type ListMapFunc = Box<dyn FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<ListEntry>>;
+
+/// An iterator over the files in an archive.
+///
+/// This is returned by [`Archive::list`] and [`Archive::list_with`].
+///
+/// [`Archive::list`]: crate::Archive::list
+/// [`Archive::list_with`]: crate::Archive::list_with
+pub struct ListEntries<'conn> {
+    stmt: rusqlite::Statement<'conn>,
+    map_func: ListMapFunc,
+}
+
+impl<'conn> fmt::Debug for ListEntries<'conn> {
+    #[cfg_attr(coverage_nightly, coverage(off))]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ListEntries")
+            .field("stmt", &self.stmt)
+            .finish_non_exhaustive()
+    }
+}
+impl<'conn> ListEntries<'conn> {
+    pub(super) fn new(stmt: rusqlite::Statement<'conn>, map_func: ListMapFunc) -> Self {
+        Self { stmt, map_func }
+    }
+}
+
+impl<'conn> Iterator for ListEntries<'conn> {
+    type Item = crate::Result<ListEntry>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.stmt.raw_query().next() {
+            Ok(row) => row.map(|row| (self.map_func)(row).map_err(crate::Error::from)),
+            Err(err) => Some(Err(err.into())),
+        }
     }
 }

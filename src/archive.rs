@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use super::file::File;
+use super::list::{ListEntries, ListOptions};
 use super::store::Store;
 
 /// A SQLite archive.
@@ -49,5 +50,17 @@ impl<'conn> Archive<'conn> {
         // handles to the same file. Otherwise they could do things like open the blob twice or
         // edit the row while the blob is open.
         File::new(path.as_ref().to_path_buf(), &mut self.store)
+    }
+
+    /// Return an iterator over the files in this archive.
+    pub fn list(&mut self) -> crate::Result<ListEntries> {
+        self.store.list_files(ListOptions::new())
+    }
+
+    /// Return an iterator over the files in this archive.
+    ///
+    /// This accepts a [`ListOptions`] to sort and filter the results.
+    pub fn list_with(&mut self, opts: ListOptions) -> crate::Result<ListEntries> {
+        self.store.list_files(opts)
     }
 }

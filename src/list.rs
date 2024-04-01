@@ -76,7 +76,7 @@ impl ListOptions {
     /// Only return files that are descendants of this directory.
     ///
     /// This returns all descendants, not just immediate children.
-    pub fn parent<P: AsRef<Path>>(&mut self, directory: P) -> &mut Self {
+    pub fn descendants<P: AsRef<Path>>(&mut self, directory: P) -> &mut Self {
         self.ancestor = Some(directory.as_ref().to_path_buf());
 
         self

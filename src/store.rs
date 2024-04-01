@@ -308,7 +308,7 @@ impl<'conn> Store<'conn> {
             .ok_or(crate::ErrorKind::NotFound.into())
     }
 
-    pub fn list_files(&self, opts: ListOptions) -> crate::Result<ListEntries> {
+    pub fn list_files(&self, opts: &ListOptions) -> crate::Result<ListEntries> {
         // TODO: Address this combinatorial explosion, ideally without using string interpolation
         // to build queries.
         let (stmt, params): (rusqlite::Statement<'_>, Vec<Box<dyn rusqlite::ToSql>>) = match opts {
@@ -342,7 +342,7 @@ impl<'conn> Store<'conn> {
                 ancestor: None,
                 direction,
             } => {
-                let stmt = self.tx().prepare(if direction == SortDirection::Asc {
+                let stmt = self.tx().prepare(if direction == &SortDirection::Asc {
                     "SELECT name, mode, mtime, sz FROM sqlar ORDER BY sz ASC"
                 } else {
                     "SELECT name, mode, mtime, sz FROM sqlar ORDER BY sz DESC"
@@ -355,7 +355,7 @@ impl<'conn> Store<'conn> {
                 ancestor: None,
                 direction,
             } => {
-                let stmt = self.tx().prepare(if direction == SortDirection::Asc {
+                let stmt = self.tx().prepare(if direction == &SortDirection::Asc {
                     "SELECT name, mode, mtime, sz FROM sqlar ORDER BY mtime ASC"
                 } else {
                     "SELECT name, mode, mtime, sz FROM sqlar ORDER BY mtime DESC"
@@ -368,7 +368,7 @@ impl<'conn> Store<'conn> {
                 ancestor: Some(ancestor),
                 direction,
             } => {
-                let stmt = self.tx().prepare(if direction == SortDirection::Asc {
+                let stmt = self.tx().prepare(if direction == &SortDirection::Asc {
                     "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' ORDER BY sz ASC"
                 } else {
                     "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' ORDER BY sz DESC"
@@ -384,7 +384,7 @@ impl<'conn> Store<'conn> {
                 ancestor: Some(ancestor),
                 direction,
             } => {
-                let stmt = self.tx().prepare(if direction == SortDirection::Asc {
+                let stmt = self.tx().prepare(if direction == &SortDirection::Asc {
                     "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' ORDER BY mtime ASC"
                 } else {
                     "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' ORDER BY mtime DESC"

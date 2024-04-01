@@ -54,13 +54,13 @@ impl<'conn> Archive<'conn> {
 
     /// Return an iterator over the files in this archive.
     pub fn list(&mut self) -> crate::Result<ListEntries> {
-        self.store.list_files(ListOptions::new())
+        self.store.list_files(&ListOptions::new())
     }
 
     /// Return an iterator over the files in this archive.
     ///
     /// This accepts a [`ListOptions`] to sort and filter the results.
-    pub fn list_with(&mut self, opts: ListOptions) -> crate::Result<ListEntries> {
+    pub fn list_with(&mut self, opts: &ListOptions) -> crate::Result<ListEntries> {
         self.store.list_files(opts)
     }
 }

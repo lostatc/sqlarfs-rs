@@ -9,6 +9,7 @@ rust-version = "1.70.0"
 anyhow = "1.0.81"
 bitflags = "2.5.0"
 flate2 = { version = "1.0.28", optional = true }
+ouroboros = "0.18.3"
 rusqlite = { version = "0.31.0", features = ["bundled", "blob"] }
 
 [dev-dependencies]

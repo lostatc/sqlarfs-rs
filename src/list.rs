@@ -127,28 +127,62 @@ impl ListEntry {
 
 pub type ListMapFunc = Box<dyn FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<ListEntry>>;
 
+#[ouroboros::self_referencing]
+struct ListEntriesInner<'conn> {
+    stmt: rusqlite::Statement<'conn>,
+    #[borrows(mut stmt)]
+    #[covariant]
+    iter: rusqlite::MappedRows<'this, ListMapFunc>,
+}
+
+impl<'conn> fmt::Debug for ListEntriesInner<'conn> {
+    #[cfg_attr(coverage_nightly, coverage(off))]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ListEntries").finish_non_exhaustive()
+    }
+}
+fn build_list_entries_inner(
+    stmt: rusqlite::Statement,
+    params: Vec<Box<dyn rusqlite::ToSql>>,
+    map_func: ListMapFunc,
+) -> crate::Result<ListEntriesInner> {
+    ListEntriesInnerTryBuilder {
+        stmt,
+        iter_builder: |stmt| {
+            stmt.query_map(
+                params
+                    .iter()
+                    .map(AsRef::as_ref)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+                map_func,
+            )
+            .map_err(crate::Error::from)
+        },
+    }
+    .try_build()
+}
+
 /// An iterator over the files in an archive.
 ///
 /// This is returned by [`Archive::list`] and [`Archive::list_with`].
 ///
 /// [`Archive::list`]: crate::Archive::list
 /// [`Archive::list_with`]: crate::Archive::list_with
+#[derive(Debug)]
 pub struct ListEntries<'conn> {
-    stmt: rusqlite::Statement<'conn>,
-    map_func: ListMapFunc,
+    inner: ListEntriesInner<'conn>,
 }
 
-impl<'conn> fmt::Debug for ListEntries<'conn> {
-    #[cfg_attr(coverage_nightly, coverage(off))]
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ListEntries")
-            .field("stmt", &self.stmt)
-            .finish_non_exhaustive()
-    }
-}
 impl<'conn> ListEntries<'conn> {
-    pub(super) fn new(stmt: rusqlite::Statement<'conn>, map_func: ListMapFunc) -> Self {
-        Self { stmt, map_func }
+    pub(super) fn new(
+        stmt: rusqlite::Statement<'conn>,
+        params: Vec<Box<dyn rusqlite::ToSql>>,
+        map_func: ListMapFunc,
+    ) -> crate::Result<Self> {
+        Ok(Self {
+            inner: build_list_entries_inner(stmt, params, map_func)?,
+        })
     }
 }
 
@@ -156,9 +190,8 @@ impl<'conn> Iterator for ListEntries<'conn> {
     type Item = crate::Result<ListEntry>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.stmt.raw_query().next() {
-            Ok(row) => row.map(|row| (self.map_func)(row).map_err(crate::Error::from)),
-            Err(err) => Some(Err(err.into())),
-        }
+        self.inner
+            .with_iter_mut(|iter| iter.next())
+            .map(|item| item.map_err(crate::Error::from))
     }
 }

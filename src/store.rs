@@ -311,94 +311,91 @@ impl<'conn> Store<'conn> {
     pub fn list_files(&self, opts: ListOptions) -> crate::Result<ListEntries> {
         // TODO: Address this combinatorial explosion, ideally without using string interpolation
         // to build queries.
-        let (mut stmt, params): (rusqlite::Statement<'_>, Vec<Box<dyn rusqlite::ToSql>>) =
-            match opts {
-                ListOptions {
-                    sort: None,
-                    ancestor: None,
-                    ..
-                } => {
-                    let stmt = self
-                        .tx()
-                        .prepare("SELECT name, mode, mtime, sz FROM sqlar")?;
+        let (stmt, params): (rusqlite::Statement<'_>, Vec<Box<dyn rusqlite::ToSql>>) = match opts {
+            ListOptions {
+                sort: None,
+                ancestor: None,
+                ..
+            } => {
+                let stmt = self
+                    .tx()
+                    .prepare("SELECT name, mode, mtime, sz FROM sqlar")?;
 
-                    (stmt, Vec::new())
-                }
-                ListOptions {
-                    sort: None,
-                    ancestor: Some(ancestor),
-                    ..
-                } => {
-                    let stmt = self.tx().prepare(
-                        "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*'",
-                    )?;
+                (stmt, Vec::new())
+            }
+            ListOptions {
+                sort: None,
+                ancestor: Some(ancestor),
+                ..
+            } => {
+                let stmt = self.tx().prepare(
+                    "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*'",
+                )?;
 
-                    (
-                        stmt,
-                        vec![Box::new(ancestor.to_string_lossy().into_owned())],
-                    )
-                }
-                ListOptions {
-                    sort: Some(ListSort::Size),
-                    ancestor: None,
-                    direction,
-                } => {
-                    let stmt = self.tx().prepare(if direction == SortDirection::Asc {
-                        "SELECT name, mode, mtime, sz FROM sqlar ORDER BY sz ASC"
-                    } else {
-                        "SELECT name, mode, mtime, sz FROM sqlar ORDER BY sz DESC"
-                    })?;
+                (
+                    stmt,
+                    vec![Box::new(ancestor.to_string_lossy().into_owned())],
+                )
+            }
+            ListOptions {
+                sort: Some(ListSort::Size),
+                ancestor: None,
+                direction,
+            } => {
+                let stmt = self.tx().prepare(if direction == SortDirection::Asc {
+                    "SELECT name, mode, mtime, sz FROM sqlar ORDER BY sz ASC"
+                } else {
+                    "SELECT name, mode, mtime, sz FROM sqlar ORDER BY sz DESC"
+                })?;
 
-                    (stmt, Vec::new())
-                }
-                ListOptions {
-                    sort: Some(ListSort::Mtime),
-                    ancestor: None,
-                    direction,
-                } => {
-                    let stmt = self.tx().prepare(if direction == SortDirection::Asc {
-                        "SELECT name, mode, mtime, sz FROM sqlar ORDER BY mtime ASC"
-                    } else {
-                        "SELECT name, mode, mtime, sz FROM sqlar ORDER BY mtime DESC"
-                    })?;
+                (stmt, Vec::new())
+            }
+            ListOptions {
+                sort: Some(ListSort::Mtime),
+                ancestor: None,
+                direction,
+            } => {
+                let stmt = self.tx().prepare(if direction == SortDirection::Asc {
+                    "SELECT name, mode, mtime, sz FROM sqlar ORDER BY mtime ASC"
+                } else {
+                    "SELECT name, mode, mtime, sz FROM sqlar ORDER BY mtime DESC"
+                })?;
 
-                    (stmt, vec![])
-                }
-                ListOptions {
-                    sort: Some(ListSort::Size),
-                    ancestor: Some(ancestor),
-                    direction,
-                } => {
-                    let stmt = self.tx().prepare(if direction == SortDirection::Asc {
+                (stmt, vec![])
+            }
+            ListOptions {
+                sort: Some(ListSort::Size),
+                ancestor: Some(ancestor),
+                direction,
+            } => {
+                let stmt = self.tx().prepare(if direction == SortDirection::Asc {
                     "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' ORDER BY sz ASC"
                 } else {
                     "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' ORDER BY sz DESC"
                 })?;
 
-                    (
-                        stmt,
-                        vec![Box::new(ancestor.to_string_lossy().into_owned())],
-                    )
-                }
-                ListOptions {
-                    sort: Some(ListSort::Mtime),
-                    ancestor: Some(ancestor),
-                    direction,
-                } => {
-                    let stmt = self.tx().prepare(if direction == SortDirection::Asc {
+                (
+                    stmt,
+                    vec![Box::new(ancestor.to_string_lossy().into_owned())],
+                )
+            }
+            ListOptions {
+                sort: Some(ListSort::Mtime),
+                ancestor: Some(ancestor),
+                direction,
+            } => {
+                let stmt = self.tx().prepare(if direction == SortDirection::Asc {
                     "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' ORDER BY mtime ASC"
                 } else {
                     "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' ORDER BY mtime DESC"
                 })?;
 
-                    (
-                        stmt,
-                        vec![Box::new(ancestor.to_string_lossy().into_owned())],
-                    )
-                }
-            };
-
-        let params = params.iter().map(AsRef::as_ref).collect::<Vec<_>>();
+                (
+                    stmt,
+                    vec![Box::new(ancestor.to_string_lossy().into_owned())],
+                )
+            }
+        };
 
         let map_func: ListMapFunc = Box::new(|row| {
             Ok(ListEntry {
@@ -413,11 +410,6 @@ impl<'conn> Store<'conn> {
             })
         });
 
-        for (i, param) in params.iter().enumerate() {
-            // Parameter bindings start at 1.
-            stmt.raw_bind_parameter(i + 1, param)?;
-        }
-
-        Ok(ListEntries::new(stmt, map_func))
+        ListEntries::new(stmt, params, map_func)
     }
 }

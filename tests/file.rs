@@ -90,7 +90,7 @@ fn validate_incompressible_bytes_are_actually_not_zlib_compressible() -> io::Res
 #[test]
 fn get_file_path() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let file = archive.open(Path::new("path/to/file"))?;
+        let file = archive.open("path/to/file")?;
 
         expect!(file.path()).to(equal(Path::new("path/to/file")));
 
@@ -101,7 +101,7 @@ fn get_file_path() -> sqlarfs::Result<()> {
 #[test]
 fn create_file_when_it_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("nonexistent-file"))?;
+        let mut file = archive.open("nonexistent-file")?;
 
         expect!(file.create()).to(be_ok());
 
@@ -112,7 +112,7 @@ fn create_file_when_it_does_not_exist() -> sqlarfs::Result<()> {
 #[test]
 fn create_file_when_it_already_exists() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("existing-file"))?;
+        let mut file = archive.open("existing-file")?;
 
         file.create()?;
 
@@ -128,7 +128,7 @@ fn create_file_when_it_already_exists() -> sqlarfs::Result<()> {
 #[test]
 fn file_metadata_when_creating_file_with_metadata() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("file"))?;
+        let mut file = archive.open("file")?;
 
         let mode = FileMode::OWNER_R | FileMode::OWNER_W | FileMode::GROUP_R | FileMode::OTHER_R;
         let precise_mtime = SystemTime::now();
@@ -151,7 +151,7 @@ fn file_metadata_when_creating_file_with_metadata() -> sqlarfs::Result<()> {
 #[test]
 fn file_correctly_reports_that_it_exists() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("existing-file"))?;
+        let mut file = archive.open("existing-file")?;
 
         file.create()?;
 
@@ -164,7 +164,7 @@ fn file_correctly_reports_that_it_exists() -> sqlarfs::Result<()> {
 #[test]
 fn file_correctly_reports_that_it_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let file = archive.open(Path::new("nonexistent-file"))?;
+        let file = archive.open("nonexistent-file")?;
 
         expect!(file.exists()).to(be_ok()).to(be_false());
 
@@ -175,7 +175,7 @@ fn file_correctly_reports_that_it_does_not_exist() -> sqlarfs::Result<()> {
 #[test]
 fn deleting_file_when_it_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("nonexistent-file"))?;
+        let mut file = archive.open("nonexistent-file")?;
 
         expect!(file.delete())
             .to(be_err())
@@ -189,7 +189,7 @@ fn deleting_file_when_it_does_not_exist() -> sqlarfs::Result<()> {
 #[test]
 fn deleting_file_when_it_does_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("existing-file"))?;
+        let mut file = archive.open("existing-file")?;
 
         file.create()?;
 
@@ -203,7 +203,7 @@ fn deleting_file_when_it_does_exist() -> sqlarfs::Result<()> {
 #[cfg(feature = "deflate")]
 fn set_compression_method() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("file"))?;
+        let mut file = archive.open("file")?;
 
         // We specify that the default is DEFLATE compression when the feature flag is enabled, but
         // not what the default compression level is.
@@ -220,7 +220,7 @@ fn set_compression_method() -> sqlarfs::Result<()> {
 #[test]
 fn set_file_mode() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("file"))?;
+        let mut file = archive.open("file")?;
 
         file.create()?;
 
@@ -246,7 +246,7 @@ fn set_file_mode() -> sqlarfs::Result<()> {
 #[test]
 fn set_file_mode_when_file_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("file"))?;
+        let mut file = archive.open("file")?;
 
         expect!(file.set_mode(None))
             .to(be_err())
@@ -260,7 +260,7 @@ fn set_file_mode_when_file_does_not_exist() -> sqlarfs::Result<()> {
 #[test]
 fn set_file_mtime() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("file"))?;
+        let mut file = archive.open("file")?;
 
         file.create()?;
 
@@ -282,7 +282,7 @@ fn set_file_mtime() -> sqlarfs::Result<()> {
 #[test]
 fn set_file_mtime_when_file_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("file"))?;
+        let mut file = archive.open("file")?;
 
         expect!(file.set_mtime(None))
             .to(be_err())
@@ -296,7 +296,7 @@ fn set_file_mtime_when_file_does_not_exist() -> sqlarfs::Result<()> {
 #[test]
 fn file_size_is_zero_when_file_is_empty() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("file"))?;
+        let mut file = archive.open("file")?;
 
         file.create()?;
 
@@ -311,7 +311,7 @@ fn file_size_is_zero_when_file_is_empty() -> sqlarfs::Result<()> {
 #[test]
 fn file_correctly_reports_being_empty() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("file"))?;
+        let mut file = archive.open("file")?;
 
         file.create()?;
 
@@ -324,7 +324,7 @@ fn file_correctly_reports_being_empty() -> sqlarfs::Result<()> {
 #[test]
 fn file_correctly_reports_being_not_empty() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("file"))?;
+        let mut file = archive.open("file")?;
 
         file.create()?;
         file.write_str("file contents")?;
@@ -338,7 +338,7 @@ fn file_correctly_reports_being_not_empty() -> sqlarfs::Result<()> {
 #[test]
 fn is_file_empty_errors_when_it_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let file = archive.open(Path::new("file"))?;
+        let file = archive.open("file")?;
 
         expect!(file.is_empty())
             .to(be_err())
@@ -352,7 +352,7 @@ fn is_file_empty_errors_when_it_does_not_exist() -> sqlarfs::Result<()> {
 #[test]
 fn is_file_compressed_errors_when_it_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let file = archive.open(Path::new("file"))?;
+        let file = archive.open("file")?;
 
         expect!(file.is_compressed())
             .to(be_err())
@@ -366,7 +366,7 @@ fn is_file_compressed_errors_when_it_does_not_exist() -> sqlarfs::Result<()> {
 #[test]
 fn write_bytes_without_compression() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("file"))?;
+        let mut file = archive.open("file")?;
         file.create()?;
 
         file.set_compression(Compression::None);
@@ -398,7 +398,7 @@ fn write_bytes_without_compression() -> sqlarfs::Result<()> {
 #[cfg(feature = "deflate")]
 fn write_incompressible_bytes_with_compression() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("file"))?;
+        let mut file = archive.open("file")?;
         file.create()?;
 
         file.set_compression(Compression::FAST);
@@ -430,7 +430,7 @@ fn write_incompressible_bytes_with_compression() -> sqlarfs::Result<()> {
 #[cfg(feature = "deflate")]
 fn write_compressible_bytes_with_compression() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("file"))?;
+        let mut file = archive.open("file")?;
         file.create()?;
 
         file.set_compression(Compression::FAST);
@@ -461,7 +461,7 @@ fn write_compressible_bytes_with_compression() -> sqlarfs::Result<()> {
 #[test]
 fn write_bytes_when_file_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("file"))?;
+        let mut file = archive.open("file")?;
 
         let expected = random_bytes(WRITE_DATA_SIZE);
 
@@ -477,7 +477,7 @@ fn write_bytes_when_file_does_not_exist() -> sqlarfs::Result<()> {
 #[test]
 fn open_reader_when_file_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("file"))?;
+        let mut file = archive.open("file")?;
 
         expect!(file.reader())
             .to(be_err())
@@ -491,7 +491,7 @@ fn open_reader_when_file_does_not_exist() -> sqlarfs::Result<()> {
 #[test]
 fn write_string() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("file"))?;
+        let mut file = archive.open("file")?;
         file.create()?;
 
         let expected = "hello world";
@@ -512,7 +512,7 @@ fn write_string() -> sqlarfs::Result<()> {
 #[test]
 fn truncated_file_returns_no_bytes() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("file"))?;
+        let mut file = archive.open("file")?;
         file.create()?;
 
         let expected = random_bytes(WRITE_DATA_SIZE);
@@ -544,7 +544,7 @@ fn truncated_file_returns_no_bytes() -> sqlarfs::Result<()> {
 #[test]
 fn truncate_file_when_it_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("file"))?;
+        let mut file = archive.open("file")?;
 
         expect!(file.truncate())
             .to(be_err())
@@ -558,7 +558,7 @@ fn truncate_file_when_it_does_not_exist() -> sqlarfs::Result<()> {
 #[test]
 fn write_from_reader_without_compression() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("file"))?;
+        let mut file = archive.open("file")?;
         file.create()?;
 
         file.set_compression(Compression::None);
@@ -592,7 +592,7 @@ fn write_from_reader_without_compression() -> sqlarfs::Result<()> {
 #[cfg(feature = "deflate")]
 fn write_incompressible_data_from_reader_with_compression() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("file"))?;
+        let mut file = archive.open("file")?;
         file.create()?;
 
         file.set_compression(Compression::FAST);
@@ -626,7 +626,7 @@ fn write_incompressible_data_from_reader_with_compression() -> sqlarfs::Result<(
 #[cfg(feature = "deflate")]
 fn write_compressible_data_from_reader_with_compression() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("file"))?;
+        let mut file = archive.open("file")?;
         file.create()?;
 
         file.set_compression(Compression::FAST);
@@ -661,7 +661,7 @@ fn write_from_file_without_compression() -> sqlarfs::Result<()> {
     let mut temp_file = tempfile::tempfile()?;
 
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("file"))?;
+        let mut file = archive.open("file")?;
         file.create()?;
 
         file.set_compression(Compression::None);
@@ -699,7 +699,7 @@ fn write_incompressible_data_from_file_with_compression() -> sqlarfs::Result<()>
     let mut temp_file = tempfile::tempfile()?;
 
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("file"))?;
+        let mut file = archive.open("file")?;
         file.create()?;
 
         file.set_compression(Compression::FAST);
@@ -738,7 +738,7 @@ fn write_compressible_data_from_file_with_compression() -> sqlarfs::Result<()> {
     let mut temp_file = tempfile::tempfile()?;
 
     connection()?.exec(|archive| {
-        let mut file = archive.open(Path::new("file"))?;
+        let mut file = archive.open("file")?;
         file.create()?;
 
         file.set_compression(Compression::FAST);

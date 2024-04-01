@@ -8,7 +8,7 @@ use super::transaction::Connection;
 ///
 /// You can also use the [`Connection::open`] and [`Connection::open_in_memory`] convenience
 /// methods.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct OpenOptions {
     create: bool,
     init: bool,

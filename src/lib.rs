@@ -9,6 +9,7 @@
 mod archive;
 mod error;
 mod file;
+mod list;
 mod metadata;
 mod open;
 mod store;

@@ -1,51 +1,20 @@
+mod common;
+
 use std::io::{self, prelude::*};
 use std::path::Path;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
 
 #[cfg(feature = "deflate")]
 use flate2::write::ZlibEncoder;
-use rand::prelude::*;
-use sqlarfs::{Compression, Connection, ErrorKind, FileMetadata, FileMode};
+use sqlarfs::{Compression, ErrorKind, FileMetadata, FileMode};
 use xpct::{
     be_empty, be_err, be_false, be_ge, be_lt, be_none, be_ok, be_some, be_true, be_zero, eq_diff,
     equal, expect, fields, match_fields, match_pattern, pattern,
 };
 
+use common::{compressible_bytes, connection, incompressible_bytes, random_bytes, truncate_mtime};
+
 const WRITE_DATA_SIZE: usize = 64;
-
-fn connection() -> sqlarfs::Result<Connection> {
-    Connection::open_in_memory()
-}
-
-// This is for rounding a file mtime to the nearest second, because that's what SQLite archives do.
-fn rounded_time(time: SystemTime) -> SystemTime {
-    let unix_time_secs = time.duration_since(UNIX_EPOCH).unwrap().as_secs();
-    UNIX_EPOCH + Duration::from_secs(unix_time_secs)
-}
-
-fn random_bytes(len: usize) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(len);
-    let mut rng = SmallRng::from_entropy();
-    rng.fill_bytes(&mut buf);
-    buf
-}
-
-// A buffer of bytes that can be compressed to a smaller size.
-fn compressible_bytes() -> Vec<u8> {
-    vec![0u8; 64]
-}
-
-// A buffer of bytes that cannot be compressed to a smaller size.
-fn incompressible_bytes() -> Vec<u8> {
-    // Make it deterministic to ensure tests don't flake, just in case zlib *can* manage to
-    // compress these random non-repeating bytes.
-    let mut rng = SmallRng::seed_from_u64(0);
-
-    // No repeating bytes.
-    let pool = (0..255).collect::<Vec<u8>>();
-
-    pool.choose_multiple(&mut rng, 64).copied().collect()
-}
 
 // Some of our tests require inputs that we know for sure are compressible via zlib. Let's make
 // absolutely sure that the test data we are using is in fact compressible.
@@ -132,14 +101,14 @@ fn file_metadata_when_creating_file_with_metadata() -> sqlarfs::Result<()> {
 
         let mode = FileMode::OWNER_R | FileMode::OWNER_W | FileMode::GROUP_R | FileMode::OTHER_R;
         let precise_mtime = SystemTime::now();
-        let rounded_mtime = rounded_time(precise_mtime);
+        let truncated_mtime = truncate_mtime(precise_mtime);
 
         file.create_with(mode, precise_mtime)?;
 
         expect!(file.metadata())
             .to(be_ok())
             .to(match_fields(fields!(FileMetadata {
-                mtime: equal(Some(rounded_mtime)),
+                mtime: equal(Some(truncated_mtime)),
                 mode: equal(Some(mode)),
                 size: be_zero(),
             })));
@@ -265,7 +234,7 @@ fn set_file_mtime() -> sqlarfs::Result<()> {
         file.create()?;
 
         let precise_mtime = SystemTime::now();
-        let rounded_mtime = rounded_time(precise_mtime);
+        let truncated_mtime = truncate_mtime(precise_mtime);
 
         file.set_mtime(Some(precise_mtime))?;
 
@@ -273,7 +242,7 @@ fn set_file_mtime() -> sqlarfs::Result<()> {
             .to(be_ok())
             .map(|metadata| metadata.mtime)
             .to(be_some())
-            .to(equal(rounded_mtime));
+            .to(equal(truncated_mtime));
 
         Ok(())
     })

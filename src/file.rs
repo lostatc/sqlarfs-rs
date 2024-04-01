@@ -178,7 +178,8 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// The file mtime is nullable, so it's possible to set this to `None`.
     ///
-    /// This rounds to the nearest second.
+    /// The mtime in a SQLite archive only has a precision of 1 second, so this rounds down to the
+    /// nearest whole second.
     ///
     /// # Errors
     ///

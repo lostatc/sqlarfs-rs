@@ -60,14 +60,14 @@ impl ListOptions {
     }
 
     /// Choose how to sort the list of files.
-    pub fn sort(&mut self, sort: ListSort) -> &mut Self {
+    pub fn sort(mut self, sort: ListSort) -> Self {
         self.sort = Some(sort);
 
         self
     }
 
     /// Choose the sort direction.
-    pub fn direction(&mut self, direction: SortDirection) -> &mut Self {
+    pub fn direction(mut self, direction: SortDirection) -> Self {
         self.direction = direction;
 
         self
@@ -76,7 +76,7 @@ impl ListOptions {
     /// Only return files that are descendants of this directory.
     ///
     /// This returns all descendants, not just immediate children.
-    pub fn descendants<P: AsRef<Path>>(&mut self, directory: P) -> &mut Self {
+    pub fn descendants<P: AsRef<Path>>(mut self, directory: P) -> Self {
         self.ancestor = Some(directory.as_ref().to_path_buf());
 
         self

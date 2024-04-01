@@ -1,9 +1,9 @@
-use sqlarfs::{Connection, ErrorKind};
+mod common;
+
+use sqlarfs::ErrorKind;
 use xpct::{be_err, equal, expect};
 
-fn connection() -> sqlarfs::Result<Connection> {
-    Connection::open_in_memory()
-}
+use common::connection;
 
 #[test]
 fn opening_file_with_absolute_path_errors() -> sqlarfs::Result<()> {

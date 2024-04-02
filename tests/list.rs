@@ -4,14 +4,10 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use sqlarfs::{Connection, FileMode, ListOptions};
+use sqlarfs::{FileMode, ListOptions};
 use xpct::{be_ok, be_some, be_zero, consist_of, contain_element, equal, expect, why};
 
-use common::truncate_mtime;
-
-fn connection() -> sqlarfs::Result<Connection> {
-    Connection::open_in_memory()
-}
+use common::{connection, truncate_mtime};
 
 #[test]
 fn list_all_paths() -> sqlarfs::Result<()> {
@@ -169,23 +165,22 @@ fn list_with_sort_by_mtime() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let base_time = SystemTime::now();
 
-        archive
-            .open("now")?
-            .create_with(FileMode::empty(), base_time)?;
+        let mut file1 = archive.open("now")?;
+        file1.create()?;
+        file1.set_mtime(Some(base_time))?;
 
         // This will be truncated to one full second behind `base_time`.
-        archive.open("100_millis_behind")?.create_with(
-            FileMode::empty(),
-            truncate_mtime(base_time) - Duration::from_millis(100),
-        )?;
+        let mut file2 = archive.open("100_millis_behind")?;
+        file2.create()?;
+        file2.set_mtime(Some(truncate_mtime(base_time) - Duration::from_millis(100)))?;
 
-        archive
-            .open("two_secs_behind")?
-            .create_with(FileMode::empty(), base_time - Duration::from_secs(2))?;
+        let mut file3 = archive.open("two_secs_behind")?;
+        file3.create()?;
+        file3.set_mtime(Some(base_time - Duration::from_secs(2)))?;
 
-        archive
-            .open("three_secs_behind")?
-            .create_with(FileMode::empty(), base_time - Duration::from_secs(3))?;
+        let mut file4 = archive.open("three_secs_behind")?;
+        file4.create()?;
+        file4.set_mtime(Some(base_time - Duration::from_secs(3)))?;
 
         expect!(archive.list_with(&ListOptions::new().by_mtime().asc()))
             .to(be_ok())
@@ -248,6 +243,120 @@ fn list_with_sort_by_size() -> sqlarfs::Result<()> {
                 PathBuf::from("size 3"),
                 PathBuf::from("size 2"),
                 PathBuf::from("size 1"),
+            ]));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn list_with_sort_by_mtime_while_filtering_descendants() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let base_time = SystemTime::now();
+
+        let mut file_a = archive.open("a")?;
+        file_a.create()?;
+
+        let mut file_b = archive.open("one/b")?;
+        file_b.create()?;
+        file_b.set_mtime(Some(base_time))?;
+
+        let mut file_d = archive.open("one/two/d")?;
+        file_d.create()?;
+        file_d.set_mtime(Some(base_time - Duration::from_secs(1)))?;
+
+        let mut file_c = archive.open("one/two/c")?;
+        file_c.create()?;
+        file_c.set_mtime(Some(base_time - Duration::from_secs(2)))?;
+
+        let mut file_e = archive.open("one/two/three/e")?;
+        file_e.create()?;
+        file_e.set_mtime(Some(base_time - Duration::from_secs(3)))?;
+
+        let opts = ListOptions::new()
+            .descendants_of(Path::new("one"))
+            .by_mtime()
+            .asc();
+
+        expect!(archive.list_with(&opts))
+            .to(be_ok())
+            .iter_try_map(|entry| Ok(entry?.into_path()))
+            .to(equal(&[
+                PathBuf::from("one/two/three/e"),
+                PathBuf::from("one/two/c"),
+                PathBuf::from("one/two/d"),
+                PathBuf::from("one/b"),
+            ]));
+
+        let opts = ListOptions::new()
+            .descendants_of(Path::new("one"))
+            .by_mtime()
+            .desc();
+
+        expect!(archive.list_with(&opts))
+            .to(be_ok())
+            .iter_try_map(|entry| Ok(entry?.into_path()))
+            .to(equal(&[
+                PathBuf::from("one/b"),
+                PathBuf::from("one/two/d"),
+                PathBuf::from("one/two/c"),
+                PathBuf::from("one/two/three/e"),
+            ]));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn list_with_sort_by_size_while_filtering_descendants() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut file_a = archive.open("a")?;
+        file_a.create()?;
+
+        let mut file_b = archive.open("one/b")?;
+        file_b.create()?;
+        file_b.write_str("b")?;
+
+        let mut file_d = archive.open("one/two/d")?;
+        file_d.create()?;
+        file_d.write_str("dd")?;
+
+        let mut file_c = archive.open("one/two/c")?;
+        file_c.create()?;
+        file_c.write_str("ccc")?;
+
+        let mut file_e = archive.open("one/two/three/e")?;
+        file_e.create()?;
+        file_e.write_str("eeee")?;
+
+        let opts = ListOptions::new()
+            .descendants_of(Path::new("one"))
+            .by_size()
+            .asc();
+
+        expect!(archive.list_with(&opts))
+            .to(be_ok())
+            .iter_try_map(|entry| Ok(entry?.into_path()))
+            .to(equal(&[
+                PathBuf::from("one/b"),
+                PathBuf::from("one/two/d"),
+                PathBuf::from("one/two/c"),
+                PathBuf::from("one/two/three/e"),
+            ]));
+
+        let opts = ListOptions::new()
+            .descendants_of(Path::new("one"))
+            .by_size()
+            .desc();
+
+        expect!(archive.list_with(&opts))
+            .to(be_ok())
+            .iter_try_map(|entry| Ok(entry?.into_path()))
+            .to(equal(&[
+                PathBuf::from("one/two/three/e"),
+                PathBuf::from("one/two/c"),
+                PathBuf::from("one/two/d"),
+                PathBuf::from("one/b"),
             ]));
 
         Ok(())

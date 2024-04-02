@@ -1,10 +1,11 @@
 mod common;
 
-use std::time::SystemTime;
-use std::{path::PathBuf, time::Duration};
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use sqlarfs::{Connection, FileMode, ListOptions};
-use xpct::{be_ok, consist_of, contain_element, equal, expect, why};
+use xpct::{be_ok, be_some, be_zero, consist_of, contain_element, equal, expect, why};
 
 use common::truncate_mtime;
 
@@ -27,6 +28,73 @@ fn list_all_paths() -> sqlarfs::Result<()> {
                 PathBuf::from("file2"),
                 PathBuf::from("file3"),
             ]));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn list_all_paths_with_metadata() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let file1_mtime = UNIX_EPOCH + Duration::from_secs(1);
+        let file2_mtime = UNIX_EPOCH + Duration::from_secs(2);
+        let file3_mtime = UNIX_EPOCH + Duration::from_secs(3);
+
+        let mut file1 = archive.open("file1")?;
+        file1.create_with(FileMode::OWNER_RWX, file1_mtime)?;
+        file1.write_str("123")?;
+
+        archive
+            .open("file2")?
+            .create_with(FileMode::GROUP_RWX, file2_mtime)?;
+
+        archive
+            .open("file3")?
+            .create_with(FileMode::OTHER_RWX, file3_mtime)?;
+
+        let entries_by_path = archive
+            .list()?
+            .map(|entry_result| entry_result.map(|entry| (entry.path().to_path_buf(), entry)))
+            .collect::<sqlarfs::Result<HashMap<_, _>>>()?;
+
+        let file1_entry = expect!(entries_by_path.get(Path::new("file1")))
+            .to(be_some())
+            .into_inner();
+
+        expect!(file1_entry.path()).to(equal(Path::new("file1")));
+        expect!(file1_entry.mode())
+            .to(be_some())
+            .to(equal(FileMode::OWNER_RWX));
+        expect!(file1_entry.mtime())
+            .to(be_some())
+            .to(equal(file1_mtime));
+        expect!(file1_entry.size()).to(equal(3));
+
+        let file2_entry = expect!(entries_by_path.get(Path::new("file2")))
+            .to(be_some())
+            .into_inner();
+
+        expect!(file2_entry.path()).to(equal(Path::new("file2")));
+        expect!(file2_entry.mode())
+            .to(be_some())
+            .to(equal(FileMode::GROUP_RWX));
+        expect!(file2_entry.mtime())
+            .to(be_some())
+            .to(equal(file2_mtime));
+        expect!(file2_entry.size()).to(be_zero());
+
+        let file3_entry = expect!(entries_by_path.get(Path::new("file3")))
+            .to(be_some())
+            .into_inner();
+
+        expect!(file3_entry.path()).to(equal(Path::new("file3")));
+        expect!(file3_entry.mode())
+            .to(be_some())
+            .to(equal(FileMode::OTHER_RWX));
+        expect!(file3_entry.mtime())
+            .to(be_some())
+            .to(equal(file3_mtime));
+        expect!(file3_entry.size()).to(be_zero());
 
         Ok(())
     })

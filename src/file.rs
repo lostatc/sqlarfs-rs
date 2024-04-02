@@ -16,6 +16,7 @@ const COPY_BUF_SIZE: usize = 1024 * 8;
 
 /// Metadata for a [`File`].
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct FileMetadata {
     /// The time the file was last modified.
     ///

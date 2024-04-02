@@ -3,7 +3,7 @@ mod common;
 use std::time::SystemTime;
 use std::{path::PathBuf, time::Duration};
 
-use sqlarfs::{Connection, FileMode, ListOptions, ListSort, SortDirection};
+use sqlarfs::{Connection, FileMode, ListOptions};
 use xpct::{be_ok, consist_of, contain_element, equal, expect, why};
 
 use common::truncate_mtime;
@@ -63,7 +63,7 @@ fn list_with_filter_descendants() -> sqlarfs::Result<()> {
         archive.open("one/two/d")?.create()?;
 
         let paths = archive
-            .list_with(&ListOptions::new().descendants("one"))?
+            .list_with(&ListOptions::new().descendants_of("one"))?
             .map(|entry| Ok(entry?.into_path()))
             .collect::<sqlarfs::Result<Vec<_>>>()?;
 
@@ -119,9 +119,7 @@ fn list_with_sort_by_mtime() -> sqlarfs::Result<()> {
             .open("three_sec_behind")?
             .create_with(FileMode::empty(), base_time - Duration::from_secs(3))?;
 
-        let opts = ListOptions::new().sort(ListSort::Mtime);
-
-        expect!(archive.list_with(&opts.clone().direction(SortDirection::Asc)))
+        expect!(archive.list_with(&ListOptions::new().by_mtime().asc()))
             .to(be_ok())
             .iter_try_map(|entry| Ok(entry?.into_path()))
             .to(equal(&[
@@ -131,7 +129,7 @@ fn list_with_sort_by_mtime() -> sqlarfs::Result<()> {
                 PathBuf::from("now"),
             ]));
 
-        expect!(archive.list_with(&opts.direction(SortDirection::Desc)))
+        expect!(archive.list_with(&ListOptions::new().by_mtime().desc()))
             .to(be_ok())
             .iter_try_map(|entry| Ok(entry?.into_path()))
             .to(equal(&[
@@ -164,9 +162,7 @@ fn list_with_sort_by_size() -> sqlarfs::Result<()> {
         file_d.create()?;
         file_d.write_str("dddd")?;
 
-        let opts = ListOptions::new().sort(ListSort::Size);
-
-        expect!(archive.list_with(&opts.clone().direction(SortDirection::Asc)))
+        expect!(archive.list_with(&ListOptions::new().by_size().asc()))
             .to(be_ok())
             .iter_try_map(|entry| Ok(entry?.into_path()))
             .to(equal(&[
@@ -176,7 +172,7 @@ fn list_with_sort_by_size() -> sqlarfs::Result<()> {
                 PathBuf::from("d"),
             ]));
 
-        expect!(archive.list_with(&opts.direction(SortDirection::Desc)))
+        expect!(archive.list_with(&ListOptions::new().by_size().desc()))
             .to(be_ok())
             .iter_try_map(|entry| Ok(entry?.into_path()))
             .to(equal(&[

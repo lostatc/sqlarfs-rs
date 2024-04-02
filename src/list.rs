@@ -4,28 +4,15 @@ use std::time::SystemTime;
 
 use crate::FileMode;
 
-/// How to sort a list of file paths.
-///
-/// This is used with [`ListOptions`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ListSort {
-    /// Sort by the file's size.
     Size,
-
-    /// Sort by the file's mtime.
     Mtime,
 }
 
-/// Which direction to sort a list of file paths in.
-///
-/// This is used with [`ListOptions`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SortDirection {
-    /// Ascending
     Asc,
-
-    /// Descending
     Desc,
 }
 
@@ -33,7 +20,10 @@ pub enum SortDirection {
 ///
 /// This is used with [`Archive::list_with`].
 ///
-/// The default sort order is unspecified.
+/// Unless you specify a sort criteria with [`ListOptions::by_mtime`] or [`ListOptions::by_size`],
+/// the order of the returned files is unspecified.
+///
+/// You cannot sort by multiple criteria; specifying a sort criteria replaces the previous one.
 ///
 /// [`Archive::list_with`]: crate::Archive::list_with
 #[derive(Debug, Clone)]
@@ -59,24 +49,38 @@ impl ListOptions {
         }
     }
 
-    /// Choose how to sort the list of files.
-    pub fn sort(mut self, sort: ListSort) -> Self {
-        self.sort = Some(sort);
+    /// Sort by last modification time.
+    pub fn by_mtime(mut self) -> Self {
+        self.sort = Some(ListSort::Mtime);
 
         self
     }
 
-    /// Choose the sort direction.
-    pub fn direction(mut self, direction: SortDirection) -> Self {
-        self.direction = direction;
+    /// Sort by file size.
+    pub fn by_size(mut self) -> Self {
+        self.sort = Some(ListSort::Size);
 
         self
     }
 
-    /// Only return files that are descendants of this directory.
+    /// Sort in ascending order (the default).
+    pub fn asc(mut self) -> Self {
+        self.direction = SortDirection::Asc;
+
+        self
+    }
+
+    /// Sort in descending order.
+    pub fn desc(mut self) -> Self {
+        self.direction = SortDirection::Desc;
+
+        self
+    }
+
+    /// Only return files that are descendants of the given `directory`.
     ///
     /// This returns all descendants, not just immediate children.
-    pub fn descendants<P: AsRef<Path>>(mut self, directory: P) -> Self {
+    pub fn descendants_of<P: AsRef<Path>>(mut self, directory: P) -> Self {
         self.ancestor = Some(directory.as_ref().to_path_buf());
 
         self

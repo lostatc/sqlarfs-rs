@@ -20,7 +20,7 @@ mod util;
 pub use archive::Archive;
 pub use error::{Error, ErrorKind, Result, SqliteErrorCode};
 pub use file::{File, FileMetadata};
-pub use list::{ListEntries, ListEntry, ListOptions, ListSort, SortDirection};
+pub use list::{ListEntries, ListEntry, ListOptions};
 pub use metadata::FileMode;
 pub use open::OpenOptions;
 pub use stream::{Compression, FileReader};

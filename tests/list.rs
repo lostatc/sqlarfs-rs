@@ -144,3 +144,48 @@ fn list_with_sort_by_mtime() -> sqlarfs::Result<()> {
         Ok(())
     })
 }
+
+#[test]
+fn list_with_sort_by_size() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut file_a = archive.open("a")?;
+        file_a.create()?;
+        file_a.write_str("a")?;
+
+        let mut file_b = archive.open("b")?;
+        file_b.create()?;
+        file_b.write_str("bb")?;
+
+        let mut file_c = archive.open("c")?;
+        file_c.create()?;
+        file_c.write_str("ccc")?;
+
+        let mut file_d = archive.open("d")?;
+        file_d.create()?;
+        file_d.write_str("dddd")?;
+
+        let opts = ListOptions::new().sort(ListSort::Size);
+
+        expect!(archive.list_with(&opts.clone().direction(SortDirection::Asc)))
+            .to(be_ok())
+            .iter_try_map(|entry| Ok(entry?.into_path()))
+            .to(equal(&[
+                PathBuf::from("a"),
+                PathBuf::from("b"),
+                PathBuf::from("c"),
+                PathBuf::from("d"),
+            ]));
+
+        expect!(archive.list_with(&opts.direction(SortDirection::Desc)))
+            .to(be_ok())
+            .iter_try_map(|entry| Ok(entry?.into_path()))
+            .to(equal(&[
+                PathBuf::from("d"),
+                PathBuf::from("c"),
+                PathBuf::from("b"),
+                PathBuf::from("a"),
+            ]));
+
+        Ok(())
+    })
+}

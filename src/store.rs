@@ -402,13 +402,15 @@ impl<'conn> Store<'conn> {
         let map_func: ListMapFunc = Box::new(|row| {
             Ok(ListEntry {
                 path: PathBuf::from(row.get::<_, String>(0)?),
-                mode: row
-                    .get::<_, Option<u32>>(1)?
-                    .map(FileMode::from_bits_truncate),
-                mtime: row
-                    .get::<_, Option<u64>>(2)?
-                    .map(|mtime_secs| UNIX_EPOCH + Duration::from_secs(mtime_secs)),
-                size: row.get(3)?,
+                metadata: FileMetadata {
+                    mode: row
+                        .get::<_, Option<u32>>(1)?
+                        .map(FileMode::from_bits_truncate),
+                    mtime: row
+                        .get::<_, Option<u64>>(2)?
+                        .map(|mtime_secs| UNIX_EPOCH + Duration::from_secs(mtime_secs)),
+                    size: row.get(3)?,
+                },
             })
         });
 

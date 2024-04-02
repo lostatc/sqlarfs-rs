@@ -1,8 +1,7 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
 
-use crate::FileMode;
+use super::file::FileMetadata;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ListSort {
@@ -97,9 +96,7 @@ impl ListOptions {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ListEntry {
     pub(super) path: PathBuf,
-    pub(super) mode: Option<FileMode>,
-    pub(super) mtime: Option<SystemTime>,
-    pub(super) size: u64,
+    pub(super) metadata: FileMetadata,
 }
 
 impl ListEntry {
@@ -113,19 +110,9 @@ impl ListEntry {
         self.path
     }
 
-    /// The file mode (permissions).
-    pub fn mode(&self) -> Option<FileMode> {
-        self.mode
-    }
-
-    /// The file's last modification time.
-    pub fn mtime(&self) -> Option<SystemTime> {
-        self.mtime
-    }
-
-    /// The original uncompressed size of the file.
-    pub fn size(&self) -> u64 {
-        self.size
+    /// The file metadata.
+    pub fn metadata(&self) -> &FileMetadata {
+        &self.metadata
     }
 }
 

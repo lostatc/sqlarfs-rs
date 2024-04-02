@@ -112,19 +112,19 @@ fn list_with_sort_by_mtime() -> sqlarfs::Result<()> {
         )?;
 
         archive
-            .open("two_sec_behind")?
+            .open("two_secs_behind")?
             .create_with(FileMode::empty(), base_time - Duration::from_secs(2))?;
 
         archive
-            .open("three_sec_behind")?
+            .open("three_secs_behind")?
             .create_with(FileMode::empty(), base_time - Duration::from_secs(3))?;
 
         expect!(archive.list_with(&ListOptions::new().by_mtime().asc()))
             .to(be_ok())
             .iter_try_map(|entry| Ok(entry?.into_path()))
             .to(equal(&[
-                PathBuf::from("three_sec_behind"),
-                PathBuf::from("two_sec_behind"),
+                PathBuf::from("three_secs_behind"),
+                PathBuf::from("two_secs_behind"),
                 PathBuf::from("100_millis_behind"),
                 PathBuf::from("now"),
             ]));
@@ -135,8 +135,8 @@ fn list_with_sort_by_mtime() -> sqlarfs::Result<()> {
             .to(equal(&[
                 PathBuf::from("now"),
                 PathBuf::from("100_millis_behind"),
-                PathBuf::from("two_sec_behind"),
-                PathBuf::from("three_sec_behind"),
+                PathBuf::from("two_secs_behind"),
+                PathBuf::from("three_secs_behind"),
             ]));
 
         Ok(())
@@ -146,19 +146,19 @@ fn list_with_sort_by_mtime() -> sqlarfs::Result<()> {
 #[test]
 fn list_with_sort_by_size() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file_a = archive.open("a")?;
+        let mut file_a = archive.open("size 1")?;
         file_a.create()?;
         file_a.write_str("a")?;
 
-        let mut file_b = archive.open("b")?;
+        let mut file_b = archive.open("size 2")?;
         file_b.create()?;
         file_b.write_str("bb")?;
 
-        let mut file_c = archive.open("c")?;
+        let mut file_c = archive.open("size 3")?;
         file_c.create()?;
         file_c.write_str("ccc")?;
 
-        let mut file_d = archive.open("d")?;
+        let mut file_d = archive.open("size 4")?;
         file_d.create()?;
         file_d.write_str("dddd")?;
 
@@ -166,20 +166,20 @@ fn list_with_sort_by_size() -> sqlarfs::Result<()> {
             .to(be_ok())
             .iter_try_map(|entry| Ok(entry?.into_path()))
             .to(equal(&[
-                PathBuf::from("a"),
-                PathBuf::from("b"),
-                PathBuf::from("c"),
-                PathBuf::from("d"),
+                PathBuf::from("size 1"),
+                PathBuf::from("size 2"),
+                PathBuf::from("size 3"),
+                PathBuf::from("size 4"),
             ]));
 
         expect!(archive.list_with(&ListOptions::new().by_size().desc()))
             .to(be_ok())
             .iter_try_map(|entry| Ok(entry?.into_path()))
             .to(equal(&[
-                PathBuf::from("d"),
-                PathBuf::from("c"),
-                PathBuf::from("b"),
-                PathBuf::from("a"),
+                PathBuf::from("size 4"),
+                PathBuf::from("size 3"),
+                PathBuf::from("size 2"),
+                PathBuf::from("size 1"),
             ]));
 
         Ok(())

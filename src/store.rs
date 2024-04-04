@@ -416,4 +416,18 @@ impl<'conn> Store<'conn> {
 
         ListEntries::new(stmt, params, map_func)
     }
+
+    pub fn has_descendants(&self, path: &Path) -> crate::Result<bool> {
+        let result = self.tx().query_row(
+            "SELECT name FROM sqlar WHERE name GLOB ?1 || '/?*' LIMIT 1",
+            [path.to_string_lossy()],
+            |_| Ok(()),
+        );
+
+        match result {
+            Ok(_) => Ok(true),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
+            Err(err) => Err(err.into()),
+        }
+    }
 }

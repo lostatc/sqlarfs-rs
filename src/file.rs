@@ -38,10 +38,17 @@ pub struct FileMetadata {
 /// exists, [`File::create`] to create it if it doesn't exist, and [`File::delete`] to delete it if
 /// it does.
 ///
+/// # Reading and writing
+///
 /// You can read from the beginning of a file, but cannot seek through it. You can truncate and
 /// overwrite the file's contents, but cannot append to it.
 ///
 /// Writing to a file does not automatically update its [`FileMetadata::mtime`].
+///
+/// Attempting to read or write a file that has descendants in the archive (i.e. it's a directory)
+/// will return an error.
+///
+/// # Compression
 ///
 /// Writes to a [`File`] can optionally be compressed with DEFLATE. You can change the compression
 /// method (compressed or uncompressed) via [`File::set_compression`]. The default is to compress
@@ -263,10 +270,20 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// - [`ErrorKind::NotFound`]: This file does not exist.
     /// - [`ErrorKind::CompressionNotSupported`]: This file is compressed, but the `deflate` Cargo
     /// feature is disabled.
+    /// - [`ErrorKind::IsADirectory`]: The file has descendants in the archive, meaning it's a
+    /// directory.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::CompressionNotSupported`]: crate::ErrorKind::CompressionNotSupported
+    /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
     pub fn reader(&mut self) -> crate::Result<FileReader> {
+        if self.store.has_descendants(&self.path)? {
+            return Err(crate::Error::msg(
+                crate::ErrorKind::IsADirectory,
+                "Cannot write to a file that has descendants in the archive.",
+            ));
+        }
+
         FileReader::new(self.store.open_blob(&self.path, true)?)
     }
 
@@ -275,6 +292,13 @@ impl<'conn, 'a> File<'conn, 'a> {
         R: ?Sized + Read,
     {
         self.store.exec(|store| {
+            if store.has_descendants(&self.path)? {
+                return Err(crate::Error::msg(
+                    crate::ErrorKind::IsADirectory,
+                    "Cannot write to a file that has descendants in the archive.",
+                ));
+            }
+
             let original_size = match self.compression {
                 Compression::None => match size_hint {
                     Some(len) => {
@@ -433,8 +457,11 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
+    /// - [`ErrorKind::IsADirectory`]: The file has descendants in the archive, meaning it's a
+    /// directory.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
+    /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
     pub fn write_from<R>(&mut self, reader: &mut R) -> crate::Result<()>
     where
         R: ?Sized + Read,
@@ -449,10 +476,20 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
+    /// - [`ErrorKind::IsADirectory`]: The file has descendants in the archive, meaning it's a
+    /// directory.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
+    /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
     pub fn write_bytes(&mut self, bytes: &[u8]) -> crate::Result<()> {
         self.store.exec(|store| {
+            if store.has_descendants(&self.path)? {
+                return Err(crate::Error::msg(
+                    crate::ErrorKind::IsADirectory,
+                    "Cannot write to a file that has descendants in the archive.",
+                ));
+            }
+
             match self.compression {
                 Compression::None => {
                     store.store_blob(&self.path, bytes)?;
@@ -489,8 +526,11 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
+    /// - [`ErrorKind::IsADirectory`]: The file has descendants in the archive, meaning it's a
+    /// directory.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
+    /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
     pub fn write_str<S: AsRef<str>>(&mut self, s: S) -> crate::Result<()> {
         self.write_bytes(s.as_ref().as_bytes())
     }
@@ -504,8 +544,11 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
+    /// - [`ErrorKind::IsADirectory`]: The file has descendants in the archive, meaning it's a
+    /// directory.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
+    /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
     pub fn write_file(&mut self, file: &mut fs::File) -> crate::Result<()> {
         // We know the size of the file, which enabled some optimizations.
         let metadata = file.metadata()?;

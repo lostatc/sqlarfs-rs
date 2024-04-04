@@ -119,6 +119,8 @@ impl From<Error> for io::Error {
             ErrorKind::AlreadyExists => io::ErrorKind::AlreadyExists,
             ErrorKind::NotFound => io::ErrorKind::NotFound,
             ErrorKind::InvalidArgs => io::ErrorKind::InvalidInput,
+            // When it's stable, we can use `std::io::ErrorKind::IsADirectory`.
+            ErrorKind::IsADirectory => io::ErrorKind::Other,
             ErrorKind::CompressionNotSupported => io::ErrorKind::InvalidInput,
             ErrorKind::FileTooBig => io::ErrorKind::Other,
             ErrorKind::ReadOnly => io::ErrorKind::Other,
@@ -178,6 +180,9 @@ pub enum ErrorKind {
     /// Some arguments were invalid.
     InvalidArgs,
 
+    /// The file was unexpectedly a directory.
+    IsADirectory,
+
     /// Attempted to read a compressed file, but the `deflate` Cargo feature was disabled.
     CompressionNotSupported,
 
@@ -215,6 +220,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::AlreadyExists => "A resource already exists.",
             ErrorKind::NotFound => "A resource was not found.",
             ErrorKind::InvalidArgs => "Some arguments were invalid.",
+            ErrorKind::IsADirectory => "The file was unexpectedly a directory.",
             ErrorKind::CompressionNotSupported => "Attempted to read a compressed file, but the `deflate` Cargo feature was disabled.",
             ErrorKind::FileTooBig => "Attempted to write more data to the SQLite archive than its maximum blob size will allow.",
             ErrorKind::ReadOnly => "Attempted to write to a read-only database.",

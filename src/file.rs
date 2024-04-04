@@ -65,13 +65,26 @@ pub struct File<'conn, 'a> {
 }
 
 impl<'conn, 'a> File<'conn, 'a> {
-    pub(super) fn new(path: PathBuf, store: &'a mut Store<'conn>) -> crate::Result<Self> {
+    pub(super) fn new(path: &Path, store: &'a mut Store<'conn>) -> crate::Result<Self> {
         if path.is_absolute() {
-            return Err(crate::ErrorKind::PathIsAbsolute.into());
+            return Err(crate::Error::msg(crate::ErrorKind::InvalidArgs, "The given path is an absolute path, but SQLite archives only support relative paths."));
         }
 
+        let normalized_path = match path.as_os_str().to_str() {
+            // SQLite archives created by the reference implementation don't have trailing slashes
+            // in directory paths, so we normalize paths coming in by stripping trailing path
+            // separators.
+            Some(utf8_str) => PathBuf::from(utf8_str.trim_end_matches(std::path::MAIN_SEPARATOR)),
+            None => {
+                return Err(crate::Error::msg(
+                    crate::ErrorKind::InvalidArgs,
+                    "The given path is not valid Unicode.",
+                ))
+            }
+        };
+
         Ok(Self {
-            path,
+            path: normalized_path,
             store,
             #[cfg(feature = "deflate")]
             compression: Compression::FAST,

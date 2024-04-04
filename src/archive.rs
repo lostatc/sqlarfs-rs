@@ -40,16 +40,20 @@ impl<'conn> Archive<'conn> {
     /// All file paths in a SQLite archive are relative paths; this method returns an error if the
     /// given `path` is an absolute path.
     ///
+    /// All file paths in a SQLite archive are encoded using the database encoding; this method
+    /// returns an error if the given `path` is not valid Unicode.
+    ///
     /// # Errors
     ///
-    /// - [`ErrorKind::PathIsAbsolute`]: The given `path` is an absolute path.
+    /// - [`ErrorKind::InvalidArgs`]: The given `path` is an absolute path.
+    /// - [`ErrorKind::InvalidArgs`]: The given `path` is not valid Unicode.
     ///
-    /// [`ErrorKind::PathIsAbsolute`]: crate::ErrorKind::PathIsAbsolute
+    /// [`ErrorKind::InvalidArgs`]: crate::ErrorKind::InvalidArgs
     pub fn open<'a, P: AsRef<Path>>(&'a mut self, path: P) -> crate::Result<File<'conn, 'a>> {
-        // Opening a file must take a mutable receiver to ensure that the user can't get two
+        // Opening a file must take a mutable receiver to ensure that the user can't get lwo
         // handles to the same file. Otherwise they could do things like open the blob twice or
         // edit the row while the blob is open.
-        File::new(path.as_ref().to_path_buf(), &mut self.store)
+        File::new(path.as_ref(), &mut self.store)
     }
 
     /// Return an iterator over the files in this archive.

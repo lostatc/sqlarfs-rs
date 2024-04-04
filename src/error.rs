@@ -53,6 +53,17 @@ impl Error {
         }
     }
 
+    /// Create a new [`Error`] from the given `message`.
+    pub fn msg<M>(kind: ErrorKind, message: M) -> Self
+    where
+        M: fmt::Display + fmt::Debug + Send + Sync + 'static,
+    {
+        Self {
+            kind,
+            source: Some(anyhow::Error::msg(message)),
+        }
+    }
+
     /// The [`ErrorKind`] of this error.
     pub fn kind(&self) -> &ErrorKind {
         &self.kind
@@ -113,7 +124,6 @@ impl From<Error> for io::Error {
             ErrorKind::ReadOnly => io::ErrorKind::Other,
             ErrorKind::CannotOpen => io::ErrorKind::Other,
             ErrorKind::NotADatabase => io::ErrorKind::Other,
-            ErrorKind::PathIsAbsolute => io::ErrorKind::Other,
             ErrorKind::Sqlite { .. } => io::ErrorKind::Other,
             ErrorKind::Io { kind } => *kind,
         };
@@ -183,9 +193,6 @@ pub enum ErrorKind {
     /// The given file is not a SQLite database.
     NotADatabase,
 
-    /// Tried to open a file with an absolute path.
-    PathIsAbsolute,
-
     /// There was an error from the underlying SQLite database.
     Sqlite {
         /// The underlying SQLite error code, if there is one.
@@ -213,7 +220,6 @@ impl fmt::Display for ErrorKind {
             ErrorKind::ReadOnly => "Attempted to write to a read-only database.",
             ErrorKind::CannotOpen => "Could not open the database file.",
             ErrorKind::NotADatabase => "The given file is not a SQLite database.",
-            ErrorKind::PathIsAbsolute => "Tried to open a file with an absolute path.",
             ErrorKind::Sqlite { .. } => "There was an error from the underlying SQLite database.",
             ErrorKind::Io { .. } => "An I/O error occurred.",
         })
@@ -309,11 +315,11 @@ mod tests {
 
     #[test]
     fn convert_from_io_error_wrapping_a_sqlarfs_error() {
-        let original_err: Error = ErrorKind::PathIsAbsolute.into();
+        let original_err: Error = ErrorKind::InvalidArgs.into();
         let io_err: io::Error = original_err.into();
         let unwrapped_error: Error = io_err.into();
 
-        expect!(unwrapped_error.kind()).to(equal(&ErrorKind::PathIsAbsolute));
+        expect!(unwrapped_error.kind()).to(equal(&ErrorKind::InvalidArgs));
     }
 
     #[test]

@@ -5,6 +5,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use rand::prelude::*;
 use sqlarfs::Connection;
 
+pub const WRITE_DATA_SIZE: usize = 64;
+
 pub fn connection() -> sqlarfs::Result<Connection> {
     Connection::open_in_memory()
 }

@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::{self, Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::SystemTime;
 
 #[cfg(feature = "deflate")]
@@ -66,7 +66,7 @@ pub struct FileMetadata {
 /// [`ErrorKind::CompressionNotSupported`]: crate::ErrorKind::CompressionNotSupported
 #[derive(Debug)]
 pub struct File<'conn, 'a> {
-    path: PathBuf,
+    path: String,
     compression: Compression,
     store: &'a mut Store<'conn>,
 }
@@ -81,7 +81,9 @@ impl<'conn, 'a> File<'conn, 'a> {
             // SQLite archives created by the reference implementation don't have trailing slashes
             // in directory paths, so we normalize paths coming in by stripping trailing path
             // separators.
-            Some(utf8_str) => PathBuf::from(utf8_str.trim_end_matches(std::path::MAIN_SEPARATOR)),
+            Some(utf8_str) => utf8_str
+                .trim_end_matches(std::path::MAIN_SEPARATOR)
+                .to_owned(),
             None => {
                 return Err(crate::Error::msg(
                     crate::ErrorKind::InvalidArgs,
@@ -112,7 +114,7 @@ impl<'conn, 'a> File<'conn, 'a> {
 
     /// The path of the file.
     pub fn path(&self) -> &Path {
-        &self.path
+        Path::new(&self.path)
     }
 
     /// Returns whether the file actually exists in the database.

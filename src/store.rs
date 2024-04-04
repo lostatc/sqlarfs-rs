@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::{self, Duration, SystemTime, UNIX_EPOCH};
 
 use rusqlite::blob::Blob;
@@ -126,7 +126,7 @@ impl<'conn> Store<'conn> {
 
     pub fn create_file(
         &self,
-        path: &Path,
+        path: &str,
         mode: Option<FileMode>,
         mtime: Option<SystemTime>,
     ) -> crate::Result<()> {
@@ -141,11 +141,7 @@ impl<'conn> Store<'conn> {
 
         let result = self.tx().execute(
             "INSERT INTO sqlar (name, mode, mtime, sz, data) VALUES (?1, ?2, ?3, 0, zeroblob(0))",
-            (
-                path.to_string_lossy(),
-                mode.map(|mode| mode.bits()),
-                unix_mtime,
-            ),
+            (path, mode.map(|mode| mode.bits()), unix_mtime),
         );
 
         match result {
@@ -159,11 +155,10 @@ impl<'conn> Store<'conn> {
         }
     }
 
-    pub fn delete_file(&self, path: &Path) -> crate::Result<()> {
-        let num_updated = self.tx().execute(
-            "DELETE FROM sqlar WHERE name = ?1",
-            (path.to_string_lossy(),),
-        )?;
+    pub fn delete_file(&self, path: &str) -> crate::Result<()> {
+        let num_updated = self
+            .tx()
+            .execute("DELETE FROM sqlar WHERE name = ?1", (path,))?;
 
         if num_updated == 0 {
             return Err(crate::ErrorKind::NotFound.into());
@@ -172,12 +167,12 @@ impl<'conn> Store<'conn> {
         Ok(())
     }
 
-    pub fn open_blob(&self, path: &Path, read_only: bool) -> crate::Result<FileBlob> {
+    pub fn open_blob(&self, path: &str, read_only: bool) -> crate::Result<FileBlob> {
         let row = self
             .tx()
             .query_row(
                 "SELECT rowid, sz FROM sqlar WHERE name = ?1;",
-                (path.to_string_lossy(),),
+                (path,),
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .optional()?;
@@ -197,10 +192,10 @@ impl<'conn> Store<'conn> {
         }
     }
 
-    pub fn allocate_blob(&self, path: &Path, len: u64) -> crate::Result<()> {
+    pub fn allocate_blob(&self, path: &str, len: u64) -> crate::Result<()> {
         let num_updated = self.tx().execute(
             "UPDATE sqlar SET data = zeroblob(?1) WHERE name = ?2",
-            (len, path.to_string_lossy()),
+            (len, path),
         )?;
 
         if num_updated == 0 {
@@ -210,11 +205,10 @@ impl<'conn> Store<'conn> {
         Ok(())
     }
 
-    pub fn store_blob(&self, path: &Path, bytes: &[u8]) -> crate::Result<()> {
-        let num_updated = self.tx().execute(
-            "UPDATE sqlar SET data = ?1 WHERE name = ?2",
-            (bytes, path.to_string_lossy()),
-        )?;
+    pub fn store_blob(&self, path: &str, bytes: &[u8]) -> crate::Result<()> {
+        let num_updated = self
+            .tx()
+            .execute("UPDATE sqlar SET data = ?1 WHERE name = ?2", (bytes, path))?;
 
         if num_updated == 0 {
             return Err(crate::ErrorKind::NotFound.into());
@@ -223,11 +217,11 @@ impl<'conn> Store<'conn> {
         Ok(())
     }
 
-    pub fn read_metadata(&self, path: &Path) -> crate::Result<FileMetadata> {
+    pub fn read_metadata(&self, path: &str) -> crate::Result<FileMetadata> {
         self.tx()
             .query_row(
                 "SELECT mode, mtime, sz FROM sqlar WHERE name = ?1;",
-                (path.to_string_lossy(),),
+                (path,),
                 |row| {
                     Ok(FileMetadata {
                         mode: row
@@ -244,10 +238,10 @@ impl<'conn> Store<'conn> {
             .ok_or(crate::ErrorKind::NotFound.into())
     }
 
-    pub fn set_mode(&self, path: &Path, mode: Option<FileMode>) -> crate::Result<()> {
+    pub fn set_mode(&self, path: &str, mode: Option<FileMode>) -> crate::Result<()> {
         let num_updated = self.tx().execute(
             "UPDATE sqlar SET mode = ?1 WHERE name = ?2",
-            (mode.map(|mode| mode.bits()), path.to_string_lossy()),
+            (mode.map(|mode| mode.bits()), path),
         )?;
 
         if num_updated == 0 {
@@ -257,7 +251,7 @@ impl<'conn> Store<'conn> {
         Ok(())
     }
 
-    pub fn set_mtime(&self, path: &Path, mtime: Option<SystemTime>) -> crate::Result<()> {
+    pub fn set_mtime(&self, path: &str, mtime: Option<SystemTime>) -> crate::Result<()> {
         let mtime_secs = mtime
             .map(|mtime| -> crate::Result<_> {
                 Ok(mtime
@@ -269,7 +263,7 @@ impl<'conn> Store<'conn> {
 
         let num_updated = self.tx().execute(
             "UPDATE sqlar SET mtime = ?1 WHERE name = ?2",
-            (mtime_secs, path.to_string_lossy()),
+            (mtime_secs, path),
         )?;
 
         if num_updated == 0 {
@@ -279,11 +273,10 @@ impl<'conn> Store<'conn> {
         Ok(())
     }
 
-    pub fn set_size(&self, path: &Path, size: u64) -> crate::Result<()> {
-        let num_updated = self.tx().execute(
-            "UPDATE sqlar SET sz = ?1 WHERE name = ?2",
-            (size, path.to_string_lossy()),
-        )?;
+    pub fn set_size(&self, path: &str, size: u64) -> crate::Result<()> {
+        let num_updated = self
+            .tx()
+            .execute("UPDATE sqlar SET sz = ?1 WHERE name = ?2", (size, path))?;
 
         if num_updated == 0 {
             return Err(crate::ErrorKind::NotFound.into());
@@ -292,11 +285,11 @@ impl<'conn> Store<'conn> {
         Ok(())
     }
 
-    pub fn blob_size(&self, path: &Path) -> crate::Result<BlobSize> {
+    pub fn blob_size(&self, path: &str) -> crate::Result<BlobSize> {
         self.tx()
             .query_row(
                 "SELECT sz, length(data) FROM sqlar WHERE name = ?1;",
-                (path.to_string_lossy(),),
+                (path,),
                 |row| {
                     Ok(BlobSize {
                         original: row.get(0)?,
@@ -417,10 +410,10 @@ impl<'conn> Store<'conn> {
         ListEntries::new(stmt, params, map_func)
     }
 
-    pub fn has_descendants(&self, path: &Path) -> crate::Result<bool> {
+    pub fn has_descendants(&self, path: &str) -> crate::Result<bool> {
         let result = self.tx().query_row(
             "SELECT name FROM sqlar WHERE name GLOB ?1 || '/?*' LIMIT 1",
-            [path.to_string_lossy()],
+            (path,),
             |_| Ok(()),
         );
 
@@ -431,10 +424,10 @@ impl<'conn> Store<'conn> {
         }
     }
 
-    pub fn has_regular_file_ancestor(&self, path: &Path) -> crate::Result<bool> {
+    pub fn has_regular_file_ancestor(&self, path: &str) -> crate::Result<bool> {
         let result = self.tx().query_row(
             "SELECT name FROM sqlar WHERE ?1 GLOB name || '/?*' AND sz > 0 LIMIT 1",
-            [path.to_string_lossy()],
+            (path,),
             |_| Ok(()),
         );
 

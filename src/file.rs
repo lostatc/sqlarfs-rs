@@ -66,6 +66,8 @@ pub struct FileMetadata {
 /// [`ErrorKind::CompressionNotSupported`]: crate::ErrorKind::CompressionNotSupported
 #[derive(Debug)]
 pub struct File<'conn, 'a> {
+    // We store this internally as a string because the contract of this type requires the path to
+    // be valid Unicode, which `PathBuf` does not guarantee.
     path: String,
     compression: Compression,
     store: &'a mut Store<'conn>,

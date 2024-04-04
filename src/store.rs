@@ -430,4 +430,18 @@ impl<'conn> Store<'conn> {
             Err(err) => Err(err.into()),
         }
     }
+
+    pub fn has_regular_file_ancestor(&self, path: &Path) -> crate::Result<bool> {
+        let result = self.tx().query_row(
+            "SELECT name FROM sqlar WHERE ?1 GLOB name || '/?*' AND sz > 0 LIMIT 1",
+            [path.to_string_lossy()],
+            |_| Ok(()),
+        );
+
+        match result {
+            Ok(_) => Ok(true),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
+            Err(err) => Err(err.into()),
+        }
+    }
 }

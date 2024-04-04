@@ -95,6 +95,42 @@ fn create_file_when_it_already_exists() -> sqlarfs::Result<()> {
 }
 
 #[test]
+fn create_file_when_it_has_a_non_directory_parent() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut parent = archive.open("parent")?;
+        parent.create()?;
+        parent.write_str("this file is not a directory because it has contents")?;
+
+        let mut child = archive.open("parent/child")?;
+
+        expect!(child.create())
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::NotADirectory));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn create_file_with_metadata_when_it_has_a_non_directory_parent() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut parent = archive.open("parent")?;
+        parent.create()?;
+        parent.write_str("this file is not a directory because it has contents")?;
+
+        let mut child = archive.open("parent/child")?;
+
+        expect!(child.create_with(FileMode::empty(), SystemTime::now()))
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::NotADirectory));
+
+        Ok(())
+    })
+}
+
+#[test]
 fn file_metadata_when_creating_file_with_metadata() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open("file")?;

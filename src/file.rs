@@ -138,9 +138,19 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// # Errors
     ///
     /// - [`ErrorKind::AlreadyExists`]: This file already exists in the archive.
+    /// - [`ErrorKind::NotADirectory`]: The file's parent is not a directory (i.e. it has a
+    /// non-zero size).
     ///
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
+    /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
     pub fn create(&mut self) -> crate::Result<()> {
+        if self.store.has_regular_file_ancestor(&self.path)? {
+            return Err(crate::Error::msg(
+                crate::ErrorKind::NotADirectory,
+                "Cannot create a file whose parent is not a directory.",
+            ));
+        }
+
         self.store.create_file(&self.path, None, None)
     }
 
@@ -151,9 +161,19 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// # Errors
     ///
     /// - [`ErrorKind::AlreadyExists`]: This file already exists in the archive.
+    /// - [`ErrorKind::NotADirectory`]: The file's parent is not a directory (i.e. it has a
+    /// non-zero size).
     ///
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
+    /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
     pub fn create_with(&mut self, mode: FileMode, mtime: SystemTime) -> crate::Result<()> {
+        if self.store.has_regular_file_ancestor(&self.path)? {
+            return Err(crate::Error::msg(
+                crate::ErrorKind::NotADirectory,
+                "Cannot create a file whose parent is not a directory.",
+            ));
+        }
+
         self.store.create_file(&self.path, Some(mode), Some(mtime))
     }
 

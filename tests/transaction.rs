@@ -7,7 +7,7 @@ fn test_transaction_commits_successfully(
 ) -> sqlarfs::Result<()> {
     let mut tx = conn.transaction_with(behavior)?;
 
-    tx.archive_mut().open("file")?.create()?;
+    tx.archive_mut().open("file")?.create_file()?;
 
     tx.commit()?;
 
@@ -47,7 +47,7 @@ fn test_transaction_rolls_back_successfully(
 ) -> sqlarfs::Result<()> {
     let mut tx = conn.transaction_with(behavior)?;
 
-    tx.archive_mut().open("file")?.create()?;
+    tx.archive_mut().open("file")?.create_file()?;
 
     tx.rollback()?;
 
@@ -84,7 +84,7 @@ fn test_exec_commits_successfully(
     conn: &mut Connection,
     behavior: TransactionBehavior,
 ) -> sqlarfs::Result<()> {
-    conn.exec_with(behavior, |archive| archive.open("file")?.create())?;
+    conn.exec_with(behavior, |archive| archive.open("file")?.create_file())?;
 
     conn.exec(|archive| {
         expect!(archive.open("file")?.exists())

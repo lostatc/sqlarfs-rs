@@ -1,3 +1,5 @@
+use std::time::SystemTime;
+
 use bitflags::bitflags;
 
 bitflags! {
@@ -51,9 +53,65 @@ bitflags! {
     }
 }
 
+/// Metadata for a [`File`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct FileMetadata {
+    /// The file mode (permissions).
+    pub mode: Option<FileMode>,
+
+    /// The time the file was last modified.
+    ///
+    /// This value has second precision.
+    pub mtime: Option<SystemTime>,
+
+    /// The uncompressed size of the file.
+    pub size: u64,
+
+    /// Whether this is a regular file or a directory.
+    ///
+    /// This can be `None` if the file had no mode in the database, or if the mode indicated the
+    /// file is a special file.
+    pub kind: Option<FileType>,
+}
+
+impl FileMetadata {
+    /// Whether this file is a regular file.
+    pub fn is_file(&self) -> bool {
+        matches!(self.kind, Some(FileType::File))
+    }
+
+    /// Whether this file is a directory.
+    pub fn is_dir(&self) -> bool {
+        matches!(self.kind, Some(FileType::Dir))
+    }
+}
+
 const TYPE_MASK: u32 = 0o170000;
 const FILE_MODE: u32 = 0o100000;
 const DIR_MODE: u32 = 0o040000;
+
+/// The type of a file, either a regular file or a directory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FileType {
+    /// A regular file.
+    File,
+
+    /// A directory.
+    Dir,
+}
+
+impl FileType {
+    pub(super) fn from_mode(mode: u32) -> Option<Self> {
+        if (mode & TYPE_MASK) == FILE_MODE {
+            Some(Self::File)
+        } else if (mode & TYPE_MASK) == DIR_MODE {
+            Some(Self::Dir)
+        } else {
+            None
+        }
+    }
+}
 
 impl FileMode {
     pub(super) fn to_file_mode(self) -> u32 {
@@ -71,7 +129,7 @@ impl FileMode {
 
 #[cfg(test)]
 mod tests {
-    use xpct::{equal, expect};
+    use xpct::{be_none, be_some, equal, expect};
 
     use super::*;
 
@@ -90,18 +148,32 @@ mod tests {
     }
 
     #[test]
-    fn to_file_mode() {
+    fn get_file_mode_from_permissions() {
         expect!(test_file_mode().to_file_mode()).to(equal(0o100664));
     }
 
     #[test]
-    fn to_dir_mode() {
+    fn get_dir_mode_from_permissions() {
         expect!(test_dir_mode().to_dir_mode()).to(equal(0o040775));
     }
 
     #[test]
-    fn from_mode() {
+    fn get_file_permissions_from_mode() {
         expect!(FileMode::from_mode(0o100664)).to(equal(test_file_mode()));
         expect!(FileMode::from_mode(0o040775)).to(equal(test_dir_mode()));
+    }
+
+    #[test]
+    fn get_file_type_from_mode() {
+        expect!(FileType::from_mode(0o100664))
+            .to(be_some())
+            .to(equal(FileType::File));
+
+        expect!(FileType::from_mode(0o040775))
+            .to(be_some())
+            .to(equal(FileType::Dir));
+
+        // This is the mode for a symlink.
+        expect!(FileType::from_mode(0o120664)).to(be_none());
     }
 }

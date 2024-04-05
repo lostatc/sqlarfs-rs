@@ -6,7 +6,7 @@ use std::time::SystemTime;
 #[cfg(feature = "deflate")]
 use flate2::write::ZlibEncoder;
 
-use super::metadata::FileMode;
+use super::metadata::{FileMetadata, FileMode, FileType};
 use super::store::Store;
 use super::stream::{Compression, FileReader};
 use super::util::u64_from_usize;
@@ -14,29 +14,11 @@ use super::util::u64_from_usize;
 #[cfg(feature = "deflate")]
 const COPY_BUF_SIZE: usize = 1024 * 8;
 
-/// Metadata for a [`File`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
-pub struct FileMetadata {
-    /// The time the file was last modified.
-    ///
-    /// This value has second precision.
-    pub mtime: Option<SystemTime>,
-
-    /// The file mode (permissions).
-    pub mode: Option<FileMode>,
-
-    /// The uncompressed size of the file.
-    pub size: u64,
-}
-
 /// A file in a SQLite archive.
 ///
 /// A [`File`] is a handle to a file that may or may not exist in the SQLite archive. Attempting to
 /// read or write data or metadata on this file will generally return an error of
-/// [`ErrorKind::NotFound`] if the file doesn't exist. You can use [`File::exists`] to check if it
-/// exists, [`File::create`] to create it if it doesn't exist, and [`File::delete`] to delete it if
-/// it does.
+/// [`ErrorKind::NotFound`] if the file doesn't exist.
 ///
 /// # Reading and writing
 ///
@@ -70,6 +52,7 @@ pub struct File<'conn, 'a> {
     // be valid Unicode, which `PathBuf` does not guarantee.
     path: String,
     compression: Compression,
+    umask: FileMode,
     store: &'a mut Store<'conn>,
 }
 
@@ -99,6 +82,7 @@ impl<'conn, 'a> File<'conn, 'a> {
             store,
             #[cfg(feature = "deflate")]
             compression: Compression::FAST,
+            umask: FileMode::OTHER_W,
             #[cfg(not(feature = "deflate"))]
             compression: Compression::None,
         })
@@ -123,7 +107,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// Unless you have an exclusive lock on the database, the file may be deleted between when you
     /// call this method and when you act on its result! If you need the file to exist, consider
-    /// calling [`File::create`] and handling the potential [`ErrorKind::AlreadyExists`].
+    /// creating the file and handling the potential [`ErrorKind::AlreadyExists`].
     ///
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
     pub fn exists(&self) -> crate::Result<bool> {
@@ -134,33 +118,32 @@ impl<'conn, 'a> File<'conn, 'a> {
         }
     }
 
-    /// Create the file if it doesn't already exist.
-    ///
-    /// This does not set the file mode or mtime. You can set the file metadata using
-    /// [`File::create_with`], or with [`File::set_mode`] and [`File::set_mtime`].
-    ///
-    /// # Errors
-    ///
-    /// - [`ErrorKind::AlreadyExists`]: This file already exists in the archive.
-    /// - [`ErrorKind::NotADirectory`]: The file's parent is not a directory (i.e. it has a
-    /// non-zero size).
-    ///
-    /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
-    /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
-    pub fn create(&mut self) -> crate::Result<()> {
-        if self.store.has_regular_file_ancestor(&self.path)? {
-            return Err(crate::Error::msg(
-                crate::ErrorKind::NotADirectory,
-                "Cannot create a file whose parent is not a directory.",
-            ));
-        }
+    fn default_file_mode(&self) -> FileMode {
+        let default = FileMode::OWNER_R
+            | FileMode::OWNER_W
+            | FileMode::GROUP_R
+            | FileMode::GROUP_W
+            | FileMode::OTHER_R
+            | FileMode::OTHER_W;
 
-        self.store.create_file(&self.path, None, None)
+        default & !self.umask
     }
 
-    /// Create the file if it doesn't already exist and set its metadata.
+    fn default_dir_mode(&self) -> FileMode {
+        let default = FileMode::OWNER_RWX | FileMode::GROUP_RWX | FileMode::OTHER_RWX;
+
+        default & !self.umask
+    }
+
+    /// Create a regular file if it doesn't already exist.
     ///
-    /// This accepts the initial file `mode` and `mtime`.
+    /// This sets the file mode based on the current [`File::umask`] and sets the mtime to now. You
+    /// can change the file metadata with [`File::set_mode`] and [`File::set_mtime`].
+    ///
+    /// See also:
+    ///
+    /// - [`File::create_dir`] to create a directory.
+    /// - [`File::create_with`] to specify the metadata on file creation.
     ///
     /// # Errors
     ///
@@ -170,7 +153,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
     /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
-    pub fn create_with(&mut self, mode: FileMode, mtime: SystemTime) -> crate::Result<()> {
+    pub fn create_file(&mut self) -> crate::Result<()> {
         if self.store.has_regular_file_ancestor(&self.path)? {
             return Err(crate::Error::msg(
                 crate::ErrorKind::NotADirectory,
@@ -178,13 +161,81 @@ impl<'conn, 'a> File<'conn, 'a> {
             ));
         }
 
-        self.store.create_file(&self.path, Some(mode), Some(mtime))
+        self.store.create_file(
+            &self.path,
+            FileType::File,
+            self.default_file_mode(),
+            Some(SystemTime::now()),
+        )
+    }
+
+    /// Create a directory if it doesn't already exist.
+    ///
+    /// This sets the file mode based on the current [`File::umask`] and sets the mtime to now. You
+    /// can change the file metadata with [`File::set_mode`] and [`File::set_mtime`].
+    ///
+    /// See also:
+    ///
+    /// - [`File::create_file`] to create a regular file.
+    /// - [`File::create_with`] to specify the metadata on file creation.
+    ///
+    /// # Errors
+    ///
+    /// - [`ErrorKind::AlreadyExists`]: This file already exists in the archive.
+    /// - [`ErrorKind::NotADirectory`]: The file's parent is not a directory (i.e. it has a
+    /// non-zero size).
+    ///
+    /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
+    /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
+    pub fn create_dir(&mut self) -> crate::Result<()> {
+        if self.store.has_regular_file_ancestor(&self.path)? {
+            return Err(crate::Error::msg(
+                crate::ErrorKind::NotADirectory,
+                "Cannot create a file whose parent is not a directory.",
+            ));
+        }
+
+        self.store.create_file(
+            &self.path,
+            FileType::Dir,
+            self.default_dir_mode(),
+            Some(SystemTime::now()),
+        )
+    }
+
+    /// Create a file or directory if it doesn't already exist and set its metadata.
+    ///
+    /// This accepts the initial file `mode` and `mtime`. It does not care about the current
+    /// [`File::umask`].
+    ///
+    /// # Errors
+    ///
+    /// - [`ErrorKind::AlreadyExists`]: This file already exists in the archive.
+    /// - [`ErrorKind::NotADirectory`]: The file's parent is not a directory (i.e. it has a
+    /// non-zero size).
+    ///
+    /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
+    /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
+    pub fn create_with(
+        &mut self,
+        kind: FileType,
+        mode: FileMode,
+        mtime: Option<SystemTime>,
+    ) -> crate::Result<()> {
+        if self.store.has_regular_file_ancestor(&self.path)? {
+            return Err(crate::Error::msg(
+                crate::ErrorKind::NotADirectory,
+                "Cannot create a file whose parent is not a directory.",
+            ));
+        }
+
+        self.store.create_file(&self.path, kind, mode, mtime)
     }
 
     /// Delete the file from the archive.
     ///
     /// This does not consume its receiver and does not invalidate the file handle; you can still
-    /// call [`File::create`] to create the file again.
+    /// use this same [`File`] object to create the file again.
     ///
     /// # Errors
     ///
@@ -243,6 +294,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     pub fn is_empty(&self) -> crate::Result<bool> {
+        // TODO: Make this return an `ErrorKind::IsADirectory` for directories.
         let metadata = self.metadata()?;
         Ok(metadata.size == 0)
     }
@@ -587,5 +639,18 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// Set the compression method used when writing to the file.
     pub fn set_compression(&mut self, method: Compression) {
         self.compression = method;
+    }
+
+    /// The current umask for newly created files and directories.
+    pub fn umask(&mut self) -> FileMode {
+        self.umask
+    }
+
+    /// Set the umask for newly created files and directories.
+    ///
+    /// This specifies the mode bits that will *not* be set, assuming the default mode for regular
+    /// files is `0o666` and the default mode for directories is `0o777`.
+    pub fn set_umask(&mut self, mode: FileMode) {
+        self.umask = mode;
     }
 }

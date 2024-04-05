@@ -1,7 +1,7 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use super::file::FileMetadata;
+use super::metadata::FileMetadata;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ListSort {

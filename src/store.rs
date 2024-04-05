@@ -6,9 +6,8 @@ use rusqlite::{OptionalExtension, Savepoint};
 
 use crate::list::{ListEntries, ListMapFunc};
 
-use super::file::FileMetadata;
 use super::list::{ListEntry, ListOptions, ListSort, SortDirection};
-use super::metadata::FileMode;
+use super::metadata::{FileMetadata, FileMode, FileType};
 use super::util::u64_from_usize;
 
 #[derive(Debug)]
@@ -127,7 +126,8 @@ impl<'conn> Store<'conn> {
     pub fn create_file(
         &self,
         path: &str,
-        mode: Option<FileMode>,
+        kind: FileType,
+        mode: FileMode,
         mtime: Option<SystemTime>,
     ) -> crate::Result<()> {
         let unix_mtime = mtime
@@ -139,9 +139,14 @@ impl<'conn> Store<'conn> {
             })
             .transpose()?;
 
+        let mode_bits = match kind {
+            FileType::File => mode.to_file_mode(),
+            FileType::Dir => mode.to_dir_mode(),
+        };
+
         let result = self.tx().execute(
             "INSERT INTO sqlar (name, mode, mtime, sz, data) VALUES (?1, ?2, ?3, 0, zeroblob(0))",
-            (path, mode.map(|mode| mode.bits()), unix_mtime),
+            (path, mode_bits, unix_mtime),
         );
 
         match result {
@@ -223,14 +228,15 @@ impl<'conn> Store<'conn> {
                 "SELECT mode, mtime, sz FROM sqlar WHERE name = ?1;",
                 (path,),
                 |row| {
+                    let raw_mode = row.get::<_, Option<u32>>(0)?;
+
                     Ok(FileMetadata {
-                        mode: row
-                            .get::<_, Option<u32>>(0)?
-                            .map(FileMode::from_bits_truncate),
+                        mode: raw_mode.map(FileMode::from_mode),
                         mtime: row
                             .get::<_, Option<u64>>(1)?
                             .map(|mtime_secs| UNIX_EPOCH + Duration::from_secs(mtime_secs)),
                         size: u64_from_usize(row.get(2)?),
+                        kind: raw_mode.and_then(FileType::from_mode),
                     })
                 },
             )
@@ -393,16 +399,17 @@ impl<'conn> Store<'conn> {
         };
 
         let map_func: ListMapFunc = Box::new(|row| {
+            let raw_mode = row.get::<_, Option<u32>>(1)?;
+
             Ok(ListEntry {
                 path: PathBuf::from(row.get::<_, String>(0)?),
                 metadata: FileMetadata {
-                    mode: row
-                        .get::<_, Option<u32>>(1)?
-                        .map(FileMode::from_bits_truncate),
+                    mode: raw_mode.map(FileMode::from_mode),
                     mtime: row
                         .get::<_, Option<u64>>(2)?
                         .map(|mtime_secs| UNIX_EPOCH + Duration::from_secs(mtime_secs)),
                     size: row.get(3)?,
+                    kind: raw_mode.and_then(FileType::from_mode),
                 },
             })
         });

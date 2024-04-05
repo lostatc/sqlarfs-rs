@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use sqlarfs::{FileMetadata, FileMode, ListOptions};
+use sqlarfs::{FileMetadata, FileMode, FileType, ListOptions};
 use xpct::{
     be_ok, be_some, be_zero, consist_of, contain_element, equal, expect, fields, match_fields, why,
 };
@@ -14,9 +14,9 @@ use common::{connection, truncate_mtime};
 #[test]
 fn list_all_paths() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        archive.open("file1")?.create()?;
-        archive.open("file2")?.create()?;
-        archive.open("file3")?.create()?;
+        archive.open("file1")?.create_file()?;
+        archive.open("file2")?.create_file()?;
+        archive.open("file3")?.create_file()?;
 
         expect!(archive.list())
             .to(be_ok())
@@ -39,16 +39,20 @@ fn list_all_paths_with_metadata() -> sqlarfs::Result<()> {
         let file3_mtime = UNIX_EPOCH + Duration::from_secs(3);
 
         let mut file1 = archive.open("file1")?;
-        file1.create_with(FileMode::OWNER_RWX, file1_mtime)?;
+        file1.create_with(FileType::File, FileMode::OWNER_RWX, Some(file1_mtime))?;
         file1.write_str("123")?;
 
-        archive
-            .open("file2")?
-            .create_with(FileMode::GROUP_RWX, file2_mtime)?;
+        archive.open("file2")?.create_with(
+            FileType::File,
+            FileMode::GROUP_RWX,
+            Some(file2_mtime),
+        )?;
 
-        archive
-            .open("file3")?
-            .create_with(FileMode::OTHER_RWX, file3_mtime)?;
+        archive.open("file3")?.create_with(
+            FileType::File,
+            FileMode::OTHER_RWX,
+            Some(file3_mtime),
+        )?;
 
         let entries_by_path = archive
             .list()?
@@ -95,9 +99,9 @@ fn list_all_paths_with_metadata() -> sqlarfs::Result<()> {
 #[test]
 fn list_with_default_opts() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        archive.open("file1")?.create()?;
-        archive.open("file2")?.create()?;
-        archive.open("file3")?.create()?;
+        archive.open("file1")?.create_file()?;
+        archive.open("file2")?.create_file()?;
+        archive.open("file3")?.create_file()?;
 
         expect!(archive.list_with(&ListOptions::new()))
             .to(be_ok())
@@ -115,12 +119,12 @@ fn list_with_default_opts() -> sqlarfs::Result<()> {
 #[test]
 fn list_with_filter_descendants() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        archive.open("a")?.create()?;
-        archive.open("one/b")?.create()?;
-        archive.open("one/")?.create()?;
-        archive.open("onetwo")?.create()?;
-        archive.open("ONE/c")?.create()?;
-        archive.open("one/two/d")?.create()?;
+        archive.open("a")?.create_file()?;
+        archive.open("one/b")?.create_file()?;
+        archive.open("one/")?.create_file()?;
+        archive.open("onetwo")?.create_file()?;
+        archive.open("ONE/c")?.create_file()?;
+        archive.open("one/two/d")?.create_file()?;
 
         let paths = archive
             .list_with(&ListOptions::new().descendants_of("one"))?
@@ -162,20 +166,20 @@ fn list_with_sort_by_mtime() -> sqlarfs::Result<()> {
         let base_time = SystemTime::now();
 
         let mut file1 = archive.open("now")?;
-        file1.create()?;
+        file1.create_file()?;
         file1.set_mtime(Some(base_time))?;
 
         // This will be truncated to one full second behind `base_time`.
         let mut file2 = archive.open("100_millis_behind")?;
-        file2.create()?;
+        file2.create_file()?;
         file2.set_mtime(Some(truncate_mtime(base_time) - Duration::from_millis(100)))?;
 
         let mut file3 = archive.open("two_secs_behind")?;
-        file3.create()?;
+        file3.create_file()?;
         file3.set_mtime(Some(base_time - Duration::from_secs(2)))?;
 
         let mut file4 = archive.open("three_secs_behind")?;
-        file4.create()?;
+        file4.create_file()?;
         file4.set_mtime(Some(base_time - Duration::from_secs(3)))?;
 
         expect!(archive.list_with(&ListOptions::new().by_mtime().asc()))
@@ -206,19 +210,19 @@ fn list_with_sort_by_mtime() -> sqlarfs::Result<()> {
 fn list_with_sort_by_size() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file_a = archive.open("size 1")?;
-        file_a.create()?;
+        file_a.create_file()?;
         file_a.write_str("a")?;
 
         let mut file_b = archive.open("size 2")?;
-        file_b.create()?;
+        file_b.create_file()?;
         file_b.write_str("bb")?;
 
         let mut file_c = archive.open("size 3")?;
-        file_c.create()?;
+        file_c.create_file()?;
         file_c.write_str("ccc")?;
 
         let mut file_d = archive.open("size 4")?;
-        file_d.create()?;
+        file_d.create_file()?;
         file_d.write_str("dddd")?;
 
         expect!(archive.list_with(&ListOptions::new().by_size().asc()))
@@ -251,22 +255,22 @@ fn list_with_sort_by_mtime_while_filtering_descendants() -> sqlarfs::Result<()> 
         let base_time = SystemTime::now();
 
         let mut file_a = archive.open("a")?;
-        file_a.create()?;
+        file_a.create_file()?;
 
         let mut file_b = archive.open("one/b")?;
-        file_b.create()?;
+        file_b.create_file()?;
         file_b.set_mtime(Some(base_time))?;
 
         let mut file_d = archive.open("one/two/d")?;
-        file_d.create()?;
+        file_d.create_file()?;
         file_d.set_mtime(Some(base_time - Duration::from_secs(1)))?;
 
         let mut file_c = archive.open("one/two/c")?;
-        file_c.create()?;
+        file_c.create_file()?;
         file_c.set_mtime(Some(base_time - Duration::from_secs(2)))?;
 
         let mut file_e = archive.open("one/two/three/e")?;
-        file_e.create()?;
+        file_e.create_file()?;
         file_e.set_mtime(Some(base_time - Duration::from_secs(3)))?;
 
         let opts = ListOptions::new()
@@ -307,22 +311,22 @@ fn list_with_sort_by_mtime_while_filtering_descendants() -> sqlarfs::Result<()> 
 fn list_with_sort_by_size_while_filtering_descendants() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file_a = archive.open("a")?;
-        file_a.create()?;
+        file_a.create_file()?;
 
         let mut file_b = archive.open("one/b")?;
-        file_b.create()?;
+        file_b.create_file()?;
         file_b.write_str("b")?;
 
         let mut file_d = archive.open("one/two/d")?;
-        file_d.create()?;
+        file_d.create_file()?;
         file_d.write_str("dd")?;
 
         let mut file_c = archive.open("one/two/c")?;
-        file_c.create()?;
+        file_c.create_file()?;
         file_c.write_str("ccc")?;
 
         let mut file_e = archive.open("one/two/three/e")?;
-        file_e.create()?;
+        file_e.create_file()?;
         file_e.write_str("eeee")?;
 
         let opts = ListOptions::new()

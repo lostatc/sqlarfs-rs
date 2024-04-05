@@ -19,9 +19,9 @@ mod util;
 
 pub use archive::Archive;
 pub use error::{Error, ErrorKind, Result, SqliteErrorCode};
-pub use file::{File, FileMetadata};
+pub use file::File;
 pub use list::{ListEntries, ListEntry, ListOptions};
-pub use metadata::FileMode;
+pub use metadata::{FileMetadata, FileMode, FileType};
 pub use open::OpenOptions;
 pub use stream::{Compression, FileReader};
 pub use transaction::{Connection, Transaction, TransactionBehavior};

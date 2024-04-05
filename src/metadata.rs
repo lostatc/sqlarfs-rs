@@ -50,3 +50,58 @@ bitflags! {
         const STICKY = 0o1000;
     }
 }
+
+const TYPE_MASK: u32 = 0o170000;
+const FILE_MODE: u32 = 0o100000;
+const DIR_MODE: u32 = 0o040000;
+
+impl FileMode {
+    pub(super) fn to_file_mode(self) -> u32 {
+        self.bits() | FILE_MODE
+    }
+
+    pub(super) fn to_dir_mode(self) -> u32 {
+        self.bits() | DIR_MODE
+    }
+
+    pub(super) fn from_mode(mode: u32) -> Self {
+        Self::from_bits_truncate(mode & !TYPE_MASK)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use xpct::{equal, expect};
+
+    use super::*;
+
+    // Typical permissions for a regular file.
+    fn test_file_mode() -> FileMode {
+        FileMode::OWNER_R
+            | FileMode::OWNER_W
+            | FileMode::GROUP_R
+            | FileMode::GROUP_W
+            | FileMode::OTHER_R
+    }
+
+    // Typical permissions for a directory.
+    fn test_dir_mode() -> FileMode {
+        FileMode::OWNER_RWX | FileMode::GROUP_RWX | FileMode::OTHER_R | FileMode::OTHER_X
+    }
+
+    #[test]
+    fn to_file_mode() {
+        expect!(test_file_mode().to_file_mode()).to(equal(0o100664));
+    }
+
+    #[test]
+    fn to_dir_mode() {
+        expect!(test_dir_mode().to_dir_mode()).to(equal(0o040775));
+    }
+
+    #[test]
+    fn from_mode() {
+        expect!(FileMode::from_mode(0o100664)).to(equal(test_file_mode()));
+        expect!(FileMode::from_mode(0o040775)).to(equal(test_dir_mode()));
+    }
+}

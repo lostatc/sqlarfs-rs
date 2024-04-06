@@ -224,8 +224,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// # Errors
     ///
     /// - [`ErrorKind::AlreadyExists`]: This file already exists in the archive.
-    /// - [`ErrorKind::NotADirectory`]: The file's parent is not a directory (i.e. it has a
-    /// non-zero size).
+    /// - [`ErrorKind::NotADirectory`]: The file's parent is not a directory.
     ///
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
     /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
@@ -253,8 +252,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// # Errors
     ///
     /// - [`ErrorKind::AlreadyExists`]: This file already exists in the archive.
-    /// - [`ErrorKind::NotADirectory`]: The file's parent is not a directory (i.e. it has a
-    /// non-zero size).
+    /// - [`ErrorKind::NotADirectory`]: The file's parent is not a directory.
     ///
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
     /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
@@ -277,8 +275,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// # Errors
     ///
     /// - [`ErrorKind::AlreadyExists`]: This file already exists in the archive.
-    /// - [`ErrorKind::NotADirectory`]: The file's parent is not a directory (i.e. it has a
-    /// non-zero size).
+    /// - [`ErrorKind::NotADirectory`]: The file's parent is not a directory.
     ///
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
     /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
@@ -355,7 +352,6 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     pub fn is_empty(&self) -> crate::Result<bool> {
-        // TODO: Make this return an `ErrorKind::IsADirectory` for directories.
         let metadata = self.metadata()?;
         Ok(metadata.size == 0)
     }
@@ -407,8 +403,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// - [`ErrorKind::NotFound`]: This file does not exist.
     /// - [`ErrorKind::CompressionNotSupported`]: This file is compressed, but the `deflate` Cargo
     /// feature is disabled.
-    /// - [`ErrorKind::IsADirectory`]: The file has descendants in the archive, meaning it's a
-    /// directory.
+    /// - [`ErrorKind::IsADirectory`]: The file is a directory.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::CompressionNotSupported`]: crate::ErrorKind::CompressionNotSupported
@@ -584,8 +579,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
-    /// - [`ErrorKind::IsADirectory`]: The file has descendants in the archive, meaning it's a
-    /// directory.
+    /// - [`ErrorKind::IsADirectory`]: The file is a directory.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
@@ -603,8 +597,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
-    /// - [`ErrorKind::IsADirectory`]: The file has descendants in the archive, meaning it's a
-    /// directory.
+    /// - [`ErrorKind::IsADirectory`]: The file is a directory.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
@@ -648,8 +641,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
-    /// - [`ErrorKind::IsADirectory`]: The file has descendants in the archive, meaning it's a
-    /// directory.
+    /// - [`ErrorKind::IsADirectory`]: The file is a directory.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
@@ -666,8 +658,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
-    /// - [`ErrorKind::IsADirectory`]: The file has descendants in the archive, meaning it's a
-    /// directory.
+    /// - [`ErrorKind::IsADirectory`]: The file is a directory.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory

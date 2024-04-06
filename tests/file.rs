@@ -53,9 +53,7 @@ fn create_file_when_it_already_exists() -> sqlarfs::Result<()> {
 #[test]
 fn create_file_when_it_has_a_non_directory_parent() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut parent = archive.open("parent")?;
-        parent.create_file()?;
-        parent.write_str("this file is not a directory because it has contents")?;
+        archive.open("parent")?.create_file()?;
 
         let mut child = archive.open("parent/child")?;
 
@@ -69,18 +67,30 @@ fn create_file_when_it_has_a_non_directory_parent() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn create_file_with_metadata_when_it_has_a_non_directory_parent() -> sqlarfs::Result<()> {
+fn create_file_when_it_has_no_parent() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut parent = archive.open("parent")?;
-        parent.create_file()?;
-        parent.write_str("this file is not a directory because it has contents")?;
+        let mut file = archive.open("parent/child")?;
 
-        let mut child = archive.open("parent/child")?;
-
-        expect!(child.create_with(FileType::File, FileMode::empty(), Some(SystemTime::now())))
+        expect!(file.create_file())
             .to(be_err())
             .map(|err| err.into_kind())
-            .to(equal(ErrorKind::NotADirectory));
+            .to(equal(ErrorKind::NotFound));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn create_file_with_trailing_slash_when_it_already_exists_without_one() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        archive.open("file")?.create_file()?;
+
+        let mut file = archive.open("file/")?;
+
+        expect!(file.create_file())
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::AlreadyExists));
 
         Ok(())
     })
@@ -312,6 +322,21 @@ fn is_file_empty_errors_when_it_does_not_exist() -> sqlarfs::Result<()> {
 }
 
 #[test]
+fn is_file_empty_errors_when_it_is_a_directory() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut dir = archive.open("dir")?;
+        dir.create_dir()?;
+
+        expect!(dir.is_empty())
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::IsADirectory));
+
+        Ok(())
+    })
+}
+
+#[test]
 fn is_file_compressed_errors_when_it_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let file = archive.open("file")?;
@@ -320,6 +345,21 @@ fn is_file_compressed_errors_when_it_does_not_exist() -> sqlarfs::Result<()> {
             .to(be_err())
             .map(|err| err.into_kind())
             .to(equal(ErrorKind::NotFound));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn is_file_compressed_errors_when_it_is_a_directory() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut dir = archive.open("dir")?;
+        dir.create_dir()?;
+
+        expect!(dir.is_compressed())
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::IsADirectory));
 
         Ok(())
     })
@@ -360,11 +400,6 @@ fn open_reader_when_file_is_a_directory() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut dir = archive.open("dir")?;
         dir.create_dir()?;
-
-        let mut file = archive.open("dir/file")?;
-        file.create_file()?;
-
-        let mut dir = archive.open("dir")?;
 
         expect!(dir.reader())
             .to(be_err())
@@ -422,15 +457,25 @@ fn truncate_file_when_it_does_not_exist() -> sqlarfs::Result<()> {
 }
 
 #[test]
+fn truncate_file_when_it_is_a_directory() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut file = archive.open("dir")?;
+        file.create_dir()?;
+
+        expect!(file.truncate())
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::IsADirectory));
+
+        Ok(())
+    })
+}
+
+#[test]
 fn write_bytes_when_file_is_a_directory() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut dir = archive.open("dir")?;
         dir.create_dir()?;
-
-        let mut file = archive.open("dir/file")?;
-        file.create_file()?;
-
-        let mut dir = archive.open("dir")?;
 
         expect!(dir.write_bytes(b"file content"))
             .to(be_err())
@@ -447,11 +492,6 @@ fn write_string_when_file_is_a_directory() -> sqlarfs::Result<()> {
         let mut dir = archive.open("dir")?;
         dir.create_dir()?;
 
-        let mut file = archive.open("dir/file")?;
-        file.create_file()?;
-
-        let mut dir = archive.open("dir")?;
-
         expect!(dir.write_str("file content"))
             .to(be_err())
             .map(|err| err.into_kind())
@@ -466,11 +506,6 @@ fn write_from_reader_when_file_is_a_directory() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut dir = archive.open("dir")?;
         dir.create_dir()?;
-
-        let mut file = archive.open("dir/file")?;
-        file.create_file()?;
-
-        let mut dir = archive.open("dir")?;
 
         expect!(dir.write_from(&mut "file content".as_bytes()))
             .to(be_err())
@@ -488,11 +523,6 @@ fn write_from_file_when_file_is_a_directory() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut dir = archive.open("dir")?;
         dir.create_dir()?;
-
-        let mut file = archive.open("dir/file")?;
-        file.create_file()?;
-
-        let mut dir = archive.open("dir")?;
 
         expect!(dir.write_file(&mut temp_file))
             .to(be_err())

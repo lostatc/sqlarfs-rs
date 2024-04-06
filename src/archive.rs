@@ -74,7 +74,7 @@ impl<'conn> Archive<'conn> {
     }
 
     /// The current umask for newly created files and directories.
-    pub fn umask(&mut self) -> FileMode {
+    pub fn umask(&self) -> FileMode {
         self.umask
     }
 

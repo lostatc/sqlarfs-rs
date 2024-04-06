@@ -97,6 +97,25 @@ fn create_file_with_trailing_slash_when_it_already_exists_without_one() -> sqlar
 }
 
 #[test]
+fn create_file_respects_file_umask() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut file = archive.open("file")?;
+
+        file.set_umask(FileMode::GROUP_RWX | FileMode::OTHER_RWX);
+
+        file.create_file()?;
+
+        expect!(file.metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.mode)
+            .to(be_some())
+            .to(equal(FileMode::OWNER_R | FileMode::OWNER_W));
+
+        Ok(())
+    })
+}
+
+#[test]
 fn file_metadata_when_creating_file_with_metadata() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open("file")?;
@@ -113,6 +132,23 @@ fn file_metadata_when_creating_file_with_metadata() -> sqlarfs::Result<()> {
                 mtime: equal(Some(truncated_mtime)),
                 mode: equal(Some(mode)),
                 size: be_zero(),
+                kind: equal(Some(FileType::File)),
+            })));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn file_metadata_correctly_reports_directories() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut dir = archive.open("dir")?;
+        dir.create_dir()?;
+
+        expect!(dir.metadata())
+            .to(be_ok())
+            .to(match_fields(fields!(FileMetadata {
+                kind: equal(Some(FileType::Dir)),
             })));
 
         Ok(())
@@ -183,6 +219,23 @@ fn set_compression_method() -> sqlarfs::Result<()> {
         file.set_compression(Compression::None);
 
         expect!(file.compression()).to(equal(Compression::None));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn set_file_umask() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut file = archive.open("file")?;
+
+        expect!(file.umask()).to(equal(FileMode::OTHER_W));
+
+        let expected_umask = FileMode::OWNER_RWX | FileMode::OTHER_RWX;
+
+        file.set_umask(expected_umask);
+
+        expect!(file.umask()).to(equal(expected_umask));
 
         Ok(())
     })

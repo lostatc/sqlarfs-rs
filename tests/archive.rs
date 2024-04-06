@@ -3,7 +3,7 @@ mod common;
 use std::ffi::OsStr;
 use std::path::Path;
 
-use sqlarfs::ErrorKind;
+use sqlarfs::{ErrorKind, FileMode};
 use xpct::{be_err, be_ok, equal, expect};
 
 use common::connection;
@@ -42,6 +42,36 @@ fn opening_file_strips_trailing_slashes() -> sqlarfs::Result<()> {
             .to(be_ok())
             .map(|file| file.path().to_owned())
             .to(equal(Path::new("path/with/trailing/slash")));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn set_archive_umask() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        expect!(archive.umask()).to(equal(FileMode::OTHER_W));
+
+        let expected_umask = FileMode::OWNER_RWX | FileMode::OTHER_RWX;
+
+        archive.set_umask(expected_umask);
+
+        expect!(archive.umask()).to(equal(expected_umask));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn files_inherit_archive_umask() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let expected_umask = FileMode::OWNER_RWX | FileMode::OTHER_RWX;
+
+        archive.set_umask(expected_umask);
+
+        let file = archive.open("file")?;
+
+        expect!(file.umask()).to(equal(expected_umask));
 
         Ok(())
     })

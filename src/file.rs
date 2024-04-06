@@ -695,7 +695,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     }
 
     /// The current compression method used when writing to the file.
-    pub fn compression(&mut self) -> Compression {
+    pub fn compression(&self) -> Compression {
         self.compression
     }
 
@@ -711,7 +711,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// See [`Archive::umask`].
     ///
     /// [`Archive::umask`]: crate::Archive::umask
-    pub fn umask(&mut self) -> FileMode {
+    pub fn umask(&self) -> FileMode {
         self.umask
     }
 

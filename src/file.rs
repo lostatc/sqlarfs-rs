@@ -16,9 +16,10 @@ const COPY_BUF_SIZE: usize = 1024 * 8;
 
 /// A file in a SQLite archive.
 ///
-/// A [`File`] is a handle to a file that may or may not exist in the SQLite archive. Attempting to
-/// read or write data or metadata on this file will generally return an error of
-/// [`ErrorKind::NotFound`] if the file doesn't exist.
+/// A [`File`] is a handle to a file that may or may not exist in the SQLite archive. You can call
+/// [`File::create_file`] or [`File::create_dir`] to actually create the file if it doesn't already
+/// exist. Attempting to read or write data or metadata on this file will return an error if the
+/// file doesn't exist.
 ///
 /// # Reading and writing
 ///
@@ -370,8 +371,10 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
+    /// - [`ErrorKind::IsADirectory`]: The file is a directory.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
+    /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
     pub fn is_empty(&self) -> crate::Result<bool> {
         self.validate_is_readable()?;
 
@@ -386,8 +389,10 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
+    /// - [`ErrorKind::IsADirectory`]: The file is a directory.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
+    /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
     pub fn is_compressed(&self) -> crate::Result<bool> {
         self.validate_is_readable()?;
 
@@ -399,8 +404,10 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
+    /// - [`ErrorKind::IsADirectory`]: The file is a directory.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
+    /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
     pub fn truncate(&mut self) -> crate::Result<()> {
         self.validate_is_writable()?;
 

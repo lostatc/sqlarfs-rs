@@ -54,6 +54,8 @@ bitflags! {
 }
 
 /// Metadata for a [`File`].
+///
+/// [`File`]: crate::File
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct FileMetadata {

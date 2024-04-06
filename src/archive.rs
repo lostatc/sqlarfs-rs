@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use crate::FileMode;
+
 use super::file::File;
 use super::list::{ListEntries, ListOptions};
 use super::store::Store;
@@ -13,12 +15,14 @@ use super::store::Store;
 #[derive(Debug)]
 pub struct Archive<'conn> {
     store: Store<'conn>,
+    umask: FileMode,
 }
 
 impl<'conn> Archive<'conn> {
     pub(super) fn new(tx: rusqlite::Transaction<'conn>) -> Self {
         Self {
             store: Store::new(tx),
+            umask: FileMode::OTHER_W,
         }
     }
 
@@ -53,7 +57,7 @@ impl<'conn> Archive<'conn> {
         // Opening a file must take a mutable receiver to ensure that the user can't get lwo
         // handles to the same file. Otherwise they could do things like open the blob twice or
         // edit the row while the blob is open.
-        File::new(path.as_ref(), &mut self.store)
+        File::new(path.as_ref(), &mut self.store, self.umask)
     }
 
     /// Return an iterator over the files in this archive.
@@ -66,5 +70,18 @@ impl<'conn> Archive<'conn> {
     /// This accepts a [`ListOptions`] to sort and filter the results.
     pub fn list_with(&mut self, opts: &ListOptions) -> crate::Result<ListEntries> {
         self.store.list_files(opts)
+    }
+
+    /// The current umask for newly created files and directories.
+    pub fn umask(&mut self) -> FileMode {
+        self.umask
+    }
+
+    /// Set the umask for newly created files and directories.
+    ///
+    /// This specifies the mode bits that will *not* be set, assuming the default mode for regular
+    /// files is `0o666` and the default mode for directories is `0o777`.
+    pub fn set_umask(&mut self, mode: FileMode) {
+        self.umask = mode;
     }
 }

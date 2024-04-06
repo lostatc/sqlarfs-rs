@@ -57,7 +57,11 @@ pub struct File<'conn, 'a> {
 }
 
 impl<'conn, 'a> File<'conn, 'a> {
-    pub(super) fn new(path: &Path, store: &'a mut Store<'conn>) -> crate::Result<Self> {
+    pub(super) fn new(
+        path: &Path,
+        store: &'a mut Store<'conn>,
+        umask: FileMode,
+    ) -> crate::Result<Self> {
         if path.is_absolute() {
             return Err(crate::Error::msg(crate::ErrorKind::InvalidArgs, "The given path is an absolute path, but SQLite archives only support relative paths."));
         }
@@ -82,7 +86,9 @@ impl<'conn, 'a> File<'conn, 'a> {
             store,
             #[cfg(feature = "deflate")]
             compression: Compression::FAST,
-            umask: FileMode::OTHER_W,
+            // Because getting a file handle requires a mutable receiver, we don't have to worry
+            // about keeping this in sync with `Archive::umask`.
+            umask,
             #[cfg(not(feature = "deflate"))]
             compression: Compression::None,
         })
@@ -642,14 +648,24 @@ impl<'conn, 'a> File<'conn, 'a> {
     }
 
     /// The current umask for newly created files and directories.
+    ///
+    /// Files inherit their initial umask from [`Archive::umask`].
+    ///
+    /// See [`Archive::umask`].
+    ///
+    /// [`Archive::umask`]: crate::Archive::umask
     pub fn umask(&mut self) -> FileMode {
         self.umask
     }
 
     /// Set the umask for newly created files and directories.
     ///
-    /// This specifies the mode bits that will *not* be set, assuming the default mode for regular
-    /// files is `0o666` and the default mode for directories is `0o777`.
+    /// This sets the umask for the current file, but does not affect the  [`Archive::umask`].
+    ///
+    /// See [`Archive::set_umask`].
+    ///
+    /// [`Archive::umask`]: crate::Archive::umask
+    /// [`Archive::set_umask`]: crate::Archive::set_umask
     pub fn set_umask(&mut self, mode: FileMode) {
         self.umask = mode;
     }

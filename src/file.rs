@@ -27,8 +27,7 @@ const COPY_BUF_SIZE: usize = 1024 * 8;
 ///
 /// Writing to a file does not automatically update its [`FileMetadata::mtime`].
 ///
-/// Attempting to read or write a file that has descendants in the archive (i.e. it's a directory)
-/// will return an error.
+/// Attempting to read from or write to a directory will return an error.
 ///
 /// # Compression
 ///
@@ -352,8 +351,9 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     pub fn is_empty(&self) -> crate::Result<bool> {
-        let metadata = self.metadata()?;
-        Ok(metadata.size == 0)
+        self.validate_is_readable()?;
+
+        Ok(self.metadata()?.size == 0)
     }
 
     /// Whether the contents of this file are compressed.
@@ -367,6 +367,8 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     pub fn is_compressed(&self) -> crate::Result<bool> {
+        self.validate_is_readable()?;
+
         Ok(self.store.blob_size(&self.path)?.is_compressed())
     }
 
@@ -378,6 +380,8 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     pub fn truncate(&mut self) -> crate::Result<()> {
+        self.validate_is_writable()?;
+
         self.store.exec(|store| {
             store.allocate_blob(&self.path, 0)?;
             store.set_size(&self.path, 0)?;

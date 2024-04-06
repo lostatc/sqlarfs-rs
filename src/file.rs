@@ -226,7 +226,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// This sets the file mode based on the current [`File::umask`] and sets the mtime to now. You
     /// can change the file metadata with [`File::set_mode`] and [`File::set_mtime`].
     ///
-    /// See also:
+    /// # See also
     ///
     /// - [`File::create_dir`] to create a directory.
     /// - [`File::create_with`] to specify the metadata on file creation.
@@ -256,7 +256,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// This sets the file mode based on the current [`File::umask`] and sets the mtime to now. You
     /// can change the file metadata with [`File::set_mode`] and [`File::set_mtime`].
     ///
-    /// See also:
+    /// # See also
     ///
     /// - [`File::create_file`] to create a regular file.
     /// - [`File::create_with`] to specify the metadata on file creation.
@@ -285,6 +285,11 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// This accepts the initial file `mode` and `mtime`. It does not care about the current
     /// [`File::umask`].
+    ///
+    /// # See also
+    ///
+    /// - [`File::create_file`] to create a regular file with default permissions.
+    /// - [`File::create_dir`] to create a directory with default permissions.
     ///
     /// # Errors
     ///
@@ -684,7 +689,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
     pub fn write_file(&mut self, file: &mut fs::File) -> crate::Result<()> {
-        // We know the size of the file, which enabled some optimizations.
+        // We know the size of the file, which enables some optimizations.
         let metadata = file.metadata()?;
         self.write_stream(file, Some(metadata.len()))
     }

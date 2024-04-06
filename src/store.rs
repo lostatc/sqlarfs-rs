@@ -121,6 +121,11 @@ impl<'conn> Store<'conn> {
         Ok(())
     }
 
+    // The file mode is mandatory even though the column in the database is nullable because we
+    // need a reliable way to determine whether the file is a directory or not, and we can't set
+    // the file type bits in the mode without also setting the permissions bits because we wouldn't
+    // have a way to distinguish a file with undefined permissions from a file with `0o000`
+    // permissions.
     pub fn create_file(
         &self,
         path: &str,

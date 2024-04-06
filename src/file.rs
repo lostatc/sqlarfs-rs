@@ -148,7 +148,18 @@ impl<'conn, 'a> File<'conn, 'a> {
             None => panic!("The given path is not valid Unicode, but we should have already checked for this when opening the file handle. This is a bug."),
         };
 
-        if !self.store.has_dir_mode(parent_str)? {
+        let parent_exists = match self.store.read_metadata(parent_str) {
+            Ok(_) => true,
+            Err(err) if err.kind() == &crate::ErrorKind::NotFound => false,
+            Err(err) => return Err(err),
+        };
+
+        if !parent_exists {
+            Err(crate::Error::msg(
+                crate::ErrorKind::NotFound,
+                "Cannot create a file whose parent does not exist.",
+            ))
+        } else if !self.store.has_dir_mode(parent_str)? {
             Err(crate::Error::msg(
                 crate::ErrorKind::NotADirectory,
                 "Cannot create a file whose parent does not have the directory mode.",
@@ -223,9 +234,11 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// # Errors
     ///
     /// - [`ErrorKind::AlreadyExists`]: This file already exists in the archive.
+    /// - [`ErrorKind::NotFound`]: This file's parent directory does not exist.
     /// - [`ErrorKind::NotADirectory`]: The file's parent is not a directory.
     ///
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
+    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
     pub fn create_file(&mut self) -> crate::Result<()> {
         self.validate_can_be_created()?;
@@ -251,9 +264,11 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// # Errors
     ///
     /// - [`ErrorKind::AlreadyExists`]: This file already exists in the archive.
+    /// - [`ErrorKind::NotFound`]: This file's parent directory does not exist.
     /// - [`ErrorKind::NotADirectory`]: The file's parent is not a directory.
     ///
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
+    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
     pub fn create_dir(&mut self) -> crate::Result<()> {
         self.validate_can_be_created()?;
@@ -274,9 +289,11 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// # Errors
     ///
     /// - [`ErrorKind::AlreadyExists`]: This file already exists in the archive.
+    /// - [`ErrorKind::NotFound`]: This file's parent directory does not exist.
     /// - [`ErrorKind::NotADirectory`]: The file's parent is not a directory.
     ///
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
+    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
     pub fn create_with(
         &mut self,

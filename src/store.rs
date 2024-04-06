@@ -4,10 +4,8 @@ use std::time::{self, Duration, SystemTime, UNIX_EPOCH};
 use rusqlite::blob::Blob;
 use rusqlite::{OptionalExtension, Savepoint};
 
-use crate::list::{ListEntries, ListMapFunc};
-
-use super::list::{ListEntry, ListOptions, ListSort, SortDirection};
-use super::metadata::{FileMetadata, FileMode, FileType};
+use super::list::{ListEntries, ListEntry, ListMapFunc, ListOptions, ListSort, SortDirection};
+use super::metadata::{FileMetadata, FileMode, FileType, DIR_MODE, FILE_MODE, TYPE_MASK};
 use super::util::u64_from_usize;
 
 #[derive(Debug)]
@@ -342,13 +340,13 @@ impl<'conn> Store<'conn> {
                 direction,
             } => {
                 let stmt = self.tx().prepare(match direction {
-                    SortDirection::Asc => "SELECT name, mode, mtime, sz FROM sqlar ORDER BY sz ASC",
+                    SortDirection::Asc => "SELECT name, mode, mtime, sz FROM sqlar WHERE (mode & ?1) = ?2 ORDER BY sz ASC",
                     SortDirection::Desc => {
-                        "SELECT name, mode, mtime, sz FROM sqlar ORDER BY sz DESC"
+                        "SELECT name, mode, mtime, sz FROM sqlar WHERE (mode & ?1) = ?2 ORDER BY sz DESC"
                     }
                 })?;
 
-                (stmt, Vec::new())
+                (stmt, vec![Box::new(TYPE_MASK), Box::new(FILE_MODE)])
             }
             ListOptions {
                 sort: Some(ListSort::Mtime),
@@ -372,13 +370,17 @@ impl<'conn> Store<'conn> {
                 direction,
             } => {
                 let stmt = self.tx().prepare(match direction {
-                    SortDirection::Asc => "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' ORDER BY sz ASC",
-                    SortDirection::Desc => "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' ORDER BY sz DESC",
+                    SortDirection::Asc => "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' AND (mode & ?2) = ?3 ORDER BY sz ASC",
+                    SortDirection::Desc => "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' AND (mode & ?2) = ?3 ORDER BY sz DESC",
                 })?;
 
                 (
                     stmt,
-                    vec![Box::new(ancestor.to_string_lossy().into_owned())],
+                    vec![
+                        Box::new(ancestor.to_string_lossy().into_owned()),
+                        Box::new(TYPE_MASK),
+                        Box::new(FILE_MODE),
+                    ],
                 )
             }
             ListOptions {
@@ -417,6 +419,20 @@ impl<'conn> Store<'conn> {
         ListEntries::new(stmt, params, map_func)
     }
 
+    pub fn has_dir_mode(&self, path: &str) -> crate::Result<bool> {
+        let result = self.tx().query_row(
+            "SELECT name FROM sqlar WHERE name = ?1 AND (mode & ?2) = ?3",
+            (path, TYPE_MASK, DIR_MODE),
+            |_| Ok(()),
+        );
+
+        match result {
+            Ok(_) => Ok(true),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
+            Err(err) => Err(err.into()),
+        }
+    }
+
     pub fn has_descendants(&self, path: &str) -> crate::Result<bool> {
         let result = self.tx().query_row(
             "SELECT name FROM sqlar WHERE name GLOB ?1 || '/?*' LIMIT 1",
@@ -431,7 +447,7 @@ impl<'conn> Store<'conn> {
         }
     }
 
-    pub fn has_regular_file_ancestor(&self, path: &str) -> crate::Result<bool> {
+    pub fn has_nonzero_size_ancestor(&self, path: &str) -> crate::Result<bool> {
         let result = self.tx().query_row(
             "SELECT name FROM sqlar WHERE ?1 GLOB name || '/?*' AND sz > 0 LIMIT 1",
             (path,),

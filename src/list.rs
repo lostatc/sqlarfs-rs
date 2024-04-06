@@ -56,6 +56,8 @@ impl ListOptions {
     }
 
     /// Sort by file size.
+    ///
+    /// If this is specified, then the list will only contain regular files, skipping directories.
     pub fn by_size(mut self) -> Self {
         self.sort = Some(ListSort::Size);
 

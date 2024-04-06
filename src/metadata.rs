@@ -89,9 +89,9 @@ impl FileMetadata {
     }
 }
 
-const TYPE_MASK: u32 = 0o170000;
-const FILE_MODE: u32 = 0o100000;
-const DIR_MODE: u32 = 0o040000;
+pub const TYPE_MASK: u32 = 0o170000;
+pub const FILE_MODE: u32 = 0o100000;
+pub const DIR_MODE: u32 = 0o040000;
 
 /// The type of a file, either a regular file or a directory.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

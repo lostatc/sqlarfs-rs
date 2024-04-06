@@ -62,6 +62,13 @@ impl<'conn, 'a> File<'conn, 'a> {
         store: &'a mut Store<'conn>,
         umask: FileMode,
     ) -> crate::Result<Self> {
+        if path == Path::new("") {
+            return Err(crate::Error::msg(
+                crate::ErrorKind::InvalidArgs,
+                "The given path is empty.",
+            ));
+        }
+
         if path.is_absolute() {
             return Err(crate::Error::msg(crate::ErrorKind::InvalidArgs, "The given path is an absolute path, but SQLite archives only support relative paths."));
         }
@@ -92,6 +99,69 @@ impl<'conn, 'a> File<'conn, 'a> {
             #[cfg(not(feature = "deflate"))]
             compression: Compression::None,
         })
+    }
+
+    fn validate_is_writable(&self) -> crate::Result<()> {
+        if self.store.has_dir_mode(&self.path)? {
+            Err(crate::Error::msg(
+                crate::ErrorKind::IsADirectory,
+                "Cannot write to a file with a directory mode.",
+            ))
+        } else if self.store.has_descendants(&self.path)? {
+            Err(crate::Error::msg(
+                crate::ErrorKind::IsADirectory,
+                "Cannot write to a file that has descendants in the archive (i.e. is a directory).",
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn validate_is_readable(&self) -> crate::Result<()> {
+        if self.store.has_dir_mode(&self.path)? {
+            Err(crate::Error::msg(
+                crate::ErrorKind::IsADirectory,
+                "Cannot read from a file with a directory mode.",
+            ))
+        } else if self.store.has_descendants(&self.path)? {
+            Err(crate::Error::msg(
+                crate::ErrorKind::IsADirectory,
+                "Cannot read from a file that has descendants in the archive (i.e. is a directory).",
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn validate_can_be_created(&self) -> crate::Result<()> {
+        let parent_path = Path::new(&self.path)
+            .parent()
+            .expect("The given file path is an absolute path, but we should have already checked for this when opening the file handle. This is a bug.");
+
+        if parent_path == Path::new("") {
+            // The path is a relative path with one component, meaning it doesn't have a parent and
+            // is safe to create.
+            return Ok(());
+        }
+
+        let parent_str = match parent_path.to_str() {
+            Some(path) => path,
+            None => panic!("The given path is not valid Unicode, but we should have already checked for this when opening the file handle. This is a bug."),
+        };
+
+        if !self.store.has_dir_mode(parent_str)? {
+            Err(crate::Error::msg(
+                crate::ErrorKind::NotADirectory,
+                "Cannot create a file whose parent does not have the directory mode.",
+            ))
+        } else if self.store.has_nonzero_size_ancestor(&self.path)? {
+            Err(crate::Error::msg(
+                crate::ErrorKind::NotADirectory,
+                "Cannot create a file whose parent has a nonzero size (i.e. is not a directory).",
+            ))
+        } else {
+            Ok(())
+        }
     }
 
     //
@@ -160,12 +230,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
     /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
     pub fn create_file(&mut self) -> crate::Result<()> {
-        if self.store.has_regular_file_ancestor(&self.path)? {
-            return Err(crate::Error::msg(
-                crate::ErrorKind::NotADirectory,
-                "Cannot create a file whose parent is not a directory.",
-            ));
-        }
+        self.validate_can_be_created()?;
 
         self.store.create_file(
             &self.path,
@@ -194,12 +259,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
     /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
     pub fn create_dir(&mut self) -> crate::Result<()> {
-        if self.store.has_regular_file_ancestor(&self.path)? {
-            return Err(crate::Error::msg(
-                crate::ErrorKind::NotADirectory,
-                "Cannot create a file whose parent is not a directory.",
-            ));
-        }
+        self.validate_can_be_created()?;
 
         self.store.create_file(
             &self.path,
@@ -228,12 +288,7 @@ impl<'conn, 'a> File<'conn, 'a> {
         mode: FileMode,
         mtime: Option<SystemTime>,
     ) -> crate::Result<()> {
-        if self.store.has_regular_file_ancestor(&self.path)? {
-            return Err(crate::Error::msg(
-                crate::ErrorKind::NotADirectory,
-                "Cannot create a file whose parent is not a directory.",
-            ));
-        }
+        self.validate_can_be_created()?;
 
         self.store.create_file(&self.path, kind, mode, mtime)
     }
@@ -359,12 +414,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// [`ErrorKind::CompressionNotSupported`]: crate::ErrorKind::CompressionNotSupported
     /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
     pub fn reader(&mut self) -> crate::Result<FileReader> {
-        if self.store.has_descendants(&self.path)? {
-            return Err(crate::Error::msg(
-                crate::ErrorKind::IsADirectory,
-                "Cannot write to a file that has descendants in the archive.",
-            ));
-        }
+        self.validate_is_readable()?;
 
         FileReader::new(self.store.open_blob(&self.path, true)?)
     }
@@ -373,14 +423,9 @@ impl<'conn, 'a> File<'conn, 'a> {
     where
         R: ?Sized + Read,
     {
-        self.store.exec(|store| {
-            if store.has_descendants(&self.path)? {
-                return Err(crate::Error::msg(
-                    crate::ErrorKind::IsADirectory,
-                    "Cannot write to a file that has descendants in the archive.",
-                ));
-            }
+        self.validate_is_writable()?;
 
+        self.store.exec(|store| {
             let original_size = match self.compression {
                 Compression::None => match size_hint {
                     Some(len) => {
@@ -564,14 +609,9 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
     pub fn write_bytes(&mut self, bytes: &[u8]) -> crate::Result<()> {
-        self.store.exec(|store| {
-            if store.has_descendants(&self.path)? {
-                return Err(crate::Error::msg(
-                    crate::ErrorKind::IsADirectory,
-                    "Cannot write to a file that has descendants in the archive.",
-                ));
-            }
+        self.validate_is_writable()?;
 
+        self.store.exec(|store| {
             match self.compression {
                 Compression::None => {
                     store.store_blob(&self.path, bytes)?;

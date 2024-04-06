@@ -119,11 +119,13 @@ fn list_with_default_opts() -> sqlarfs::Result<()> {
 #[test]
 fn list_with_filter_descendants() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        archive.open("a")?.create_file()?;
+        archive.open("a")?.create_dir()?;
+        archive.open("one")?.create_dir()?;
         archive.open("one/b")?.create_file()?;
-        archive.open("one/")?.create_file()?;
-        archive.open("onetwo")?.create_file()?;
+        archive.open("onetwo")?.create_dir()?;
+        archive.open("ONE")?.create_dir()?;
         archive.open("ONE/c")?.create_file()?;
+        archive.open("one/two")?.create_dir()?;
         archive.open("one/two/d")?.create_file()?;
 
         let paths = archive
@@ -134,11 +136,6 @@ fn list_with_filter_descendants() -> sqlarfs::Result<()> {
         expect!(&paths).to_not(why(
             contain_element(PathBuf::from("a")),
             "This is the parent directory.",
-        ));
-
-        expect!(&paths).to_not(why(
-            contain_element(PathBuf::from("one/")),
-            "The same path with a trailing slash is not a descendant.",
         ));
 
         expect!(&paths).to_not(why(
@@ -153,6 +150,7 @@ fn list_with_filter_descendants() -> sqlarfs::Result<()> {
 
         expect!(paths).to(consist_of(&[
             PathBuf::from("one/b"),
+            PathBuf::from("one/two"),
             PathBuf::from("one/two/d"),
         ]));
 
@@ -257,21 +255,32 @@ fn list_with_sort_by_mtime_while_filtering_descendants() -> sqlarfs::Result<()> 
         let mut file_a = archive.open("a")?;
         file_a.create_file()?;
 
+        let mut dir_one = archive.open("one")?;
+        dir_one.create_dir()?;
+
         let mut file_b = archive.open("one/b")?;
         file_b.create_file()?;
-        file_b.set_mtime(Some(base_time))?;
+        file_b.set_mtime(Some(base_time - Duration::from_secs(1)))?;
+
+        let mut dir_two = archive.open("one/two")?;
+        dir_two.create_dir()?;
+        dir_two.set_mtime(Some(base_time - Duration::from_secs(2)))?;
 
         let mut file_d = archive.open("one/two/d")?;
         file_d.create_file()?;
-        file_d.set_mtime(Some(base_time - Duration::from_secs(1)))?;
+        file_d.set_mtime(Some(base_time - Duration::from_secs(3)))?;
 
         let mut file_c = archive.open("one/two/c")?;
         file_c.create_file()?;
-        file_c.set_mtime(Some(base_time - Duration::from_secs(2)))?;
+        file_c.set_mtime(Some(base_time - Duration::from_secs(4)))?;
+
+        let mut dir_three = archive.open("one/two/three")?;
+        dir_three.create_dir()?;
+        dir_three.set_mtime(Some(base_time - Duration::from_secs(5)))?;
 
         let mut file_e = archive.open("one/two/three/e")?;
         file_e.create_file()?;
-        file_e.set_mtime(Some(base_time - Duration::from_secs(3)))?;
+        file_e.set_mtime(Some(base_time - Duration::from_secs(6)))?;
 
         let opts = ListOptions::new()
             .descendants_of(Path::new("one"))
@@ -283,8 +292,10 @@ fn list_with_sort_by_mtime_while_filtering_descendants() -> sqlarfs::Result<()> 
             .iter_try_map(|entry| Ok(entry?.into_path()))
             .to(equal(&[
                 PathBuf::from("one/two/three/e"),
+                PathBuf::from("one/two/three"),
                 PathBuf::from("one/two/c"),
                 PathBuf::from("one/two/d"),
+                PathBuf::from("one/two"),
                 PathBuf::from("one/b"),
             ]));
 
@@ -298,8 +309,10 @@ fn list_with_sort_by_mtime_while_filtering_descendants() -> sqlarfs::Result<()> 
             .iter_try_map(|entry| Ok(entry?.into_path()))
             .to(equal(&[
                 PathBuf::from("one/b"),
+                PathBuf::from("one/two"),
                 PathBuf::from("one/two/d"),
                 PathBuf::from("one/two/c"),
+                PathBuf::from("one/two/three"),
                 PathBuf::from("one/two/three/e"),
             ]));
 
@@ -313,9 +326,13 @@ fn list_with_sort_by_size_while_filtering_descendants() -> sqlarfs::Result<()> {
         let mut file_a = archive.open("a")?;
         file_a.create_file()?;
 
+        archive.open("one")?.create_dir()?;
+
         let mut file_b = archive.open("one/b")?;
         file_b.create_file()?;
         file_b.write_str("b")?;
+
+        archive.open("one/two")?.create_dir()?;
 
         let mut file_d = archive.open("one/two/d")?;
         file_d.create_file()?;
@@ -324,6 +341,8 @@ fn list_with_sort_by_size_while_filtering_descendants() -> sqlarfs::Result<()> {
         let mut file_c = archive.open("one/two/c")?;
         file_c.create_file()?;
         file_c.write_str("ccc")?;
+
+        archive.open("one/two/three")?.create_dir()?;
 
         let mut file_e = archive.open("one/two/three/e")?;
         file_e.create_file()?;

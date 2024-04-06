@@ -51,6 +51,7 @@ impl<'conn> Archive<'conn> {
     ///
     /// - [`ErrorKind::InvalidArgs`]: The given `path` is an absolute path.
     /// - [`ErrorKind::InvalidArgs`]: The given `path` is not valid Unicode.
+    /// - [`ErrorKind::InvalidArgs`]: The given `path` is empty.
     ///
     /// [`ErrorKind::InvalidArgs`]: crate::ErrorKind::InvalidArgs
     pub fn open<'a, P: AsRef<Path>>(&'a mut self, path: P) -> crate::Result<File<'conn, 'a>> {

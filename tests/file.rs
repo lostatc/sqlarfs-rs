@@ -359,7 +359,7 @@ fn open_reader_when_file_does_not_exist() -> sqlarfs::Result<()> {
 fn open_reader_when_file_is_a_directory() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut dir = archive.open("dir")?;
-        dir.create_file()?;
+        dir.create_dir()?;
 
         let mut file = archive.open("dir/file")?;
         file.create_file()?;
@@ -425,7 +425,7 @@ fn truncate_file_when_it_does_not_exist() -> sqlarfs::Result<()> {
 fn write_bytes_when_file_is_a_directory() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut dir = archive.open("dir")?;
-        dir.create_file()?;
+        dir.create_dir()?;
 
         let mut file = archive.open("dir/file")?;
         file.create_file()?;
@@ -445,7 +445,7 @@ fn write_bytes_when_file_is_a_directory() -> sqlarfs::Result<()> {
 fn write_string_when_file_is_a_directory() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut dir = archive.open("dir")?;
-        dir.create_file()?;
+        dir.create_dir()?;
 
         let mut file = archive.open("dir/file")?;
         file.create_file()?;
@@ -465,7 +465,7 @@ fn write_string_when_file_is_a_directory() -> sqlarfs::Result<()> {
 fn write_from_reader_when_file_is_a_directory() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut dir = archive.open("dir")?;
-        dir.create_file()?;
+        dir.create_dir()?;
 
         let mut file = archive.open("dir/file")?;
         file.create_file()?;
@@ -487,7 +487,7 @@ fn write_from_file_when_file_is_a_directory() -> sqlarfs::Result<()> {
 
     connection()?.exec(|archive| {
         let mut dir = archive.open("dir")?;
-        dir.create_file()?;
+        dir.create_dir()?;
 
         let mut file = archive.open("dir/file")?;
         file.create_file()?;

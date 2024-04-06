@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::{self, Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 #[cfg(feature = "deflate")]
@@ -13,6 +13,10 @@ use super::util::u64_from_usize;
 
 #[cfg(feature = "deflate")]
 const COPY_BUF_SIZE: usize = 1024 * 8;
+
+fn unwrap_path_parent(path: &Path) -> &Path {
+    path.parent().expect("The given file path is an absolute path, but we should have already checked for this when opening the file handle. This is a bug.")
+}
 
 /// A file in a SQLite archive.
 ///
@@ -134,9 +138,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     }
 
     fn validate_can_be_created(&self) -> crate::Result<()> {
-        let parent_path = Path::new(&self.path)
-            .parent()
-            .expect("The given file path is an absolute path, but we should have already checked for this when opening the file handle. This is a bug.");
+        let parent_path = unwrap_path_parent(Path::new(&self.path));
 
         if parent_path == Path::new("") {
             // The path is a relative path with one component, meaning it doesn't have a parent and
@@ -230,6 +232,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// # See also
     ///
     /// - [`File::create_dir`] to create a directory.
+    /// - [`File::create_dir_all`] to create a directory and all its parent directories.
     /// - [`File::create_with`] to specify the metadata on file creation.
     ///
     /// # Errors
@@ -260,6 +263,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// # See also
     ///
     /// - [`File::create_file`] to create a regular file.
+    /// - [`File::create_dir_all`] to create a directory and all its parent directories.
     /// - [`File::create_with`] to specify the metadata on file creation.
     ///
     /// # Errors
@@ -282,6 +286,79 @@ impl<'conn, 'a> File<'conn, 'a> {
         )
     }
 
+    /// Create a directory and all its missing parent directories.
+    ///
+    /// Unlike [`File::create_dir`], this does not return an error if the directory already exists.
+    ///
+    /// This sets the file mode based on the current [`File::umask`] and sets the mtime to now. You
+    /// can change the file metadata with [`File::set_mode`] and [`File::set_mtime`].
+    ///
+    /// # See also
+    ///
+    /// - [`File::create_file`] to create a regular file.
+    /// - [`File::create_dir`] to create a directory.
+    /// - [`File::create_with`] to specify the metadata on file creation.
+    ///
+    /// # Errors
+    ///
+    /// - [`ErrorKind::AlreadyExists`]: This file already exists in the archive and is not a
+    /// directory.
+    /// - [`ErrorKind::NotADirectory`]: The file's parent is not a directory.
+    ///
+    /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
+    /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
+    pub fn create_dir_all(&mut self) -> crate::Result<()> {
+        match self.validate_can_be_created() {
+            Ok(_) => {}
+            Err(err) if err.kind() == &crate::ErrorKind::NotFound => {}
+            Err(err) => return Err(err),
+        }
+
+        match self.metadata() {
+            Ok(metadata) if !metadata.is_dir() => {
+                return Err(crate::Error::msg(
+                    crate::ErrorKind::AlreadyExists,
+                    "This file already exists, but is not a directory.",
+                ))
+            }
+            Ok(_) => {}
+            Err(err) if err.kind() == &crate::ErrorKind::NotFound => {}
+            Err(err) => return Err(err),
+        }
+
+        let path = PathBuf::from(&self.path);
+        let mode = self.default_dir_mode();
+        // Each parent directory should have the same mtime.
+        let mtime = SystemTime::now();
+
+        let mut parents = Vec::new();
+        let mut parent = path.as_path();
+
+        while parent != Path::new("") {
+            parents.push(parent);
+            parent = unwrap_path_parent(parent);
+        }
+
+        self.store.exec(|store| {
+            for dir in parents.iter().rev() {
+                let result = store.create_file(
+                    dir.to_string_lossy().as_ref(),
+                    FileType::Dir,
+                    mode,
+                    Some(mtime),
+                );
+
+                match result {
+                    Ok(_) => {}
+                    Err(err) if err.kind() == &crate::ErrorKind::AlreadyExists => {}
+                    Err(err) => return Err(err),
+                }
+            }
+
+            Ok(())
+        })
+    }
+
     /// Create a file or directory if it doesn't already exist and set its metadata.
     ///
     /// This accepts the initial file `mode` and `mtime`. It does not care about the current
@@ -291,6 +368,7 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// - [`File::create_file`] to create a regular file with default permissions.
     /// - [`File::create_dir`] to create a directory with default permissions.
+    /// - [`File::create_dir_all`] to create a directory and all its parent directories.
     ///
     /// # Errors
     ///

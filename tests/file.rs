@@ -116,6 +116,54 @@ fn create_file_respects_file_umask() -> sqlarfs::Result<()> {
 }
 
 #[test]
+fn create_dir_all_creates_missing_parent_directories() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut dir_c = archive.open("a/b/c")?;
+
+        expect!(dir_c.create_dir_all()).to(be_ok());
+
+        expect!(dir_c.exists()).to(be_ok()).to(be_true());
+
+        let dir_b = archive.open("a/b")?;
+        expect!(dir_b.exists()).to(be_ok()).to(be_true());
+
+        let dir_a = archive.open("a")?;
+        expect!(dir_a.exists()).to(be_ok()).to(be_true());
+
+        Ok(())
+    })
+}
+
+#[test]
+fn create_dir_all_does_not_error_if_directory_already_exists() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut dir = archive.open("dir")?;
+
+        dir.create_dir()?;
+
+        expect!(dir.create_dir_all()).to(be_ok());
+
+        Ok(())
+    })
+}
+
+#[test]
+fn create_dir_all_errors_if_regular_file_already_exists() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut dir = archive.open("file")?;
+
+        dir.create_file()?;
+
+        expect!(dir.create_dir_all())
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::AlreadyExists));
+
+        Ok(())
+    })
+}
+
+#[test]
 fn file_metadata_when_creating_file_with_metadata() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open("file")?;

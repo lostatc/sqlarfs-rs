@@ -32,7 +32,8 @@ impl TransactionBehavior {
 /// A connection to a SQLite database.
 ///
 /// All operations on an [`Archive`] must happen within the context of a [`Transaction`]. You can
-/// use this connection to begin a transaction.
+/// use this connection to begin a transaction. Typically, you'll use [`Connection::exec`] to
+/// execute a closure within a transaction.
 #[derive(Debug)]
 pub struct Connection {
     conn: rusqlite::Connection,

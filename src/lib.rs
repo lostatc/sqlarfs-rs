@@ -2,6 +2,39 @@
 //!
 //! This library is a Rust implementation of the [sqlar](https://sqlite.org/sqlar.html) format for
 //! SQLite archive files.
+//!
+//! ```
+//! use std::io::prelude::*;
+//!
+//! use sqlarfs::Connection;
+//!
+//! fn main() -> sqlarfs::Result<()> {
+//!     let mut conn = Connection::open_in_memory()?;
+//!
+//!     let expected = "hello world";
+//!
+//!     let actual = conn.exec(|archive| {
+//!         let mut dir = archive.open("path/to")?;
+//!         dir.create_dir_all()?;
+//!
+//!         let mut file = archive.open("path/to/file")?;
+//!         file.create_file()?;
+//!
+//!         file.write_str(expected)?;
+//!
+//!         let mut actual = String::new();
+//!         let mut reader = file.reader()?;
+//!
+//!         reader.read_to_string(&mut actual)?;
+//!
+//!         sqlarfs::Result::Ok(actual)
+//!     })?;
+//!
+//!     assert_eq!(actual, expected);
+//!
+//!     Ok(())
+//! }
+//! ```
 
 // This requires the nightly toolchain.
 #![cfg_attr(coverage_nightly, feature(coverage_attribute))]

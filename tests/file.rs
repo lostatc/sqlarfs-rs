@@ -124,7 +124,7 @@ fn create_file_respects_file_umask() -> sqlarfs::Result<()> {
 }
 
 //
-// `File::create_dir`
+// `File::create_dir_all`
 //
 
 #[test]

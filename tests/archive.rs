@@ -40,6 +40,18 @@ fn opening_file_with_non_utf8_path_errors() -> sqlarfs::Result<()> {
 }
 
 #[test]
+fn opening_file_with_empty_path_errors() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        expect!(archive.open(""))
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::InvalidArgs));
+
+        Ok(())
+    })
+}
+
+#[test]
 fn opening_file_strips_trailing_slashes() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         expect!(archive.open("path/with/trailing/slash/"))

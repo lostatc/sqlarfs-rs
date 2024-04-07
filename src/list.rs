@@ -15,6 +15,16 @@ pub enum SortDirection {
     Desc,
 }
 
+impl SortDirection {
+    // It's important that this is a &'static string; it's used to build SQL queries.
+    pub fn as_sql(&self) -> &'static str {
+        match self {
+            SortDirection::Asc => "ASC",
+            SortDirection::Desc => "DESC",
+        }
+    }
+}
+
 /// Options for sorting and filtering a list of files.
 ///
 /// This is used with [`Archive::list_with`].

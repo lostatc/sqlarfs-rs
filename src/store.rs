@@ -4,7 +4,7 @@ use std::time::{self, Duration, SystemTime, UNIX_EPOCH};
 use rusqlite::blob::Blob;
 use rusqlite::{OptionalExtension, Savepoint};
 
-use super::list::{ListEntries, ListEntry, ListMapFunc, ListOptions, ListSort, SortDirection};
+use super::list::{ListEntries, ListEntry, ListMapFunc, ListOptions, ListSort};
 use super::metadata::{FileMetadata, FileMode, FileType, DIR_MODE, FILE_MODE, TYPE_MASK};
 use super::util::u64_from_usize;
 
@@ -314,8 +314,8 @@ impl<'conn> Store<'conn> {
     }
 
     pub fn list_files(&self, opts: &ListOptions) -> crate::Result<ListEntries> {
-        // TODO: Address this combinatorial explosion, ideally without using string interpolation
-        // to build queries.
+        // TODO: Address this combinatorial explosion, ideally without using too much string
+        // interpolation to build queries.
         let (stmt, params): (rusqlite::Statement<'_>, Vec<Box<dyn rusqlite::ToSql>>) = match opts {
             ListOptions {
                 sort: None,
@@ -347,12 +347,10 @@ impl<'conn> Store<'conn> {
                 ancestor: None,
                 direction,
             } => {
-                let stmt = self.tx().prepare(match direction {
-                    SortDirection::Asc => "SELECT name, mode, mtime, sz FROM sqlar WHERE (mode & ?1) = ?2 ORDER BY sz ASC",
-                    SortDirection::Desc => {
-                        "SELECT name, mode, mtime, sz FROM sqlar WHERE (mode & ?1) = ?2 ORDER BY sz DESC"
-                    }
-                })?;
+                let stmt = self.tx().prepare(&format!(
+                    "SELECT name, mode, mtime, sz FROM sqlar WHERE (mode & ?1) = ?2 ORDER BY sz {}",
+                    direction.as_sql()
+                ))?;
 
                 (stmt, vec![Box::new(TYPE_MASK), Box::new(FILE_MODE)])
             }
@@ -361,14 +359,10 @@ impl<'conn> Store<'conn> {
                 ancestor: None,
                 direction,
             } => {
-                let stmt = self.tx().prepare(match direction {
-                    SortDirection::Asc => {
-                        "SELECT name, mode, mtime, sz FROM sqlar ORDER BY mtime ASC"
-                    }
-                    SortDirection::Desc => {
-                        "SELECT name, mode, mtime, sz FROM sqlar ORDER BY mtime DESC"
-                    }
-                })?;
+                let stmt = self.tx().prepare(&format!(
+                    "SELECT name, mode, mtime, sz FROM sqlar ORDER BY mtime {}",
+                    direction.as_sql()
+                ))?;
 
                 (stmt, vec![])
             }
@@ -377,10 +371,10 @@ impl<'conn> Store<'conn> {
                 ancestor: Some(ancestor),
                 direction,
             } => {
-                let stmt = self.tx().prepare(match direction {
-                    SortDirection::Asc => "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' AND (mode & ?2) = ?3 ORDER BY sz ASC",
-                    SortDirection::Desc => "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' AND (mode & ?2) = ?3 ORDER BY sz DESC",
-                })?;
+                let stmt = self.tx().prepare(&format!(
+                    "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' AND (mode & ?2) = ?3 ORDER BY sz {}",
+                    direction.as_sql()
+                ))?;
 
                 (
                     stmt,
@@ -396,10 +390,10 @@ impl<'conn> Store<'conn> {
                 ancestor: Some(ancestor),
                 direction,
             } => {
-                let stmt = self.tx().prepare(match direction {
-                    SortDirection::Asc => "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' ORDER BY mtime ASC",
-                    SortDirection::Desc => "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' ORDER BY mtime DESC",
-                })?;
+                let stmt = self.tx().prepare(&format!(
+                    "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' ORDER BY mtime {}",
+                    direction.as_sql()
+                ))?;
 
                 (
                     stmt,

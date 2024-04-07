@@ -650,6 +650,21 @@ fn write_bytes_when_file_is_a_directory() -> sqlarfs::Result<()> {
 //
 // `File::write_str`
 //
+//
+
+#[test]
+fn write_string_when_file_does_not_exist() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut file = archive.open("file")?;
+
+        expect!(file.write_str("file content"))
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::NotFound));
+
+        Ok(())
+    })
+}
 
 #[test]
 fn write_string_when_file_is_a_directory() -> sqlarfs::Result<()> {
@@ -671,6 +686,20 @@ fn write_string_when_file_is_a_directory() -> sqlarfs::Result<()> {
 //
 
 #[test]
+fn write_from_reader_when_file_does_not_exist() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut file = archive.open("file")?;
+
+        expect!(file.write_from(&mut "file content".as_bytes()))
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::NotFound));
+
+        Ok(())
+    })
+}
+
+#[test]
 fn write_from_reader_when_file_is_a_directory() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut dir = archive.open("dir")?;
@@ -688,6 +717,22 @@ fn write_from_reader_when_file_is_a_directory() -> sqlarfs::Result<()> {
 //
 // `File::write_file`
 //
+
+#[test]
+fn write_from_file_when_file_does_not_exist() -> sqlarfs::Result<()> {
+    let mut temp_file = tempfile::tempfile()?;
+
+    connection()?.exec(|archive| {
+        let mut file = archive.open("file")?;
+
+        expect!(file.write_file(&mut temp_file))
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::NotFound));
+
+        Ok(())
+    })
+}
 
 #[test]
 fn write_from_file_when_file_is_a_directory() -> sqlarfs::Result<()> {

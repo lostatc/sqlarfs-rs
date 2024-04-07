@@ -8,6 +8,10 @@ use xpct::{be_err, be_ok, equal, expect};
 
 use common::connection;
 
+//
+// `Archive::open`
+//
+
 #[test]
 fn opening_file_with_absolute_path_errors() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
@@ -46,6 +50,10 @@ fn opening_file_strips_trailing_slashes() -> sqlarfs::Result<()> {
         Ok(())
     })
 }
+
+//
+// `Archive::umask` / `Archive::set_umask`
+//
 
 #[test]
 fn set_archive_umask() -> sqlarfs::Result<()> {

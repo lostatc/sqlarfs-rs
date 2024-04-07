@@ -49,6 +49,10 @@ fn validate_incompressible_bytes_are_actually_not_zlib_compressible() -> io::Res
     Ok(())
 }
 
+//
+// `File::write_bytes`
+//
+
 #[test]
 fn write_bytes_without_compression() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
@@ -143,6 +147,10 @@ fn write_compressible_bytes_with_compression() -> sqlarfs::Result<()> {
         Ok(())
     })
 }
+
+//
+// `File::write_from`
+//
 
 #[test]
 fn write_from_reader_without_compression() -> sqlarfs::Result<()> {
@@ -244,6 +252,10 @@ fn write_compressible_data_from_reader_with_compression() -> sqlarfs::Result<()>
         Ok(())
     })
 }
+
+//
+// `File::write_file`
+//
 
 #[test]
 fn write_from_file_without_compression() -> sqlarfs::Result<()> {
@@ -359,6 +371,10 @@ fn write_compressible_data_from_file_with_compression() -> sqlarfs::Result<()> {
         Ok(())
     })
 }
+
+//
+// `File::write_str`
+//
 
 #[test]
 fn write_string() -> sqlarfs::Result<()> {

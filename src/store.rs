@@ -81,7 +81,10 @@ impl<'conn> Store<'conn> {
         })
     }
 
-    /// Execute the given function inside of a savepoint.
+    // Execute the given function inside of a savepoint.
+    //
+    // Operations that perform multiple writes to the database should wrap them with this method to
+    // ensure atomicity and consistency.
     pub fn exec<T, F>(&mut self, f: F) -> crate::Result<T>
     where
         F: FnOnce(&mut Store) -> crate::Result<T>,

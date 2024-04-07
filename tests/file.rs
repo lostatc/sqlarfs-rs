@@ -12,6 +12,10 @@ use xpct::{
 
 use common::{connection, random_bytes, truncate_mtime, WRITE_DATA_SIZE};
 
+//
+// `File::path`
+//
+
 #[test]
 fn get_file_path() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
@@ -22,6 +26,10 @@ fn get_file_path() -> sqlarfs::Result<()> {
         Ok(())
     })
 }
+
+//
+// `File::create_file`
+//
 
 #[test]
 fn create_file_when_it_does_not_exist() -> sqlarfs::Result<()> {
@@ -115,6 +123,10 @@ fn create_file_respects_file_umask() -> sqlarfs::Result<()> {
     })
 }
 
+//
+// `File::create_dir`
+//
+
 #[test]
 fn create_dir_all_creates_missing_parent_directories() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
@@ -163,6 +175,10 @@ fn create_dir_all_errors_if_regular_file_already_exists() -> sqlarfs::Result<()>
     })
 }
 
+//
+// `File::metadata`
+//
+
 #[test]
 fn file_metadata_when_creating_file_with_metadata() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
@@ -204,6 +220,25 @@ fn file_metadata_correctly_reports_directories() -> sqlarfs::Result<()> {
 }
 
 #[test]
+fn file_size_is_zero_when_file_is_empty() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut file = archive.open("file")?;
+
+        file.create_file()?;
+
+        let metadata = file.metadata()?;
+
+        expect!(metadata.size).to(be_zero());
+
+        Ok(())
+    })
+}
+
+//
+// `File::exists
+//
+
+#[test]
 fn file_correctly_reports_that_it_exists() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open("existing-file")?;
@@ -226,6 +261,10 @@ fn file_correctly_reports_that_it_does_not_exist() -> sqlarfs::Result<()> {
         Ok(())
     })
 }
+
+//
+// `File::delete`
+//
 
 #[test]
 fn deleting_file_when_it_does_not_exist() -> sqlarfs::Result<()> {
@@ -254,6 +293,10 @@ fn deleting_file_when_it_does_exist() -> sqlarfs::Result<()> {
     })
 }
 
+//
+// `File::compression` / `File::set_compression`
+//
+
 #[test]
 #[cfg(feature = "deflate")]
 fn set_compression_method() -> sqlarfs::Result<()> {
@@ -272,6 +315,10 @@ fn set_compression_method() -> sqlarfs::Result<()> {
     })
 }
 
+//
+// `File::umask` / `File::set_umask`
+//
+
 #[test]
 fn set_file_umask() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
@@ -288,6 +335,10 @@ fn set_file_umask() -> sqlarfs::Result<()> {
         Ok(())
     })
 }
+
+//
+// `File::set_mode`
+//
 
 #[test]
 fn set_file_mode() -> sqlarfs::Result<()> {
@@ -330,6 +381,10 @@ fn set_file_mode_when_file_does_not_exist() -> sqlarfs::Result<()> {
     })
 }
 
+//
+// `File::set_mtime`
+//
+
 #[test]
 fn set_file_mtime() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
@@ -366,20 +421,9 @@ fn set_file_mtime_when_file_does_not_exist() -> sqlarfs::Result<()> {
     })
 }
 
-#[test]
-fn file_size_is_zero_when_file_is_empty() -> sqlarfs::Result<()> {
-    connection()?.exec(|archive| {
-        let mut file = archive.open("file")?;
-
-        file.create_file()?;
-
-        let metadata = file.metadata()?;
-
-        expect!(metadata.size).to(be_zero());
-
-        Ok(())
-    })
-}
+//
+// `File::is_empty`
+//
 
 #[test]
 fn file_correctly_reports_being_empty() -> sqlarfs::Result<()> {
@@ -437,6 +481,10 @@ fn is_file_empty_errors_when_it_is_a_directory() -> sqlarfs::Result<()> {
     })
 }
 
+//
+// `File::is_compressed`
+//
+
 #[test]
 fn is_file_compressed_errors_when_it_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
@@ -466,21 +514,9 @@ fn is_file_compressed_errors_when_it_is_a_directory() -> sqlarfs::Result<()> {
     })
 }
 
-#[test]
-fn write_bytes_when_file_does_not_exist() -> sqlarfs::Result<()> {
-    connection()?.exec(|archive| {
-        let mut file = archive.open("file")?;
-
-        let expected = random_bytes(WRITE_DATA_SIZE);
-
-        expect!(file.write_bytes(&expected))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::NotFound));
-
-        Ok(())
-    })
-}
+//
+// `File::reader`
+//
 
 #[test]
 fn open_reader_when_file_does_not_exist() -> sqlarfs::Result<()> {
@@ -510,6 +546,10 @@ fn open_reader_when_file_is_a_directory() -> sqlarfs::Result<()> {
         Ok(())
     })
 }
+
+//
+// `File::truncate`
+//
 
 #[test]
 fn truncated_file_returns_no_bytes() -> sqlarfs::Result<()> {
@@ -572,6 +612,26 @@ fn truncate_file_when_it_is_a_directory() -> sqlarfs::Result<()> {
     })
 }
 
+//
+// `File::write_bytes`
+//
+
+#[test]
+fn write_bytes_when_file_does_not_exist() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut file = archive.open("file")?;
+
+        let expected = random_bytes(WRITE_DATA_SIZE);
+
+        expect!(file.write_bytes(&expected))
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::NotFound));
+
+        Ok(())
+    })
+}
+
 #[test]
 fn write_bytes_when_file_is_a_directory() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
@@ -586,6 +646,10 @@ fn write_bytes_when_file_is_a_directory() -> sqlarfs::Result<()> {
         Ok(())
     })
 }
+
+//
+// `File::write_str`
+//
 
 #[test]
 fn write_string_when_file_is_a_directory() -> sqlarfs::Result<()> {
@@ -602,6 +666,10 @@ fn write_string_when_file_is_a_directory() -> sqlarfs::Result<()> {
     })
 }
 
+//
+// `File::write_from`
+//
+
 #[test]
 fn write_from_reader_when_file_is_a_directory() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
@@ -616,6 +684,10 @@ fn write_from_reader_when_file_is_a_directory() -> sqlarfs::Result<()> {
         Ok(())
     })
 }
+
+//
+// `File::write_file`
+//
 
 #[test]
 fn write_from_file_when_file_is_a_directory() -> sqlarfs::Result<()> {

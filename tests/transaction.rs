@@ -20,6 +20,43 @@ fn test_transaction_commits_successfully(
     })
 }
 
+fn test_transaction_rolls_back_successfully(
+    conn: &mut Connection,
+    behavior: TransactionBehavior,
+) -> sqlarfs::Result<()> {
+    let mut tx = conn.transaction_with(behavior)?;
+
+    tx.archive_mut().open("file")?.create_file()?;
+
+    tx.rollback()?;
+
+    conn.exec(|archive| {
+        let file = archive.open("file")?;
+        expect!(file.exists()).to(be_ok()).to(be_false());
+
+        Ok(())
+    })
+}
+
+fn test_exec_commits_successfully(
+    conn: &mut Connection,
+    behavior: TransactionBehavior,
+) -> sqlarfs::Result<()> {
+    conn.exec_with(behavior, |archive| archive.open("file")?.create_file())?;
+
+    conn.exec(|archive| {
+        expect!(archive.open("file")?.exists())
+            .to(be_ok())
+            .to(be_true());
+
+        Ok(())
+    })
+}
+
+//
+// `Connection::transaction_with`
+//
+
 #[test]
 fn transaction_with_deferred_and_commit() -> sqlarfs::Result<()> {
     let mut conn = Connection::open_in_memory()?;
@@ -39,24 +76,6 @@ fn transaction_with_exclusive_and_commit() -> sqlarfs::Result<()> {
     let mut conn = Connection::open_in_memory()?;
 
     test_transaction_commits_successfully(&mut conn, TransactionBehavior::Exclusive)
-}
-
-fn test_transaction_rolls_back_successfully(
-    conn: &mut Connection,
-    behavior: TransactionBehavior,
-) -> sqlarfs::Result<()> {
-    let mut tx = conn.transaction_with(behavior)?;
-
-    tx.archive_mut().open("file")?.create_file()?;
-
-    tx.rollback()?;
-
-    conn.exec(|archive| {
-        let file = archive.open("file")?;
-        expect!(file.exists()).to(be_ok()).to(be_false());
-
-        Ok(())
-    })
 }
 
 #[test]
@@ -80,20 +99,9 @@ fn transaction_with_exclusive_and_rollback() -> sqlarfs::Result<()> {
     test_transaction_rolls_back_successfully(&mut conn, TransactionBehavior::Exclusive)
 }
 
-fn test_exec_commits_successfully(
-    conn: &mut Connection,
-    behavior: TransactionBehavior,
-) -> sqlarfs::Result<()> {
-    conn.exec_with(behavior, |archive| archive.open("file")?.create_file())?;
-
-    conn.exec(|archive| {
-        expect!(archive.open("file")?.exists())
-            .to(be_ok())
-            .to(be_true());
-
-        Ok(())
-    })
-}
+//
+// `Connection::exec_with`
+//
 
 #[test]
 fn exec_with_deferred_and_commit() -> sqlarfs::Result<()> {

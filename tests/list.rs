@@ -11,6 +11,10 @@ use xpct::{
 
 use common::{connection, truncate_mtime};
 
+//
+// `Archive::list`
+//
+
 #[test]
 fn list_all_paths() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
@@ -95,6 +99,10 @@ fn list_all_paths_with_metadata() -> sqlarfs::Result<()> {
         Ok(())
     })
 }
+
+//
+// `Archive::list_with`
+//
 
 #[test]
 fn list_with_default_opts() -> sqlarfs::Result<()> {

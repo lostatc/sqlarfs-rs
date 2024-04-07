@@ -4,9 +4,10 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::time::SystemTime;
 
-use sqlarfs::{Compression, ErrorKind, FileMetadata, FileMode, FileType};
+use sqlarfs::{Compression, Connection, ErrorKind, FileMetadata, FileMode, FileType};
+use tempfile::NamedTempFile;
 use xpct::{
-    be_empty, be_err, be_false, be_ok, be_some, be_true, be_zero, equal, expect, fields,
+    be_empty, be_err, be_false, be_none, be_ok, be_some, be_true, be_zero, equal, expect, fields,
     match_fields, match_pattern, pattern,
 };
 
@@ -123,6 +124,35 @@ fn create_file_respects_file_umask() -> sqlarfs::Result<()> {
     })
 }
 
+#[test]
+fn create_file_errors_when_parent_has_directory_mode_but_nonzero_size() -> sqlarfs::Result<()> {
+    let db_file = NamedTempFile::new()?;
+
+    // Initialize the database with the `sqlar` table.
+    Connection::open(db_file.path())?;
+
+    let dir_mode = 0o040775;
+
+    let conn = rusqlite::Connection::open(db_file.path())?;
+    conn.execute(
+        "INSERT INTO sqlar (name, mode, sz, data) VALUES (?1, ?2, 1, zeroblob(1))",
+        ("dir", dir_mode),
+    )?;
+
+    let mut conn = Connection::open(db_file.path())?;
+
+    conn.exec(|archive| {
+        let mut file = archive.open("dir/file")?;
+
+        expect!(file.create_file())
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::NotADirectory));
+
+        Ok(())
+    })
+}
+
 //
 // `File::create_dir_all`
 //
@@ -229,6 +259,62 @@ fn file_size_is_zero_when_file_is_empty() -> sqlarfs::Result<()> {
         let metadata = file.metadata()?;
 
         expect!(metadata.size).to(be_zero());
+
+        Ok(())
+    })
+}
+
+#[test]
+fn file_metadata_reports_no_file_type_when_mode_indicates_it_is_a_special_file(
+) -> sqlarfs::Result<()> {
+    let db_file = NamedTempFile::new()?;
+
+    // Initialize the database with the `sqlar` table.
+    Connection::open(db_file.path())?;
+
+    // Socket file.
+    let special_file_mode = 0o140664;
+
+    let conn = rusqlite::Connection::open(db_file.path())?;
+    conn.execute(
+        "INSERT INTO sqlar (name, mode, sz, data) VALUES (?1, ?2, 0, zeroblob(0))",
+        ("file", special_file_mode),
+    )?;
+
+    let mut conn = Connection::open(db_file.path())?;
+
+    conn.exec(|archive| {
+        let file = archive.open("file")?;
+
+        let metadata = file.metadata()?;
+
+        expect!(metadata.kind).to(be_none());
+
+        Ok(())
+    })
+}
+
+#[test]
+fn file_metadata_reports_no_file_type_when_there_is_no_mode() -> sqlarfs::Result<()> {
+    let db_file = NamedTempFile::new()?;
+
+    // Initialize the database with the `sqlar` table.
+    Connection::open(db_file.path())?;
+
+    let conn = rusqlite::Connection::open(db_file.path())?;
+    conn.execute(
+        "INSERT INTO sqlar (name, sz, data) VALUES (?1, 0, zeroblob(0))",
+        ("file",),
+    )?;
+
+    let mut conn = Connection::open(db_file.path())?;
+
+    conn.exec(|archive| {
+        let file = archive.open("file")?;
+
+        let metadata = file.metadata()?;
+
+        expect!(metadata.kind).to(be_none());
 
         Ok(())
     })
@@ -548,6 +634,40 @@ fn open_reader_errors_when_file_is_a_directory() -> sqlarfs::Result<()> {
     })
 }
 
+#[test]
+fn open_reader_errors_when_file_has_regular_file_mode_but_also_descendants() -> sqlarfs::Result<()>
+{
+    let db_file = NamedTempFile::new()?;
+
+    // Initialize the database with the `sqlar` table.
+    Connection::open(db_file.path())?;
+
+    let regular_file_mode = 0o100664;
+
+    let conn = rusqlite::Connection::open(db_file.path())?;
+    conn.execute(
+        "INSERT INTO sqlar (name, mode, sz, data) VALUES (?1, ?2, 0, zeroblob(0))",
+        ("dir", regular_file_mode),
+    )?;
+    conn.execute(
+        "INSERT INTO sqlar (name, mode, sz, data) VALUES (?1, ?2, 0, zeroblob(0))",
+        ("dir/file", regular_file_mode),
+    )?;
+
+    let mut conn = Connection::open(db_file.path())?;
+
+    conn.exec(|archive| {
+        let mut dir = archive.open("dir")?;
+
+        expect!(dir.reader())
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::IsADirectory));
+
+        Ok(())
+    })
+}
+
 //
 // `File::truncate`
 //
@@ -640,6 +760,40 @@ fn write_bytes_errors_when_file_is_a_directory() -> sqlarfs::Result<()> {
         dir.create_dir()?;
 
         expect!(dir.write_bytes(b"file content"))
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::IsADirectory));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn write_bytes_errors_when_file_has_regular_file_mode_but_also_descendants() -> sqlarfs::Result<()>
+{
+    let db_file = NamedTempFile::new()?;
+
+    // Initialize the database with the `sqlar` table.
+    Connection::open(db_file.path())?;
+
+    let regular_file_mode = 0o100664;
+
+    let conn = rusqlite::Connection::open(db_file.path())?;
+    conn.execute(
+        "INSERT INTO sqlar (name, mode, sz, data) VALUES (?1, ?2, 0, zeroblob(0))",
+        ("dir", regular_file_mode),
+    )?;
+    conn.execute(
+        "INSERT INTO sqlar (name, mode, sz, data) VALUES (?1, ?2, 0, zeroblob(0))",
+        ("dir/file", regular_file_mode),
+    )?;
+
+    let mut conn = Connection::open(db_file.path())?;
+
+    conn.exec(|archive| {
+        let mut dir = archive.open("dir")?;
+
+        expect!(dir.write_bytes("file contents".as_bytes()))
             .to(be_err())
             .map(|err| err.into_kind())
             .to(equal(ErrorKind::IsADirectory));

@@ -43,7 +43,7 @@ fn create_file_when_it_does_not_exist() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn create_file_when_it_already_exists() -> sqlarfs::Result<()> {
+fn create_file_errors_when_it_already_exists() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open("existing-file")?;
 
@@ -59,7 +59,7 @@ fn create_file_when_it_already_exists() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn create_file_when_it_has_a_non_directory_parent() -> sqlarfs::Result<()> {
+fn create_file_errors_when_it_has_a_non_directory_parent() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         archive.open("parent")?.create_file()?;
 
@@ -75,7 +75,7 @@ fn create_file_when_it_has_a_non_directory_parent() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn create_file_when_it_has_no_parent() -> sqlarfs::Result<()> {
+fn create_file_errors_when_it_has_no_parent() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open("parent/child")?;
 
@@ -267,7 +267,21 @@ fn file_correctly_reports_that_it_does_not_exist() -> sqlarfs::Result<()> {
 //
 
 #[test]
-fn deleting_file_when_it_does_not_exist() -> sqlarfs::Result<()> {
+fn deleted_file_no_longer_exists() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut file = archive.open("existing-file")?;
+
+        file.create_file()?;
+
+        expect!(file.delete()).to(be_ok());
+        expect!(file.exists()).to(be_ok()).to(be_false());
+
+        Ok(())
+    })
+}
+
+#[test]
+fn deleting_file_errors_when_it_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open("nonexistent-file")?;
 
@@ -275,19 +289,6 @@ fn deleting_file_when_it_does_not_exist() -> sqlarfs::Result<()> {
             .to(be_err())
             .map(|err| err.into_kind())
             .to(equal(ErrorKind::NotFound));
-
-        Ok(())
-    })
-}
-
-#[test]
-fn deleting_file_when_it_does_exist() -> sqlarfs::Result<()> {
-    connection()?.exec(|archive| {
-        let mut file = archive.open("existing-file")?;
-
-        file.create_file()?;
-
-        expect!(file.delete()).to(be_ok());
 
         Ok(())
     })
@@ -368,7 +369,7 @@ fn set_file_mode() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn set_file_mode_when_file_does_not_exist() -> sqlarfs::Result<()> {
+fn set_file_mode_errors_when_file_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open("file")?;
 
@@ -408,7 +409,7 @@ fn set_file_mtime() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn set_file_mtime_when_file_does_not_exist() -> sqlarfs::Result<()> {
+fn set_file_mtime_errors_when_file_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open("file")?;
 
@@ -519,7 +520,7 @@ fn is_file_compressed_errors_when_it_is_a_directory() -> sqlarfs::Result<()> {
 //
 
 #[test]
-fn open_reader_when_file_does_not_exist() -> sqlarfs::Result<()> {
+fn open_reader_errors_when_file_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open("file")?;
 
@@ -533,7 +534,7 @@ fn open_reader_when_file_does_not_exist() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn open_reader_when_file_is_a_directory() -> sqlarfs::Result<()> {
+fn open_reader_errors_when_file_is_a_directory() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut dir = archive.open("dir")?;
         dir.create_dir()?;
@@ -584,7 +585,7 @@ fn truncated_file_returns_no_bytes() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn truncate_file_when_it_does_not_exist() -> sqlarfs::Result<()> {
+fn truncate_file_errors_when_it_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open("file")?;
 
@@ -598,7 +599,7 @@ fn truncate_file_when_it_does_not_exist() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn truncate_file_when_it_is_a_directory() -> sqlarfs::Result<()> {
+fn truncate_file_errors_when_it_is_a_directory() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open("dir")?;
         file.create_dir()?;
@@ -617,7 +618,7 @@ fn truncate_file_when_it_is_a_directory() -> sqlarfs::Result<()> {
 //
 
 #[test]
-fn write_bytes_when_file_does_not_exist() -> sqlarfs::Result<()> {
+fn write_bytes_errors_when_file_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open("file")?;
 
@@ -633,7 +634,7 @@ fn write_bytes_when_file_does_not_exist() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn write_bytes_when_file_is_a_directory() -> sqlarfs::Result<()> {
+fn write_bytes_errors_when_file_is_a_directory() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut dir = archive.open("dir")?;
         dir.create_dir()?;
@@ -653,7 +654,7 @@ fn write_bytes_when_file_is_a_directory() -> sqlarfs::Result<()> {
 //
 
 #[test]
-fn write_string_when_file_does_not_exist() -> sqlarfs::Result<()> {
+fn write_string_errors_when_file_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open("file")?;
 
@@ -667,7 +668,7 @@ fn write_string_when_file_does_not_exist() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn write_string_when_file_is_a_directory() -> sqlarfs::Result<()> {
+fn write_string_errors_when_file_is_a_directory() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut dir = archive.open("dir")?;
         dir.create_dir()?;
@@ -686,7 +687,7 @@ fn write_string_when_file_is_a_directory() -> sqlarfs::Result<()> {
 //
 
 #[test]
-fn write_from_reader_when_file_does_not_exist() -> sqlarfs::Result<()> {
+fn write_from_reader_errors_when_file_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open("file")?;
 
@@ -700,7 +701,7 @@ fn write_from_reader_when_file_does_not_exist() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn write_from_reader_when_file_is_a_directory() -> sqlarfs::Result<()> {
+fn write_from_reader_errors_when_file_is_a_directory() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut dir = archive.open("dir")?;
         dir.create_dir()?;
@@ -719,7 +720,7 @@ fn write_from_reader_when_file_is_a_directory() -> sqlarfs::Result<()> {
 //
 
 #[test]
-fn write_from_file_when_file_does_not_exist() -> sqlarfs::Result<()> {
+fn write_from_file_errors_when_file_does_not_exist() -> sqlarfs::Result<()> {
     let mut temp_file = tempfile::tempfile()?;
 
     connection()?.exec(|archive| {
@@ -735,7 +736,7 @@ fn write_from_file_when_file_does_not_exist() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn write_from_file_when_file_is_a_directory() -> sqlarfs::Result<()> {
+fn write_from_file_errors_when_file_is_a_directory() -> sqlarfs::Result<()> {
     let mut temp_file = tempfile::tempfile()?;
 
     connection()?.exec(|archive| {

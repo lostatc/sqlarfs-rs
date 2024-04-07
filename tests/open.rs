@@ -26,7 +26,7 @@ fn opening_creates_db_file_when_it_does_not_exist() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn opening_fails_when_db_does_not_exist() -> sqlarfs::Result<()> {
+fn opening_errors_when_db_does_not_exist() -> sqlarfs::Result<()> {
     let temp_file = tempfile::NamedTempFile::new()?;
     let temp_path = temp_file.path().to_path_buf();
 
@@ -43,7 +43,7 @@ fn opening_fails_when_db_does_not_exist() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn any_db_operation_fails_when_file_is_not_a_db() -> sqlarfs::Result<()> {
+fn any_db_operation_errors_when_file_is_not_a_db() -> sqlarfs::Result<()> {
     let mut temp_file = tempfile::NamedTempFile::new()?;
     temp_file.write_all(b"not a database")?;
     temp_file.flush()?;
@@ -59,7 +59,7 @@ fn any_db_operation_fails_when_file_is_not_a_db() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn opening_read_only_fails_when_create_db_is_true() -> sqlarfs::Result<()> {
+fn opening_read_only_errors_when_create_db_is_true() -> sqlarfs::Result<()> {
     let temp_file = tempfile::NamedTempFile::new()?;
 
     let result = OpenOptions::new()
@@ -76,7 +76,7 @@ fn opening_read_only_fails_when_create_db_is_true() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn any_write_operation_fails_when_db_is_read_only() -> sqlarfs::Result<()> {
+fn any_write_operation_errors_when_db_is_read_only() -> sqlarfs::Result<()> {
     let temp_file = tempfile::NamedTempFile::new()?;
     let temp_path = temp_file.path().to_path_buf();
 

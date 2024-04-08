@@ -35,6 +35,15 @@
 //!     Ok(())
 //! }
 //! ```
+//!
+//! To open a connection to the database, use [`Connection::open`] or [`Connection::builder`]. From
+//! there, you can call [`Connection::exec`] to execute a closure within a transaction. This
+//! closure will be passed an [`Archive`], which is the main type for reading and writing to the
+//! database.
+//!
+//! [`Connection::open`]: crate::Connection::open
+//! [`Connection::exec`]: crate::Connection::exec
+//! [`Archive`]: crate::Archive
 
 // This requires the nightly toolchain.
 #![cfg_attr(coverage_nightly, feature(coverage_attribute))]

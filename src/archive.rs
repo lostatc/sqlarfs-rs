@@ -8,10 +8,15 @@ use super::store::Store;
 
 /// A SQLite archive.
 ///
+/// This is the main type for reading and writing to the archive. You can only access an `Archive`
+/// within the context of a transaction, which you'll typically use [`Connection::exec`] for.
+///
 /// A SQLite archive is a SQLite database with a table named `sqlar` that conforms to a specific
 /// schema. A SQLite archive may contain other tables, and this library will ignore them.
 ///
 /// All file paths in a SQLite archive are relative paths.
+///
+/// [`Connection::exec`]: crate::Connection::exec
 #[derive(Debug)]
 pub struct Archive<'conn> {
     store: Store<'conn>,

@@ -8,11 +8,17 @@ use super::transaction::Connection;
 ///
 /// You can also use the [`Connection::open`] and [`Connection::open_in_memory`] convenience
 /// methods.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct OpenOptions {
     create: bool,
     init: bool,
     read_only: bool,
+}
+
+impl Default for OpenOptions {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl OpenOptions {

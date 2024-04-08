@@ -6,8 +6,8 @@ use super::transaction::Connection;
 ///
 /// You can create a new builder with [`Connection::builder`].
 ///
-/// You can also use the [`Connection::open`] and [`Connection::open_in_memory`] convenience
-/// methods.
+/// You can also use the [`Connection::open`] convenience method. To open an in-memory database,
+/// use [`Connection::open_in_memory`].
 #[derive(Debug, Clone)]
 pub struct OpenOptions {
     create: bool,
@@ -103,37 +103,6 @@ impl OpenOptions {
                 _ => return Err(err.into()),
             },
         };
-
-        if self.init {
-            conn.exec(|archive| match archive.init() {
-                Err(err) if err.kind() == &crate::ErrorKind::ReadOnly => {
-                    Err(crate::Error::new(crate::ErrorKind::InvalidArgs, err))
-                }
-                result => result,
-            })?;
-        }
-
-        Ok(conn)
-    }
-
-    /// Open a new in-memory database [`Connection`].
-    pub fn open_in_memory(&mut self) -> crate::Result<Connection> {
-        use rusqlite::OpenFlags;
-
-        // SQLITE_OPEN_NO_MUTEX is the default in rusqlite. Its docs explain why.
-        let mut flags = OpenFlags::SQLITE_OPEN_MEMORY | OpenFlags::SQLITE_OPEN_NO_MUTEX;
-
-        if self.read_only {
-            flags |= OpenFlags::SQLITE_OPEN_READ_ONLY;
-        } else {
-            flags |= OpenFlags::SQLITE_OPEN_READ_WRITE;
-        }
-
-        if self.create {
-            flags |= OpenFlags::SQLITE_OPEN_CREATE;
-        }
-
-        let mut conn = Connection::new(rusqlite::Connection::open_in_memory_with_flags(flags)?);
 
         if self.init {
             conn.exec(|archive| match archive.init() {

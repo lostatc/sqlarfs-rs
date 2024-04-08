@@ -57,10 +57,10 @@ impl Connection {
     }
 
     /// Open a SQLite connection to an in-memory database.
-    ///
-    /// You can access more options for how the connection is opened with [`Connection::builder`].
     pub fn open_in_memory() -> crate::Result<Self> {
-        OpenOptions::new().open_in_memory()
+        let mut conn = Self::new(rusqlite::Connection::open_in_memory()?);
+        conn.exec(|archive| archive.init())?;
+        Ok(conn)
     }
 
     /// Start a new transaction.
@@ -105,6 +105,22 @@ impl Connection {
 /// An open transaction on an [`Archive`].
 ///
 /// If a `Transaction` is dropped without committing, the transaction is rolled back.
+///
+/// # Examples
+///
+/// ```
+/// # use sqlarfs::Connection;
+/// let mut connection = Connection::open_in_memory()?;
+/// let mut tx = connection.transaction()?;
+/// let archive = tx.archive_mut();
+///
+/// let mut file = archive.open("file")?;
+/// file.create_file()?;
+///
+/// tx.commit()?;
+/// # sqlarfs::Result::Ok(())
+///
+/// ```
 #[derive(Debug)]
 pub struct Transaction<'conn> {
     archive: Archive<'conn>,

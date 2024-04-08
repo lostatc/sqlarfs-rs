@@ -80,6 +80,24 @@ impl<'conn> Archive<'conn> {
     /// - [`ErrorKind::InvalidArgs`]: Mutually exclusive options were specified together in
     /// [`ListOptions`].
     ///
+    /// # Examples
+    ///
+    /// List the regular files that are descendants of `parent/dir` in descending order by size.
+    ///
+    /// ```
+    /// # use sqlarfs::{ListOptions, Connection};
+    /// # let mut connection = Connection::open_in_memory()?;
+    /// # let mut tx = connection.transaction()?;
+    /// # let mut archive = tx.archive_mut();
+    /// let opts = ListOptions::new().by_size().desc().descendants_of("parent/dir");
+    ///
+    /// for result in archive.list_with(&opts)? {
+    ///     let entry = result?;
+    ///     println!("{}: {}", entry.path().to_string_lossy(), entry.metadata().size);
+    /// }
+    /// # sqlarfs::Result::Ok(())
+    /// ```
+    ///
     /// [`ErrorKind::InvalidArgs`]: crate::ErrorKind::InvalidArgs
     pub fn list_with(&mut self, opts: &ListOptions) -> crate::Result<ListEntries> {
         if opts.invalid {
@@ -101,6 +119,20 @@ impl<'conn> Archive<'conn> {
     ///
     /// This specifies the mode bits that will *not* be set, assuming the default mode for regular
     /// files is `0o666` and the default mode for directories is `0o777`.
+    ///
+    /// The default umask is `FileMode::OTHER_W` (`0o002`).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use sqlarfs::{Connection, FileMode};
+    /// # let mut connection = Connection::open_in_memory()?;
+    /// # let mut tx = connection.transaction()?;
+    /// # let archive = tx.archive_mut();
+    /// archive.set_umask(FileMode::OTHER_R | FileMode::OTHER_W);
+    /// assert_eq!(archive.umask(), FileMode::OTHER_R | FileMode::OTHER_W);
+    /// # sqlarfs::Result::Ok(())
+    /// ```
     pub fn set_umask(&mut self, mode: FileMode) {
         self.umask = mode;
     }

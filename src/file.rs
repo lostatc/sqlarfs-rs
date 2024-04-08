@@ -399,6 +399,22 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
     ///
+    /// # Examples
+    /// ```
+    /// # use sqlarfs::{Connection, FileMode};
+    /// # let mut connection = Connection::open_in_memory()?;
+    /// # let mut tx = connection.transaction()?;
+    /// # let archive = tx.archive_mut();
+    /// let mut file = archive.open("file")?;
+    ///
+    /// file.create_file()?;
+    /// assert!(file.exists()?);
+    ///
+    /// file.delete()?;
+    /// assert!(!file.exists()?);
+    /// # sqlarfs::Result::Ok(())
+    /// ```
+    ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     pub fn delete(&mut self) -> crate::Result<()> {
         self.store.delete_file(&self.path)
@@ -808,6 +824,19 @@ impl<'conn, 'a> File<'conn, 'a> {
     ///
     /// [`Archive::umask`]: crate::Archive::umask
     /// [`Archive::set_umask`]: crate::Archive::set_umask
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use sqlarfs::{Connection, FileMode};
+    /// # let mut connection = Connection::open_in_memory()?;
+    /// # let mut tx = connection.transaction()?;
+    /// # let archive = tx.archive_mut();
+    /// let mut file = archive.open("path/to/file")?;
+    /// file.set_umask(FileMode::OTHER_R | FileMode::OTHER_W);
+    /// assert_eq!(file.umask(), FileMode::OTHER_R | FileMode::OTHER_W);
+    /// # sqlarfs::Result::Ok(())
+    /// ```
     pub fn set_umask(&mut self, mode: FileMode) {
         self.umask = mode;
     }

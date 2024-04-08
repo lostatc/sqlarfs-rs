@@ -116,25 +116,11 @@ fn initializing_read_only_db_errors() -> sqlarfs::Result<()> {
     Ok(())
 }
 
-//
-// `OpenOptions::open_in_memory`
-//
-
-#[test]
-fn opening_in_memory_succeeds() {
-    expect!(OpenOptions::new().open_in_memory()).to(be_ok());
-}
-
-#[test]
-fn create_false_is_ignored_for_open_in_memory() -> sqlarfs::Result<()> {
-    expect!(OpenOptions::new().create(false).open_in_memory()).to(be_ok());
-
-    Ok(())
-}
-
 #[test]
 fn writing_to_uninitialized_db_errors() -> sqlarfs::Result<()> {
-    let mut conn = OpenOptions::new().init(false).open_in_memory()?;
+    let temp_file = tempfile::NamedTempFile::new()?;
+
+    let mut conn = OpenOptions::new().init(false).open(temp_file.path())?;
 
     conn.exec(|archive| {
         let mut file = archive.open("file")?;
@@ -143,19 +129,4 @@ fn writing_to_uninitialized_db_errors() -> sqlarfs::Result<()> {
 
         Ok(())
     })
-}
-
-#[test]
-fn initializing_read_only_in_memory_db_errors() -> sqlarfs::Result<()> {
-    let result = OpenOptions::new()
-        .read_only(true)
-        .init(true)
-        .open_in_memory();
-
-    expect!(result)
-        .to(be_err())
-        .map(|err| err.into_kind())
-        .to(equal(sqlarfs::ErrorKind::InvalidArgs));
-
-    Ok(())
 }

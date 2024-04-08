@@ -4,9 +4,10 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use sqlarfs::{FileMetadata, FileMode, FileType, ListOptions};
+use sqlarfs::{ErrorKind, FileMetadata, FileMode, FileType, ListOptions};
 use xpct::{
-    be_ok, be_some, be_zero, consist_of, contain_element, equal, expect, fields, match_fields, why,
+    be_err, be_ok, be_some, be_zero, consist_of, contain_element, equal, expect, fields,
+    match_fields, why,
 };
 
 use common::{connection, truncate_mtime};
@@ -103,6 +104,34 @@ fn list_all_paths_with_metadata() -> sqlarfs::Result<()> {
 //
 // `Archive::list_with`
 //
+
+#[test]
+fn specifying_mutually_exclusive_sort_options_errors() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let opts = ListOptions::new().by_size().by_mtime();
+
+        expect!(archive.list_with(&opts))
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::InvalidArgs));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn specifying_mutually_exclusive_order_options_errors() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let opts = ListOptions::new().asc().desc();
+
+        expect!(archive.list_with(&opts))
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::InvalidArgs));
+
+        Ok(())
+    })
+}
 
 #[test]
 fn list_with_default_opts() -> sqlarfs::Result<()> {

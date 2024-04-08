@@ -346,10 +346,11 @@ impl<'conn> Store<'conn> {
                 sort: Some(ListSort::Size),
                 ancestor: None,
                 direction,
+                ..
             } => {
                 let stmt = self.tx().prepare(&format!(
                     "SELECT name, mode, mtime, sz FROM sqlar WHERE (mode & ?1) = ?2 ORDER BY sz {}",
-                    direction.as_sql()
+                    direction.unwrap_or_default().as_sql()
                 ))?;
 
                 (stmt, vec![Box::new(TYPE_MASK), Box::new(FILE_MODE)])
@@ -358,10 +359,11 @@ impl<'conn> Store<'conn> {
                 sort: Some(ListSort::Mtime),
                 ancestor: None,
                 direction,
+                ..
             } => {
                 let stmt = self.tx().prepare(&format!(
                     "SELECT name, mode, mtime, sz FROM sqlar ORDER BY mtime {}",
-                    direction.as_sql()
+                    direction.unwrap_or_default().as_sql()
                 ))?;
 
                 (stmt, vec![])
@@ -370,10 +372,11 @@ impl<'conn> Store<'conn> {
                 sort: Some(ListSort::Size),
                 ancestor: Some(ancestor),
                 direction,
+                ..
             } => {
                 let stmt = self.tx().prepare(&format!(
                     "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' AND (mode & ?2) = ?3 ORDER BY sz {}",
-                    direction.as_sql()
+                    direction.unwrap_or_default().as_sql()
                 ))?;
 
                 (
@@ -389,10 +392,11 @@ impl<'conn> Store<'conn> {
                 sort: Some(ListSort::Mtime),
                 ancestor: Some(ancestor),
                 direction,
+                ..
             } => {
                 let stmt = self.tx().prepare(&format!(
                     "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' ORDER BY mtime {}",
-                    direction.as_sql()
+                    direction.unwrap_or_default().as_sql()
                 ))?;
 
                 (

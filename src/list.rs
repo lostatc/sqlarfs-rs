@@ -15,6 +15,12 @@ pub enum SortDirection {
     Desc,
 }
 
+impl Default for SortDirection {
+    fn default() -> Self {
+        Self::Asc
+    }
+}
+
 impl SortDirection {
     // It's important that this is a &'static string; it's used to build SQL queries.
     pub fn as_sql(&self) -> &'static str {
@@ -32,14 +38,13 @@ impl SortDirection {
 /// Unless you specify a sort criteria with [`ListOptions::by_mtime`] or [`ListOptions::by_size`],
 /// the order of the returned files is unspecified.
 ///
-/// You cannot sort by multiple criteria; specifying a sort criteria replaces the previous one.
-///
 /// [`Archive::list_with`]: crate::Archive::list_with
 #[derive(Debug, Clone)]
 pub struct ListOptions {
-    pub(super) direction: SortDirection,
+    pub(super) direction: Option<SortDirection>,
     pub(super) sort: Option<ListSort>,
     pub(super) ancestor: Option<PathBuf>,
+    pub(super) invalid: bool,
 }
 
 impl Default for ListOptions {
@@ -52,14 +57,22 @@ impl ListOptions {
     /// Create a new [`ListOptions`] with default settings.
     pub fn new() -> Self {
         Self {
-            direction: SortDirection::Asc,
+            direction: None,
             sort: None,
             ancestor: None,
+            invalid: false,
         }
     }
 
     /// Sort by last modification time.
+    ///
+    /// This is mutually exclusive with [`ListOptions::by_size`].
     pub fn by_mtime(mut self) -> Self {
+        if self.sort.is_some() {
+            self.invalid = true;
+            return self;
+        }
+
         self.sort = Some(ListSort::Mtime);
 
         self
@@ -68,22 +81,43 @@ impl ListOptions {
     /// Sort by file size.
     ///
     /// If this is specified, then the list will only contain regular files, skipping directories.
+    ///
+    /// This is mutually exclusive with [`ListOptions::by_mtime`].
     pub fn by_size(mut self) -> Self {
+        if self.sort.is_some() {
+            self.invalid = true;
+            return self;
+        }
+
         self.sort = Some(ListSort::Size);
 
         self
     }
 
     /// Sort in ascending order (the default).
+    ///
+    /// This is mutually exclusive with [`ListOptions::desc`].
     pub fn asc(mut self) -> Self {
-        self.direction = SortDirection::Asc;
+        if self.direction.is_some() {
+            self.invalid = true;
+            return self;
+        }
+
+        self.direction = Some(SortDirection::Asc);
 
         self
     }
 
     /// Sort in descending order.
+    ///
+    /// This is mutually exclusive with [`ListOptions::asc`].
     pub fn desc(mut self) -> Self {
-        self.direction = SortDirection::Desc;
+        if self.direction.is_some() {
+            self.invalid = true;
+            return self;
+        }
+
+        self.direction = Some(SortDirection::Desc);
 
         self
     }

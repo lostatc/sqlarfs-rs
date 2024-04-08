@@ -74,7 +74,21 @@ impl<'conn> Archive<'conn> {
     /// Return an iterator over the files in this archive.
     ///
     /// This accepts a [`ListOptions`] to sort and filter the results.
+    ///
+    /// # Errors
+    ///
+    /// - [`ErrorKind::InvalidArgs`]: Mutually exclusive options were specified together in
+    /// [`ListOptions`].
+    ///
+    /// [`ErrorKind::InvalidArgs`]: crate::ErrorKind::InvalidArgs
     pub fn list_with(&mut self, opts: &ListOptions) -> crate::Result<ListEntries> {
+        if opts.invalid {
+            return Err(crate::Error::msg(
+                crate::ErrorKind::InvalidArgs,
+                "Mutually exclusive options where used together in `ListOptions`.",
+            ));
+        }
+
         self.store.list_files(opts)
     }
 

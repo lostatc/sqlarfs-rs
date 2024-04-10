@@ -337,7 +337,7 @@ impl<'conn> Store<'conn> {
                 sqlar
             WHERE
                 iif(?1 = '', true, name GLOB ?1 || '/?*')
-                AND iif(?2 = 0, true, (mode & ?2) = ?3)
+                AND iif(?2 IS NULL, true, (mode & ?2) = ?3)
             ORDER BY
                 {order_column} {direction}
         "
@@ -351,9 +351,9 @@ impl<'conn> Store<'conn> {
                     .unwrap_or_default(),
             ),
             Box::new(if let Some(ListSort::Size) = opts.sort {
-                TYPE_MASK
+                Some(TYPE_MASK)
             } else {
-                0
+                None
             }),
             Box::new(FILE_MODE),
         ];

@@ -4,6 +4,8 @@ use std::time::{self, Duration, SystemTime, UNIX_EPOCH};
 use rusqlite::blob::Blob;
 use rusqlite::{OptionalExtension, Savepoint};
 
+use crate::list::SortDirection;
+
 use super::list::{ListEntries, ListEntry, ListMapFunc, ListOptions, ListSort};
 use super::metadata::{FileMetadata, FileMode, FileType, DIR_MODE, FILE_MODE, TYPE_MASK};
 use super::util::u64_from_usize;
@@ -314,97 +316,47 @@ impl<'conn> Store<'conn> {
     }
 
     pub fn list_files(&self, opts: &ListOptions) -> crate::Result<ListEntries> {
-        // TODO: Address this combinatorial explosion, ideally without using too much string
-        // interpolation to build queries.
-        let (stmt, params): (rusqlite::Statement<'_>, Vec<Box<dyn rusqlite::ToSql>>) = match opts {
-            ListOptions {
-                sort: None,
-                ancestor: None,
-                ..
-            } => {
-                let stmt = self
-                    .tx()
-                    .prepare("SELECT name, mode, mtime, sz FROM sqlar")?;
-
-                (stmt, Vec::new())
-            }
-            ListOptions {
-                sort: None,
-                ancestor: Some(ancestor),
-                ..
-            } => {
-                let stmt = self.tx().prepare(
-                    "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*'",
-                )?;
-
-                (
-                    stmt,
-                    vec![Box::new(ancestor.to_string_lossy().into_owned())],
-                )
-            }
-            ListOptions {
-                sort: Some(ListSort::Size),
-                ancestor: None,
-                direction,
-                ..
-            } => {
-                let stmt = self.tx().prepare(&format!(
-                    "SELECT name, mode, mtime, sz FROM sqlar WHERE (mode & ?1) = ?2 ORDER BY sz {}",
-                    direction.unwrap_or_default().as_sql()
-                ))?;
-
-                (stmt, vec![Box::new(TYPE_MASK), Box::new(FILE_MODE)])
-            }
-            ListOptions {
-                sort: Some(ListSort::Mtime),
-                ancestor: None,
-                direction,
-                ..
-            } => {
-                let stmt = self.tx().prepare(&format!(
-                    "SELECT name, mode, mtime, sz FROM sqlar ORDER BY mtime {}",
-                    direction.unwrap_or_default().as_sql()
-                ))?;
-
-                (stmt, vec![])
-            }
-            ListOptions {
-                sort: Some(ListSort::Size),
-                ancestor: Some(ancestor),
-                direction,
-                ..
-            } => {
-                let stmt = self.tx().prepare(&format!(
-                    "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' AND (mode & ?2) = ?3 ORDER BY sz {}",
-                    direction.unwrap_or_default().as_sql()
-                ))?;
-
-                (
-                    stmt,
-                    vec![
-                        Box::new(ancestor.to_string_lossy().into_owned()),
-                        Box::new(TYPE_MASK),
-                        Box::new(FILE_MODE),
-                    ],
-                )
-            }
-            ListOptions {
-                sort: Some(ListSort::Mtime),
-                ancestor: Some(ancestor),
-                direction,
-                ..
-            } => {
-                let stmt = self.tx().prepare(&format!(
-                    "SELECT name, mode, mtime, sz FROM sqlar WHERE name GLOB ?1 || '/?*' ORDER BY mtime {}",
-                    direction.unwrap_or_default().as_sql()
-                ))?;
-
-                (
-                    stmt,
-                    vec![Box::new(ancestor.to_string_lossy().into_owned())],
-                )
-            }
+        let order_column = match opts.sort {
+            Some(ListSort::Size) => "sz",
+            Some(ListSort::Mtime) => "mtime",
+            // The contract of `Archive::list` and `Archive::list_with` is that default sort order
+            // is unspecified.
+            None => "rowid",
         };
+
+        let direction = match opts.direction {
+            Some(SortDirection::Asc) | None => "ASC",
+            Some(SortDirection::Desc) => "DESC",
+        };
+
+        let stmt = self.tx().prepare(&format!(
+            "
+            SELECT
+                name, mode, mtime, sz
+            FROM
+                sqlar
+            WHERE
+                iif(?1 = '', true, name GLOB ?1 || '/?*')
+                AND iif(?2 = 0, true, (mode & ?2) = ?3)
+            ORDER BY
+                {order_column} {direction}
+        "
+        ))?;
+
+        let params: Vec<Box<dyn rusqlite::ToSql>> = vec![
+            Box::new(
+                opts.ancestor
+                    .as_ref()
+                    .map(|ancestor| ancestor.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
+            ),
+            Box::new(if let Some(ListSort::Size) = opts.sort {
+                TYPE_MASK
+            } else {
+                0
+            }),
+            Box::new(FILE_MODE),
+        ];
 
         let map_func: ListMapFunc = Box::new(|row| {
             let raw_mode = row.get::<_, Option<u32>>(1)?;

@@ -134,6 +134,7 @@ impl<'conn> Archive<'conn> {
         to: Q,
         opts: &ArchiveOptions,
     ) -> crate::Result<()> {
+        // On Unix-like systems, we set the file mode based on the mode bits in the archive.
         #[cfg(unix)]
         archive_tree(
             self,
@@ -143,8 +144,15 @@ impl<'conn> Archive<'conn> {
             &super::mode::UnixModeAdapter,
         )?;
 
+        // On unsupported platforms (currently any non-Unix-like platform), we use the umask.
         #[cfg(not(unix))]
-        todo!("unsupported platform");
+        archive_tree(
+            self,
+            from.as_ref(),
+            to.as_ref(),
+            opts,
+            &super::mode::UmaskModeAdapter::new(self.umask),
+        )?;
 
         Ok(())
     }

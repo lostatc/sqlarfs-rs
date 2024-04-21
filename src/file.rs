@@ -6,7 +6,7 @@ use std::time::SystemTime;
 #[cfg(feature = "deflate")]
 use flate2::write::ZlibEncoder;
 
-use super::metadata::{FileMetadata, FileMode, FileType};
+use super::metadata::{mode_from_umask, FileMetadata, FileMode, FileType};
 use super::store::Store;
 use super::stream::{Compression, FileReader};
 use super::util::u64_from_usize;
@@ -207,23 +207,6 @@ impl<'conn, 'a> File<'conn, 'a> {
         }
     }
 
-    fn default_file_mode(&self) -> FileMode {
-        let default = FileMode::OWNER_R
-            | FileMode::OWNER_W
-            | FileMode::GROUP_R
-            | FileMode::GROUP_W
-            | FileMode::OTHER_R
-            | FileMode::OTHER_W;
-
-        default & !self.umask
-    }
-
-    fn default_dir_mode(&self) -> FileMode {
-        let default = FileMode::OWNER_RWX | FileMode::GROUP_RWX | FileMode::OTHER_RWX;
-
-        default & !self.umask
-    }
-
     /// Create a regular file if it doesn't already exist.
     ///
     /// This sets the file mode based on the current [`File::umask`] and sets the mtime to now. You
@@ -250,7 +233,7 @@ impl<'conn, 'a> File<'conn, 'a> {
         self.store.create_file(
             &self.path,
             FileType::File,
-            self.default_file_mode(),
+            mode_from_umask(FileType::File, self.umask),
             Some(SystemTime::now()),
         )
     }
@@ -281,7 +264,7 @@ impl<'conn, 'a> File<'conn, 'a> {
         self.store.create_file(
             &self.path,
             FileType::Dir,
-            self.default_dir_mode(),
+            mode_from_umask(FileType::Dir, self.umask),
             Some(SystemTime::now()),
         )
     }
@@ -327,7 +310,7 @@ impl<'conn, 'a> File<'conn, 'a> {
         }
 
         let path = PathBuf::from(&self.path);
-        let mode = self.default_dir_mode();
+        let mode = mode_from_umask(FileType::Dir, self.umask);
         // Each parent directory should have the same mtime.
         let mtime = SystemTime::now();
 

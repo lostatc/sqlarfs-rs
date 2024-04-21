@@ -129,6 +129,22 @@ impl FileMode {
     }
 }
 
+pub fn mode_from_umask(kind: FileType, umask: FileMode) -> FileMode {
+    let default = match kind {
+        FileType::File => {
+            FileMode::OWNER_R
+                | FileMode::OWNER_W
+                | FileMode::GROUP_R
+                | FileMode::GROUP_W
+                | FileMode::OTHER_R
+                | FileMode::OTHER_W
+        }
+        FileType::Dir => FileMode::OWNER_RWX | FileMode::GROUP_RWX | FileMode::OTHER_RWX,
+    };
+
+    default & !umask
+}
+
 #[cfg(test)]
 mod tests {
     use xpct::{be_none, be_some, equal, expect};

@@ -5,9 +5,20 @@ use std::path::Path;
 use super::archive::Archive;
 use super::mode::{ReadMode, WriteMode};
 
+/// Options for archiving a filesystem directory tree to an [`Archive`].
+///
+/// This is used with [`Archive::archive`].
+///
+/// [`Archive`]: crate::Archive
+/// [`Archive::archive`]: crate::Archive::archive
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct ArchiveOptions {
+    /// Follow symbolic links.
+    ///
+    /// If this is `false`, symbolic links will be silently skipped.
+    ///
+    /// The default is `true`.
     follow_symlinks: bool,
 }
 

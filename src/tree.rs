@@ -35,19 +35,20 @@ fn read_metadata(path: &Path, follow_symlinks: bool) -> crate::Result<fs::Metada
 
 pub fn archive_tree<T>(
     archive: &mut Archive,
-    root: &Path,
+    src_root: &Path,
+    dest_root: &Path,
     opts: &ArchiveOptions,
     mode_adapter: &T,
 ) -> crate::Result<()>
 where
     T: ReadMode + WriteMode,
 {
-    let metadata = read_metadata(root, opts.follow_symlinks)?;
+    let metadata = read_metadata(src_root, opts.follow_symlinks)?;
 
     // When `std::io::ErrorKind::NotADirectory` is stable, we can catch that error when it's
     // returned by `std::fs::read_dir` instead of reading the metadata first. As written, this
     // presents a race condition, as the file might change from a non-directory to a directory
-    // before between now and when we try to iterate over its children.
+    // between now and when we try to iterate over its children.
     if !metadata.is_dir() {
         return Err(crate::Error::msg(
             crate::ErrorKind::NotADirectory,
@@ -55,9 +56,15 @@ where
         ));
     }
 
-    let mut stack = fs::read_dir(root)?
-        .map(|entry| entry.map(|entry| entry.path()))
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut stack = if dest_root == Path::new("") {
+        // Archive the children of `src_root` into the root of the archive.
+        fs::read_dir(src_root)?
+            .map(|entry| entry.map(|entry| entry.path()))
+            .collect::<Result<Vec<_>, _>>()?
+    } else {
+        // Archive `src_root` to `dest_root`.
+        vec![src_root.to_path_buf()]
+    };
 
     while let Some(path) = stack.pop() {
         let metadata = read_metadata(&path, opts.follow_symlinks)?;
@@ -71,16 +78,18 @@ where
             continue;
         };
 
-        let relative_path = match path.strip_prefix(root) {
+        let relative_path = match path.strip_prefix(src_root) {
             Ok(path) => path,
             Err(_) => {
                 panic!("Could not get path relative to ancestor while walking the directory tree. This is a bug.")
             }
         };
 
+        let dest_path = dest_root.join(relative_path);
+
         let mode = mode_adapter.read_mode(&path, &metadata)?;
 
-        let mut archive_file = archive.open(relative_path)?;
+        let mut archive_file = archive.open(dest_path)?;
         archive_file.create_with(file_type, mode, metadata.modified().ok())?;
 
         match file_type {

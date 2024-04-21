@@ -111,24 +111,37 @@ impl<'conn> Archive<'conn> {
         self.store.list_files(opts)
     }
 
-    /// Copy the directory tree at `root` into the archive.
+    /// Copy the filesystem directory tree at `from` into the archive at `to`.
     ///
-    /// All paths in the archive will be relative to `root`. The `root` directory itself is not
-    /// copied into the archive.
+    /// To copy the children of `from` into the root of the archive, pass an empty path for `to`.
     ///
     /// # Errors
     ///
-    /// - [`ErrorKind::NotFound`]: There is no file or directory at `root`.
-    /// - [`ErrorKind::NotADirectory`]: The file at `root` is not a directory.
-    /// - [`ErrorKind::AlreadyExists`]: One of the files in `root` would overwrite an existing file
+    /// - [`ErrorKind::NotFound`]: There is no file or directory at `from`.
+    /// - [`ErrorKind::NotADirectory`]: The file at `from` is not a directory.
+    /// - [`ErrorKind::AlreadyExists`]: One of the files in `from` would overwrite an existing file
     /// in the archive.
+    /// - [`ErrorKind::InvalidArgs`]: The given `to` path is an absolute path.
+    /// - [`ErrorKind::InvalidArgs`]: The given `to` path is not valid Unicode.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
-    pub fn archive<P: AsRef<Path>>(&mut self, root: P, opts: &ArchiveOptions) -> crate::Result<()> {
+    /// [`ErrorKind::InvalidArgs`]: crate::ErrorKind::InvalidArgs
+    pub fn archive<P: AsRef<Path>, Q: AsRef<Path>>(
+        &mut self,
+        from: P,
+        to: Q,
+        opts: &ArchiveOptions,
+    ) -> crate::Result<()> {
         #[cfg(unix)]
-        archive_tree(self, root.as_ref(), opts, &super::mode::UnixModeAdapter)?;
+        archive_tree(
+            self,
+            from.as_ref(),
+            to.as_ref(),
+            opts,
+            &super::mode::UnixModeAdapter,
+        )?;
 
         #[cfg(not(unix))]
         todo!("unsupported platform");

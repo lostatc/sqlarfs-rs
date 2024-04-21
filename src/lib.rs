@@ -53,10 +53,12 @@ mod error;
 mod file;
 mod list;
 mod metadata;
+mod mode;
 mod open;
 mod store;
 mod stream;
 mod transaction;
+mod tree;
 mod util;
 
 pub use archive::Archive;

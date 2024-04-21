@@ -5,6 +5,7 @@ use crate::FileMode;
 use super::file::File;
 use super::list::{ListEntries, ListOptions};
 use super::store::Store;
+use super::tree::{archive_tree, ArchiveOptions};
 
 /// A SQLite archive.
 ///
@@ -108,6 +109,31 @@ impl<'conn> Archive<'conn> {
         }
 
         self.store.list_files(opts)
+    }
+
+    /// Copy the directory tree at `root` into the archive.
+    ///
+    /// All paths in the archive will be relative to `root`. The `root` directory itself is not
+    /// copied into the archive.
+    ///
+    /// # Errors
+    ///
+    /// - [`ErrorKind::NotFound`]: There is no file or directory at `root`.
+    /// - [`ErrorKind::NotADirectory`]: The file at `root` is not a directory.
+    /// - [`ErrorKind::AlreadyExists`]: One of the files in `root` would overwrite an existing file
+    /// in the archive.
+    ///
+    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
+    /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
+    /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
+    pub fn archive<P: AsRef<Path>>(&mut self, root: P, opts: &ArchiveOptions) -> crate::Result<()> {
+        #[cfg(unix)]
+        archive_tree(self, root.as_ref(), opts, &super::mode::UnixModeAdapter)?;
+
+        #[cfg(not(unix))]
+        todo!("unsupported platform");
+
+        Ok(())
     }
 
     /// The current umask for newly created files and directories.

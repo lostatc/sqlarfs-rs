@@ -54,20 +54,10 @@ pub fn archive_tree<T>(
 where
     T: ReadMode + WriteMode,
 {
-    let metadata = read_metadata(src_root, opts.follow_symlinks)?;
+    let source_is_dir = read_metadata(src_root, opts.follow_symlinks)?.is_dir();
+    let dest_is_root = dest_root == Path::new("");
 
-    // When `std::io::ErrorKind::NotADirectory` is stable, we can catch that error when it's
-    // returned by `std::fs::read_dir` instead of reading the metadata first. As written, this
-    // presents a race condition, as the file might change from a non-directory to a directory
-    // between now and when we try to iterate over its children.
-    if !metadata.is_dir() {
-        return Err(crate::Error::msg(
-            crate::ErrorKind::NotADirectory,
-            "Cannot archive a file that is not a directory.",
-        ));
-    }
-
-    let mut stack = if dest_root == Path::new("") {
+    let mut stack = if source_is_dir && dest_is_root {
         // Archive the children of `src_root` into the root of the archive.
         fs::read_dir(src_root)?
             .map(|entry| entry.map(|entry| entry.path()))

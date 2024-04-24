@@ -113,19 +113,19 @@ impl<'conn> Archive<'conn> {
 
     /// Copy the filesystem directory tree at `from` into the archive at `to`.
     ///
+    /// The file at `from` may be either a directory or a regular file.
+    ///
     /// To copy the children of `from` into the root of the archive, pass an empty path for `to`.
     ///
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: There is no file or directory at `from`.
-    /// - [`ErrorKind::NotADirectory`]: The file at `from` is not a directory.
     /// - [`ErrorKind::AlreadyExists`]: One of the files in `from` would overwrite an existing file
     /// in the archive.
     /// - [`ErrorKind::InvalidArgs`]: The given `to` path is an absolute path.
     /// - [`ErrorKind::InvalidArgs`]: The given `to` path is not valid Unicode.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
-    /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
     /// [`ErrorKind::InvalidArgs`]: crate::ErrorKind::InvalidArgs
     pub fn archive<P: AsRef<Path>, Q: AsRef<Path>>(

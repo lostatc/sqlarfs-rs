@@ -13,6 +13,7 @@ ouroboros = "0.18.3"
 rusqlite = { version = "0.31.0", features = ["bundled", "blob"] }
 
 [dev-dependencies]
+nix = { version = "0.28.0", features = ["fs"] }
 rand = { version = "0.8.5", features = ["small_rng"] }
 tempfile = "3.10.1"
 xpct = { version = "0.5.1", features = ["diff"] }

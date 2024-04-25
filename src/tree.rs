@@ -93,8 +93,6 @@ fn read_metadata(path: &Path, follow_symlinks: bool) -> crate::Result<fs::Metada
     }
 }
 
-// TODO: Think real hard about whether you want this to work like `cp` and what the behavior should
-// be when an empty path is passed for `dest_root`.
 pub fn archive_tree<T>(
     archive: &mut Archive,
     src_root: &Path,

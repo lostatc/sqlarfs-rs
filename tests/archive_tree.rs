@@ -122,7 +122,7 @@ fn archiving_preserves_unix_file_mode() -> sqlarfs::Result<()> {
     let temp_file = tempfile::NamedTempFile::new()?;
     fs::set_permissions(temp_file.path(), fs::Permissions::from_mode(expected_mode))?;
 
-    // A sanity check to guard against false positives.
+    // A sanity check to guard against tests passing when they shouldn't.
     expect!(fs::metadata(temp_file.path())?)
         .map(|metadata| metadata.permissions().mode())
         .to_not(equal(expected_mode));
@@ -471,7 +471,7 @@ fn archiving_does_not_preserve_unix_file_mode() -> sqlarfs::Result<()> {
     let temp_file = tempfile::NamedTempFile::new()?;
     fs::set_permissions(temp_file.path(), fs::Permissions::from_mode(expected_mode))?;
 
-    // A sanity check to guard against false positives.
+    // A sanity check to guard against tests passing when they shouldn't.
     expect!(fs::metadata(temp_file.path())?)
         .map(|metadata| metadata.permissions().mode())
         .to_not(equal(expected_mode));

@@ -38,6 +38,11 @@ pub struct ArchiveOptions {
     ///
     /// The default is `true`.
     pub recursive: bool,
+
+    /// Preserve file metadata when copying files into the archive.
+    ///
+    /// The default is `true`.
+    pub preserve: bool,
 }
 
 impl Default for ArchiveOptions {
@@ -46,6 +51,7 @@ impl Default for ArchiveOptions {
             dereference: true,
             children: false,
             recursive: true,
+            preserve: true,
         }
     }
 }
@@ -104,15 +110,23 @@ where
         );
         dbg!(&dest_path);
 
-        let mode = mode_adapter.read_mode(&path, &metadata)?;
-
-        // `std::fs::Metadata::modified` returns an error when mtime isn't available on the current
-        // platform, in which case we just don't set the mtime in the archive.
-        let mtime = metadata.modified().ok();
-
-        // Create the file with its metadata.
         let mut archive_file = archive.open(dest_path)?;
-        archive_file.create_with(file_type, mode, mtime)?;
+
+        if opts.preserve {
+            let mode = mode_adapter.read_mode(&path, &metadata)?;
+
+            // `std::fs::Metadata::modified` returns an error when mtime isn't available on the current
+            // platform, in which case we just don't set the mtime in the archive.
+            let mtime = metadata.modified().ok();
+
+            // Create the file with its metadata.
+            archive_file.create_with(file_type, mode, mtime)?;
+        } else {
+            match file_type {
+                FileType::File => archive_file.create_file()?,
+                FileType::Dir => archive_file.create_dir()?,
+            }
+        }
 
         match file_type {
             FileType::File => {

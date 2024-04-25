@@ -120,12 +120,16 @@ impl<'conn> Archive<'conn> {
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: There is no file or directory at `from`.
+    /// - [`ErrorKind::NotFound`]: [`ArchiveOptions::children`] was `true` and `to` does not exist.
+    /// - [`ErrorKind::NotADirectory`]: [`ArchiveOptions::children`] was `true` and the file at
+    /// `to` already exists and is not a directory.
     /// - [`ErrorKind::AlreadyExists`]: One of the files in `from` would overwrite an existing file
     /// in the archive.
     /// - [`ErrorKind::InvalidArgs`]: The given `to` path is an absolute path.
     /// - [`ErrorKind::InvalidArgs`]: The given `to` path is not valid Unicode.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
+    /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
     /// [`ErrorKind::InvalidArgs`]: crate::ErrorKind::InvalidArgs
     pub fn archive<P: AsRef<Path>, Q: AsRef<Path>>(

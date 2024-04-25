@@ -3,6 +3,7 @@ use std::io;
 use std::path::Path;
 
 use super::archive::Archive;
+use super::metadata::FileType;
 use super::mode::{ReadMode, WriteMode};
 
 /// Options for archiving a filesystem directory tree to an [`Archive`].
@@ -19,13 +20,21 @@ pub struct ArchiveOptions {
     /// If this is `false`, symbolic links will be silently skipped.
     ///
     /// The default is `true`.
-    follow_symlinks: bool,
+    pub dereference: bool,
+
+    /// Archive the children of the source directory instead of the source directory itself.
+    ///
+    /// This puts the children of the source directory into the given destination directory.
+    ///
+    /// The default is `false`.
+    pub children: bool,
 }
 
 impl Default for ArchiveOptions {
     fn default() -> Self {
         Self {
-            follow_symlinks: true,
+            dereference: true,
+            children: false,
         }
     }
 }
@@ -44,6 +53,8 @@ fn read_metadata(path: &Path, follow_symlinks: bool) -> crate::Result<fs::Metada
     }
 }
 
+// TODO: Think real hard about whether you want this to work like `cp` and what the behavior should
+// be when an empty path is passed for `dest_root`.
 pub fn archive_tree<T>(
     archive: &mut Archive,
     src_root: &Path,
@@ -54,51 +65,51 @@ pub fn archive_tree<T>(
 where
     T: ReadMode + WriteMode,
 {
-    let source_is_dir = read_metadata(src_root, opts.follow_symlinks)?.is_dir();
-    let dest_is_root = dest_root == Path::new("");
+    let src_is_dir = read_metadata(src_root, opts.dereference)?.is_dir();
 
-    let mut stack = if source_is_dir && dest_is_root {
-        // Archive the children of `src_root` into the root of the archive.
+    let mut stack = if opts.children && src_is_dir {
         fs::read_dir(src_root)?
             .map(|entry| entry.map(|entry| entry.path()))
             .collect::<Result<Vec<_>, _>>()?
     } else {
-        // Archive `src_root` to `dest_root`.
         vec![src_root.to_path_buf()]
     };
 
     while let Some(path) = stack.pop() {
-        let metadata = read_metadata(&path, opts.follow_symlinks)?;
+        let metadata = read_metadata(&path, opts.dereference)?;
 
         let file_type = if metadata.is_file() {
-            crate::FileType::File
+            FileType::File
         } else if metadata.is_dir() {
-            crate::FileType::Dir
+            FileType::Dir
         } else {
             // We ignore special files.
             continue;
         };
 
-        let relative_path = match path.strip_prefix(src_root) {
-            Ok(path) => path,
-            Err(_) => {
-                panic!("Could not get path relative to ancestor while walking the directory tree. This is a bug.")
-            }
-        };
-
-        let dest_path = dest_root.join(relative_path);
+        let dest_path = dest_root.join(path
+            .strip_prefix(src_root)
+            .expect("Could not get path relative to ancestor while walking the directory tree. This is a bug.")
+        );
+        dbg!(&dest_path);
 
         let mode = mode_adapter.read_mode(&path, &metadata)?;
 
+        // `std::fs::Metadata::modified` returns an error when mtime isn't available on the current
+        // platform, in which case we just don't set the mtime in the archive.
+        let mtime = metadata.modified().ok();
+
+        // Create the file with its metadata.
         let mut archive_file = archive.open(dest_path)?;
-        archive_file.create_with(file_type, mode, metadata.modified().ok())?;
+        archive_file.create_with(file_type, mode, mtime)?;
 
         match file_type {
-            crate::FileType::File => {
+            FileType::File => {
+                // Copy the file contents.
                 let mut fs_file = fs::File::open(&path)?;
                 archive_file.write_file(&mut fs_file)?;
             }
-            crate::FileType::Dir => {
+            FileType::Dir => {
                 for entry in fs::read_dir(&path)? {
                     let entry = entry?;
                     let path = entry.path();

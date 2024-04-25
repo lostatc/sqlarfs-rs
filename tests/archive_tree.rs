@@ -16,7 +16,7 @@ use xpct::{approx_eq_time, be_err, be_false, be_ok, be_some, be_true, equal, exp
 #[test]
 fn archiving_when_source_path_does_not_exist_errors() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        expect!(archive.archive("nonexistent", "", &ArchiveOptions::default()))
+        expect!(archive.archive("nonexistent", ""))
             .to(be_err())
             .map(|err| err.into_kind())
             .to(equal(ErrorKind::NotFound));
@@ -33,7 +33,7 @@ fn archiving_when_dest_path_already_exists_errors() -> sqlarfs::Result<()> {
         let mut target = archive.open("file")?;
         target.create_file()?;
 
-        expect!(archive.archive(temp_file.path(), "file", &ArchiveOptions::default()))
+        expect!(archive.archive(temp_file.path(), "file"))
             .to(be_err())
             .map(|err| err.into_kind())
             .to(equal(ErrorKind::AlreadyExists));
@@ -47,7 +47,7 @@ fn archiving_when_dest_path_is_absolute_errors() -> sqlarfs::Result<()> {
     let temp_file = tempfile::NamedTempFile::new()?;
 
     connection()?.exec(|archive| {
-        expect!(archive.archive(temp_file.path(), "/file", &ArchiveOptions::default()))
+        expect!(archive.archive(temp_file.path(), "/file"))
             .to(be_err())
             .map(|err| err.into_kind())
             .to(equal(ErrorKind::InvalidArgs));
@@ -64,14 +64,10 @@ fn archiving_when_dest_path_is_not_valid_unicode_errors() -> sqlarfs::Result<()>
     let temp_file = tempfile::NamedTempFile::new()?;
 
     connection()?.exec(|archive| {
-        expect!(archive.archive(
-            temp_file.path(),
-            OsStr::from_bytes(b"invalid-unicode-\xff"),
-            &ArchiveOptions::default()
-        ))
-        .to(be_err())
-        .map(|err| err.into_kind())
-        .to(equal(ErrorKind::InvalidArgs));
+        expect!(archive.archive(temp_file.path(), OsStr::from_bytes(b"invalid-unicode-\xff"),))
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::InvalidArgs));
 
         Ok(())
     })
@@ -82,7 +78,7 @@ fn archive_regular_file() -> sqlarfs::Result<()> {
     let temp_file = tempfile::NamedTempFile::new()?;
 
     connection()?.exec(|archive| {
-        expect!(archive.archive(temp_file.path(), "file", &ArchiveOptions::default())).to(be_ok());
+        expect!(archive.archive(temp_file.path(), "file")).to(be_ok());
 
         let file = archive.open("file")?;
 
@@ -101,7 +97,7 @@ fn archive_empty_directory() -> sqlarfs::Result<()> {
     let temp_dir = tempfile::tempdir()?;
 
     connection()?.exec(|archive| {
-        expect!(archive.archive(temp_dir.path(), "dir", &ArchiveOptions::default())).to(be_ok());
+        expect!(archive.archive(temp_dir.path(), "dir")).to(be_ok());
 
         let file = archive.open("dir")?;
 
@@ -132,7 +128,7 @@ fn archiving_preserves_unix_file_mode() -> sqlarfs::Result<()> {
         .to_not(equal(expected_mode));
 
     connection()?.exec(|archive| {
-        expect!(archive.archive(temp_file.path(), "file", &ArchiveOptions::default())).to(be_ok());
+        expect!(archive.archive(temp_file.path(), "file")).to(be_ok());
 
         let file = archive.open("file")?;
 
@@ -155,7 +151,7 @@ fn archiving_preserves_file_mtime() -> sqlarfs::Result<()> {
     temp_file.as_file().set_modified(expected_mtime)?;
 
     connection()?.exec(|archive| {
-        expect!(archive.archive(temp_file.path(), "file", &ArchiveOptions::default())).to(be_ok());
+        expect!(archive.archive(temp_file.path(), "file")).to(be_ok());
 
         let file = archive.open("file")?;
 
@@ -187,7 +183,7 @@ fn archiving_skips_special_files() -> sqlarfs::Result<()> {
     })?;
 
     connection()?.exec(|archive| {
-        expect!(archive.archive(temp_dir.path(), "dir", &ArchiveOptions::default())).to(be_ok());
+        expect!(archive.archive(temp_dir.path(), "dir")).to(be_ok());
 
         let special_file = archive.open("fifo")?;
 
@@ -224,7 +220,7 @@ fn archiving_follows_symlinks() -> sqlarfs::Result<()> {
     })?;
 
     connection()?.exec(|archive| {
-        expect!(archive.archive(temp_dir.path(), "dir", &ArchiveOptions::default())).to(be_ok());
+        expect!(archive.archive(temp_dir.path(), "dir")).to(be_ok());
 
         let symlink = archive.open("dir/symlink")?;
 
@@ -264,7 +260,7 @@ fn archiving_does_not_follow_symlinks() -> sqlarfs::Result<()> {
         let mut opts = ArchiveOptions::default();
         opts.dereference = false;
 
-        expect!(archive.archive(temp_dir.path(), "dir", &opts)).to(be_ok());
+        expect!(archive.archive_with(temp_dir.path(), "dir", &opts)).to(be_ok());
 
         let symlink = archive.open("dir/symlink")?;
 
@@ -293,7 +289,7 @@ fn archive_directory_children_to_target() -> sqlarfs::Result<()> {
         let mut opts = ArchiveOptions::default();
         opts.children = true;
 
-        expect!(archive.archive(temp_dir.path(), "dir", &opts,)).to(be_ok());
+        expect!(archive.archive_with(temp_dir.path(), "dir", &opts,)).to(be_ok());
 
         let file = archive.open("dir/file")?;
 
@@ -319,7 +315,7 @@ fn archive_directory_children_to_archive_root() -> sqlarfs::Result<()> {
     opts.children = true;
 
     connection()?.exec(|archive| {
-        expect!(archive.archive(temp_dir.path(), "", &opts)).to(be_ok());
+        expect!(archive.archive_with(temp_dir.path(), "", &opts)).to(be_ok());
 
         let file = archive.open("file")?;
 
@@ -348,7 +344,7 @@ fn archiving_directory_children_when_target_is_file_errors() -> sqlarfs::Result<
         let mut opts = ArchiveOptions::default();
         opts.children = true;
 
-        expect!(archive.archive(temp_dir.path(), "file", &opts))
+        expect!(archive.archive_with(temp_dir.path(), "file", &opts))
             .to(be_err())
             .map(|err| err.into_kind())
             .to(equal(ErrorKind::NotADirectory));
@@ -369,7 +365,7 @@ fn archiving_directory_children_when_target_doest_not_exist_errors() -> sqlarfs:
         let mut opts = ArchiveOptions::default();
         opts.children = true;
 
-        expect!(archive.archive(temp_dir.path(), "dir", &opts))
+        expect!(archive.archive_with(temp_dir.path(), "dir", &opts))
             .to(be_err())
             .map(|err| err.into_kind())
             .to(equal(ErrorKind::NotFound));
@@ -386,7 +382,7 @@ fn archive_directory_children_when_source_is_file() -> sqlarfs::Result<()> {
         let mut opts = ArchiveOptions::default();
         opts.children = true;
 
-        expect!(archive.archive(temp_file.path(), "file", &opts)).to(be_ok());
+        expect!(archive.archive_with(temp_file.path(), "file", &opts)).to(be_ok());
 
         let file = archive.open("file")?;
 
@@ -416,7 +412,7 @@ fn archive_non_recursively() -> sqlarfs::Result<()> {
         let mut opts = ArchiveOptions::default();
         opts.recursive = false;
 
-        expect!(archive.archive(temp_dir.path(), "dir", &opts)).to(be_ok());
+        expect!(archive.archive_with(temp_dir.path(), "dir", &opts)).to(be_ok());
 
         let dir = archive.open("dir")?;
         expect!(dir.exists()).to(be_ok()).to(be_true());
@@ -444,7 +440,7 @@ fn archiving_does_not_preserve_file_mtime() -> sqlarfs::Result<()> {
         let mut opts = ArchiveOptions::default();
         opts.preserve = false;
 
-        expect!(archive.archive(temp_file.path(), "file", &opts)).to(be_ok());
+        expect!(archive.archive_with(temp_file.path(), "file", &opts)).to(be_ok());
 
         let file = archive.open("file")?;
 
@@ -484,7 +480,7 @@ fn archiving_does_not_preserve_unix_file_mode() -> sqlarfs::Result<()> {
         let mut opts = ArchiveOptions::default();
         opts.preserve = false;
 
-        expect!(archive.archive(temp_file.path(), "file", &opts)).to(be_ok());
+        expect!(archive.archive_with(temp_file.path(), "file", &opts)).to(be_ok());
 
         let file = archive.open("file")?;
 

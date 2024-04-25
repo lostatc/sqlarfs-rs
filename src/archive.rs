@@ -68,6 +68,8 @@ impl<'conn> Archive<'conn> {
     }
 
     /// Return an iterator over the files in this archive.
+    ///
+    /// This is the same as [`Archive::list_with`], but using the default options.
     pub fn list(&mut self) -> crate::Result<ListEntries> {
         self.store.list_files(&ListOptions::new())
     }
@@ -113,9 +115,14 @@ impl<'conn> Archive<'conn> {
 
     /// Copy the filesystem directory tree at `from` into the archive at `to`.
     ///
-    /// The file at `from` may be either a directory or a regular file.
+    /// This is the same as [`Archive::archive_with`], but using the default options.
+    pub fn archive<P: AsRef<Path>, Q: AsRef<Path>>(&mut self, from: P, to: Q) -> crate::Result<()> {
+        self.archive_with(from, to, &Default::default())
+    }
+
+    /// Copy the filesystem directory tree at `from` into the archive at `to`.
     ///
-    /// To copy the children of `from` into the root of the archive, pass an empty path for `to`.
+    /// The file at `from` may be either a directory or a regular file.
     ///
     /// # Errors
     ///
@@ -132,7 +139,7 @@ impl<'conn> Archive<'conn> {
     /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
     /// [`ErrorKind::InvalidArgs`]: crate::ErrorKind::InvalidArgs
-    pub fn archive<P: AsRef<Path>, Q: AsRef<Path>>(
+    pub fn archive_with<P: AsRef<Path>, Q: AsRef<Path>>(
         &mut self,
         from: P,
         to: Q,

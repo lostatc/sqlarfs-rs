@@ -201,6 +201,83 @@ fn archiving_skips_special_files() -> sqlarfs::Result<()> {
 }
 
 //
+// `ArchiveOptions::dereference`
+//
+
+#[test]
+#[cfg(unix)]
+fn archiving_follows_symlinks() -> sqlarfs::Result<()> {
+    use nix::unistd::symlinkat;
+
+    let temp_dir = tempfile::tempdir()?;
+    let symlink_target = tempfile::NamedTempFile::new()?;
+
+    symlinkat(
+        symlink_target.path(),
+        None,
+        &temp_dir.path().join("symlink"),
+    )
+    .map_err(|err| {
+        Error::new(
+            ErrorKind::Io {
+                kind: io::ErrorKind::Other,
+            },
+            err,
+        )
+    })?;
+
+    connection()?.exec(|archive| {
+        expect!(archive.archive(temp_dir.path(), "dir", &ArchiveOptions::default())).to(be_ok());
+
+        let symlink = archive.open("dir/symlink")?;
+
+        expect!(symlink.exists()).to(be_ok()).to(be_true());
+        expect!(symlink.metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.is_file())
+            .to(be_true());
+
+        Ok(())
+    })
+}
+
+#[test]
+#[cfg(unix)]
+fn archiving_does_not_follow_symlinks() -> sqlarfs::Result<()> {
+    use nix::unistd::symlinkat;
+
+    let temp_dir = tempfile::tempdir()?;
+    let symlink_target = tempfile::NamedTempFile::new()?;
+
+    symlinkat(
+        symlink_target.path(),
+        None,
+        &temp_dir.path().join("symlink"),
+    )
+    .map_err(|err| {
+        Error::new(
+            ErrorKind::Io {
+                kind: io::ErrorKind::Other,
+            },
+            err,
+        )
+    })?;
+
+    connection()?.exec(|archive| {
+        let mut opts = ArchiveOptions::default();
+        opts.dereference = false;
+
+        expect!(archive.archive(temp_dir.path(), "dir", &opts)).to(be_ok());
+
+        let symlink = archive.open("dir/symlink")?;
+
+        expect!(symlink.exists()).to(be_ok()).to(be_false());
+
+        Ok(())
+    })
+}
+
+//
 // `ArchiveOptions::children`
 //
 

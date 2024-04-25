@@ -16,7 +16,7 @@ use xpct::{approx_eq_time, be_err, be_false, be_ok, be_some, be_true, equal, exp
 #[test]
 fn archiving_when_source_path_does_not_exist_errors() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        expect!(archive.archive("nonexistent", ""))
+        expect!(archive.archive("nonexistent", "dest"))
             .to(be_err())
             .map(|err| err.into_kind())
             .to(equal(ErrorKind::NotFound));
@@ -272,6 +272,20 @@ fn archiving_does_not_follow_symlinks() -> sqlarfs::Result<()> {
 //
 // `ArchiveOptions::children`
 //
+
+#[test]
+fn archiving_fails_when_source_is_root_and_children_is_false() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let temp_file = tempfile::NamedTempFile::new()?;
+
+        expect!(archive.archive(temp_file.path(), ""))
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::InvalidArgs));
+
+        Ok(())
+    })
+}
 
 #[test]
 fn archive_directory_children_to_target() -> sqlarfs::Result<()> {

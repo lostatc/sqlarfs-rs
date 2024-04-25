@@ -105,6 +105,13 @@ pub fn archive_tree<T>(
 where
     T: ReadMode + WriteMode,
 {
+    if dest_root == Path::new("") && !opts.children {
+        return Err(crate::Error::msg(
+            crate::ErrorKind::InvalidArgs,
+            "Cannot use an empty path as the destination directory unless archiving the children of the source directory."
+        ));
+    }
+
     let src_is_dir = read_metadata(src_root, opts.follow_symlinks)?.is_dir();
 
     let mut stack = if opts.children && src_is_dir {

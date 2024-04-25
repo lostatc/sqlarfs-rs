@@ -5,7 +5,7 @@ use crate::FileMode;
 use super::file::File;
 use super::list::{ListEntries, ListOptions};
 use super::store::Store;
-use super::tree::{archive_tree, ArchiveOptions};
+use super::tree::{archive_tree, extract_tree, ArchiveOptions};
 
 /// A SQLite archive.
 ///
@@ -163,6 +163,29 @@ impl<'conn> Archive<'conn> {
             from.as_ref(),
             to.as_ref(),
             opts,
+            &super::mode::UmaskModeAdapter::new(self.umask),
+        )?;
+
+        Ok(())
+    }
+
+    /// Copy the directory tree in the archive at `from` into the filesystem at `to`.
+    pub fn extract<P: AsRef<Path>, Q: AsRef<Path>>(&mut self, from: P, to: Q) -> crate::Result<()> {
+        // On Unix-like systems, we set the file mode based on the mode bits in the archive.
+        #[cfg(unix)]
+        extract_tree(
+            self,
+            from.as_ref(),
+            to.as_ref(),
+            &super::mode::UnixModeAdapter,
+        )?;
+
+        // On unsupported platforms (currently any non-Unix-like platform), we use the umask.
+        #[cfg(not(unix))]
+        extract_tree(
+            self,
+            from.as_ref(),
+            to.as_ref(),
             &super::mode::UmaskModeAdapter::new(self.umask),
         )?;
 

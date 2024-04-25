@@ -1,10 +1,9 @@
 use std::fs;
 #[cfg(unix)]
-use std::os::unix::fs::MetadataExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
 
 use super::metadata::FileMode;
-#[cfg(not(unix))]
 use super::metadata::{mode_from_umask, FileType};
 
 pub trait ReadMode {
@@ -26,25 +25,26 @@ impl ReadMode for UnixModeAdapter {
 }
 
 impl WriteMode for UnixModeAdapter {
-    fn write_mode(&self, _path: &Path, _mode: FileMode) -> crate::Result<()> {
-        todo!()
+    fn write_mode(&self, path: &Path, mode: FileMode) -> crate::Result<()> {
+        let mut perms = fs::metadata(path)?.permissions();
+        perms.set_mode(mode.bits());
+        fs::set_permissions(path, perms)?;
+        Ok(())
     }
 }
 
 #[derive(Debug)]
-#[cfg(not(unix))]
 pub struct UmaskModeAdapter {
     umask: FileMode,
 }
 
-#[cfg(not(unix))]
 impl UmaskModeAdapter {
+    #[cfg(not(unix))]
     pub fn new(umask: FileMode) -> Self {
         Self { umask }
     }
 }
 
-#[cfg(not(unix))]
 impl ReadMode for UmaskModeAdapter {
     fn read_mode(&self, _path: &Path, metadata: &fs::Metadata) -> crate::Result<FileMode> {
         let kind = if metadata.is_dir() {
@@ -57,7 +57,6 @@ impl ReadMode for UmaskModeAdapter {
     }
 }
 
-#[cfg(not(unix))]
 impl WriteMode for UmaskModeAdapter {
     fn write_mode(&self, _path: &Path, _mode: FileMode) -> crate::Result<()> {
         // Do nothing; use the default permissions set by the OS.

@@ -257,8 +257,7 @@ fn archiving_does_not_follow_symlinks() -> sqlarfs::Result<()> {
     })?;
 
     connection()?.exec(|archive| {
-        let mut opts = ArchiveOptions::default();
-        opts.dereference = false;
+        let opts = ArchiveOptions::new().follow_symlinks(false);
 
         expect!(archive.archive_with(temp_dir.path(), "dir", &opts)).to(be_ok());
 
@@ -286,8 +285,7 @@ fn archive_directory_children_to_target() -> sqlarfs::Result<()> {
         let mut target = archive.open("dir")?;
         target.create_dir()?;
 
-        let mut opts = ArchiveOptions::default();
-        opts.children = true;
+        let opts = ArchiveOptions::new().children(true);
 
         expect!(archive.archive_with(temp_dir.path(), "dir", &opts,)).to(be_ok());
 
@@ -311,8 +309,7 @@ fn archive_directory_children_to_archive_root() -> sqlarfs::Result<()> {
         .create_new(true)
         .open(temp_dir.path().join("file"))?;
 
-    let mut opts = ArchiveOptions::default();
-    opts.children = true;
+    let opts = ArchiveOptions::new().children(true);
 
     connection()?.exec(|archive| {
         expect!(archive.archive_with(temp_dir.path(), "", &opts)).to(be_ok());
@@ -341,8 +338,7 @@ fn archiving_directory_children_when_target_is_file_errors() -> sqlarfs::Result<
         let mut target = archive.open("file")?;
         target.create_file()?;
 
-        let mut opts = ArchiveOptions::default();
-        opts.children = true;
+        let opts = ArchiveOptions::new().children(true);
 
         expect!(archive.archive_with(temp_dir.path(), "file", &opts))
             .to(be_err())
@@ -362,8 +358,7 @@ fn archiving_directory_children_when_target_doest_not_exist_errors() -> sqlarfs:
         .open(temp_dir.path().join("file"))?;
 
     connection()?.exec(|archive| {
-        let mut opts = ArchiveOptions::default();
-        opts.children = true;
+        let opts = ArchiveOptions::new().children(true);
 
         expect!(archive.archive_with(temp_dir.path(), "dir", &opts))
             .to(be_err())
@@ -379,8 +374,7 @@ fn archive_directory_children_when_source_is_file() -> sqlarfs::Result<()> {
     let temp_file = tempfile::NamedTempFile::new()?;
 
     connection()?.exec(|archive| {
-        let mut opts = ArchiveOptions::default();
-        opts.children = true;
+        let opts = ArchiveOptions::new().children(true);
 
         expect!(archive.archive_with(temp_file.path(), "file", &opts)).to(be_ok());
 
@@ -409,8 +403,7 @@ fn archive_non_recursively() -> sqlarfs::Result<()> {
         .open(temp_dir.path().join("file"))?;
 
     connection()?.exec(|archive| {
-        let mut opts = ArchiveOptions::default();
-        opts.recursive = false;
+        let opts = ArchiveOptions::new().recursive(false);
 
         expect!(archive.archive_with(temp_dir.path(), "dir", &opts)).to(be_ok());
 
@@ -437,8 +430,7 @@ fn archiving_does_not_preserve_file_mtime() -> sqlarfs::Result<()> {
     temp_file.as_file().set_modified(expected_mtime)?;
 
     connection()?.exec(|archive| {
-        let mut opts = ArchiveOptions::default();
-        opts.preserve = false;
+        let opts = ArchiveOptions::new().preserve_metadata(false);
 
         expect!(archive.archive_with(temp_file.path(), "file", &opts)).to(be_ok());
 
@@ -477,8 +469,7 @@ fn archiving_does_not_preserve_unix_file_mode() -> sqlarfs::Result<()> {
         .to_not(equal(expected_mode));
 
     connection()?.exec(|archive| {
-        let mut opts = ArchiveOptions::default();
-        opts.preserve = false;
+        let opts = ArchiveOptions::new().preserve_metadata(false);
 
         expect!(archive.archive_with(temp_file.path(), "file", &opts)).to(be_ok());
 

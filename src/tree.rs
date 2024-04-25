@@ -12,15 +12,40 @@ use super::mode::{ReadMode, WriteMode};
 ///
 /// [`Archive`]: crate::Archive
 /// [`Archive::archive_with`]: crate::Archive::archive_with
-#[derive(Debug)]
-#[non_exhaustive]
+#[derive(Debug, Clone)]
 pub struct ArchiveOptions {
+    follow_symlinks: bool,
+    children: bool,
+    recursive: bool,
+    preserve_metadata: bool,
+}
+
+impl Default for ArchiveOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ArchiveOptions {
+    /// Create a new [`ArchiveOptions`] default settings.
+    pub fn new() -> Self {
+        Self {
+            follow_symlinks: true,
+            children: false,
+            recursive: true,
+            preserve_metadata: true,
+        }
+    }
+
     /// Follow symbolic links.
     ///
     /// If this is `false`, symbolic links will be silently skipped.
     ///
     /// The default is `true`.
-    pub dereference: bool,
+    pub fn follow_symlinks(mut self, follow: bool) -> Self {
+        self.follow_symlinks = follow;
+        self
+    }
 
     /// Archive the children of the source directory instead of the source directory itself.
     ///
@@ -30,29 +55,27 @@ pub struct ArchiveOptions {
     /// children in the root of the archive.
     ///
     /// The default is `false`.
-    pub children: bool,
+    pub fn children(mut self, children: bool) -> Self {
+        self.children = children;
+        self
+    }
 
     /// Archive the source directory recursively.
     ///
     /// This has no effect if the source is a regular file.
     ///
     /// The default is `true`.
-    pub recursive: bool,
+    pub fn recursive(mut self, recursive: bool) -> Self {
+        self.recursive = recursive;
+        self
+    }
 
     /// Preserve file metadata when copying files into the archive.
     ///
     /// The default is `true`.
-    pub preserve: bool,
-}
-
-impl Default for ArchiveOptions {
-    fn default() -> Self {
-        Self {
-            dereference: true,
-            children: false,
-            recursive: true,
-            preserve: true,
-        }
+    pub fn preserve_metadata(mut self, preserve: bool) -> Self {
+        self.preserve_metadata = preserve;
+        self
     }
 }
 
@@ -82,7 +105,7 @@ pub fn archive_tree<T>(
 where
     T: ReadMode + WriteMode,
 {
-    let src_is_dir = read_metadata(src_root, opts.dereference)?.is_dir();
+    let src_is_dir = read_metadata(src_root, opts.follow_symlinks)?.is_dir();
 
     let mut stack = if opts.children && src_is_dir {
         fs::read_dir(src_root)?
@@ -93,7 +116,7 @@ where
     };
 
     while let Some(path) = stack.pop() {
-        let metadata = read_metadata(&path, opts.dereference)?;
+        let metadata = read_metadata(&path, opts.follow_symlinks)?;
 
         let file_type = if metadata.is_file() {
             FileType::File
@@ -112,7 +135,7 @@ where
 
         let mut archive_file = archive.open(dest_path)?;
 
-        if opts.preserve {
+        if opts.preserve_metadata {
             let mode = mode_adapter.read_mode(&path, &metadata)?;
 
             // `std::fs::Metadata::modified` returns an error when mtime isn't available on the current

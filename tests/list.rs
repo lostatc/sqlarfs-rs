@@ -134,6 +134,20 @@ fn specifying_mutually_exclusive_order_options_errors() -> sqlarfs::Result<()> {
 }
 
 #[test]
+fn specifying_mutually_exclusive_file_type_options_errors() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let opts = ListOptions::new().file_type(FileType::File).by_size();
+
+        expect!(archive.list_with(&opts))
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::InvalidArgs));
+
+        Ok(())
+    })
+}
+
+#[test]
 fn list_with_default_opts() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         archive.open("file1")?.create_file()?;
@@ -414,6 +428,40 @@ fn list_with_sort_by_size_while_filtering_descendants() -> sqlarfs::Result<()> {
                 PathBuf::from("one/two/d"),
                 PathBuf::from("one/b"),
             ]));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn list_with_filter_only_files() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        archive.open("dir")?.create_dir()?;
+        archive.open("dir/file")?.create_file()?;
+
+        let opts = ListOptions::new().file_type(FileType::File);
+
+        expect!(archive.list_with(&opts))
+            .to(be_ok())
+            .iter_try_map(|entry| Ok(entry?.into_path()))
+            .to(consist_of(&[PathBuf::from("dir/file")]));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn list_with_filter_only_dirs() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        archive.open("dir")?.create_dir()?;
+        archive.open("dir/file")?.create_file()?;
+
+        let opts = ListOptions::new().file_type(FileType::Dir);
+
+        expect!(archive.list_with(&opts))
+            .to(be_ok())
+            .iter_try_map(|entry| Ok(entry?.into_path()))
+            .to(consist_of(&[PathBuf::from("dir")]));
 
         Ok(())
     })

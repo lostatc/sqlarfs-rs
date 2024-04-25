@@ -103,7 +103,7 @@ impl<'conn> Archive<'conn> {
     ///
     /// [`ErrorKind::InvalidArgs`]: crate::ErrorKind::InvalidArgs
     pub fn list_with(&mut self, opts: &ListOptions) -> crate::Result<ListEntries> {
-        if opts.invalid {
+        if opts.is_invalid {
             return Err(crate::Error::msg(
                 crate::ErrorKind::InvalidArgs,
                 "Mutually exclusive options where used together in `ListOptions`.",

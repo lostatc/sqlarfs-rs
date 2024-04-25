@@ -1,7 +1,7 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use super::metadata::FileMetadata;
+use super::metadata::{FileMetadata, FileType};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ListSort {
@@ -34,7 +34,8 @@ pub struct ListOptions {
     pub(super) direction: Option<SortDirection>,
     pub(super) sort: Option<ListSort>,
     pub(super) ancestor: Option<PathBuf>,
-    pub(super) invalid: bool,
+    pub(super) file_type: Option<FileType>,
+    pub(super) is_invalid: bool,
 }
 
 impl Default for ListOptions {
@@ -50,8 +51,32 @@ impl ListOptions {
             direction: None,
             sort: None,
             ancestor: None,
-            invalid: false,
+            file_type: None,
+            is_invalid: false,
         }
+    }
+
+    /// Only return files that are descendants of the given `directory`.
+    ///
+    /// This returns all descendants, not just immediate children.
+    pub fn descendants_of<P: AsRef<Path>>(mut self, directory: P) -> Self {
+        self.ancestor = Some(directory.as_ref().to_path_buf());
+
+        self
+    }
+
+    /// Only return files of this [`FileType`].
+    ///
+    /// This is mutually exclusive with [`ListOptions::by_size`].
+    pub fn file_type(mut self, file_type: FileType) -> Self {
+        if self.sort == Some(ListSort::Size) {
+            self.is_invalid = true;
+            return self;
+        }
+
+        self.file_type = Some(file_type);
+
+        self
     }
 
     /// Sort by last modification time.
@@ -59,7 +84,7 @@ impl ListOptions {
     /// This is mutually exclusive with [`ListOptions::by_size`].
     pub fn by_mtime(mut self) -> Self {
         if self.sort.is_some() {
-            self.invalid = true;
+            self.is_invalid = true;
             return self;
         }
 
@@ -72,10 +97,10 @@ impl ListOptions {
     ///
     /// If this is specified, then the list will only contain regular files, skipping directories.
     ///
-    /// This is mutually exclusive with [`ListOptions::by_mtime`].
+    /// This is mutually exclusive with [`ListOptions::by_mtime`] and [`ListOptions::file_type`].
     pub fn by_size(mut self) -> Self {
-        if self.sort.is_some() {
-            self.invalid = true;
+        if self.sort.is_some() || self.file_type.is_some() {
+            self.is_invalid = true;
             return self;
         }
 
@@ -89,7 +114,7 @@ impl ListOptions {
     /// This is mutually exclusive with [`ListOptions::desc`].
     pub fn asc(mut self) -> Self {
         if self.direction.is_some() {
-            self.invalid = true;
+            self.is_invalid = true;
             return self;
         }
 
@@ -103,20 +128,11 @@ impl ListOptions {
     /// This is mutually exclusive with [`ListOptions::asc`].
     pub fn desc(mut self) -> Self {
         if self.direction.is_some() {
-            self.invalid = true;
+            self.is_invalid = true;
             return self;
         }
 
         self.direction = Some(SortDirection::Desc);
-
-        self
-    }
-
-    /// Only return files that are descendants of the given `directory`.
-    ///
-    /// This returns all descendants, not just immediate children.
-    pub fn descendants_of<P: AsRef<Path>>(mut self, directory: P) -> Self {
-        self.ancestor = Some(directory.as_ref().to_path_buf());
 
         self
     }

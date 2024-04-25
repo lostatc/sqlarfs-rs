@@ -339,7 +339,8 @@ impl<'conn> Store<'conn> {
                 sqlar
             WHERE
                 iif(?1 = '', true, name GLOB ?1 || '/?*')
-                AND iif(?2 IS NULL, true, (mode & ?2) = ?3)
+                AND iif(?3 IS NULL, true, (mode & ?2) = ?3)
+                AND iif(?4 IS NULL, true, (mode & ?2) = ?4)
             ORDER BY
                 {order_column} {direction}
         "
@@ -352,12 +353,17 @@ impl<'conn> Store<'conn> {
                     .map(|ancestor| ancestor.to_string_lossy().into_owned())
                     .unwrap_or_default(),
             ),
+            Box::new(TYPE_MASK),
             Box::new(if let Some(ListSort::Size) = opts.sort {
-                Some(TYPE_MASK)
+                Some(FILE_MODE)
             } else {
                 None
             }),
-            Box::new(FILE_MODE),
+            Box::new(match opts.file_type {
+                Some(FileType::File) => Some(FILE_MODE),
+                Some(FileType::Dir) => Some(DIR_MODE),
+                None => None,
+            }),
         ];
 
         let map_func: ListMapFunc = Box::new(|row| {

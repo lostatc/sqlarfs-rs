@@ -8,10 +8,10 @@ use super::mode::{ReadMode, WriteMode};
 
 /// Options for archiving a filesystem directory tree to an [`Archive`].
 ///
-/// This is used with [`Archive::archive`].
+/// This is used with [`Archive::archive_with`].
 ///
 /// [`Archive`]: crate::Archive
-/// [`Archive::archive`]: crate::Archive::archive
+/// [`Archive::archive_with`]: crate::Archive::archive_with
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct ArchiveOptions {

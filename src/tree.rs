@@ -26,8 +26,18 @@ pub struct ArchiveOptions {
     ///
     /// This puts the children of the source directory into the given destination directory.
     ///
+    /// As a special case, you can use an empty path as the destination directory to put the
+    /// children in the root of the archive.
+    ///
     /// The default is `false`.
     pub children: bool,
+
+    /// Archive the source directory recursively.
+    ///
+    /// This has no effect if the source is a regular file.
+    ///
+    /// The default is `true`.
+    pub recursive: bool,
 }
 
 impl Default for ArchiveOptions {
@@ -35,6 +45,7 @@ impl Default for ArchiveOptions {
         Self {
             dereference: true,
             children: false,
+            recursive: true,
         }
     }
 }
@@ -109,13 +120,14 @@ where
                 let mut fs_file = fs::File::open(&path)?;
                 archive_file.write_file(&mut fs_file)?;
             }
-            FileType::Dir => {
+            FileType::Dir if opts.recursive => {
                 for entry in fs::read_dir(&path)? {
                     let entry = entry?;
                     let path = entry.path();
                     stack.push(path);
                 }
             }
+            _ => {}
         }
     }
 

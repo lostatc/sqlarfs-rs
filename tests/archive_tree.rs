@@ -402,3 +402,31 @@ fn archive_directory_children_when_source_is_file() -> sqlarfs::Result<()> {
         Ok(())
     })
 }
+
+//
+// `ArchiveOptions::recursive`
+//
+
+#[test]
+fn archive_non_recursively() -> sqlarfs::Result<()> {
+    let temp_dir = tempfile::tempdir()?;
+    fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(temp_dir.path().join("file"))?;
+
+    connection()?.exec(|archive| {
+        let mut opts = ArchiveOptions::default();
+        opts.recursive = false;
+
+        expect!(archive.archive(temp_dir.path(), "dir", &opts)).to(be_ok());
+
+        let dir = archive.open("dir")?;
+        expect!(dir.exists()).to(be_ok()).to(be_true());
+
+        let file = archive.open("dir/file")?;
+        expect!(file.exists()).to(be_ok()).to(be_false());
+
+        Ok(())
+    })
+}

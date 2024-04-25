@@ -378,6 +378,8 @@ impl<'conn, 'a> File<'conn, 'a> {
     /// This does not consume its receiver and does not invalidate the file handle; you can still
     /// use this same [`File`] object to create the file again.
     ///
+    /// If this file is a directory, this recursively deletes all descendants.
+    ///
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.

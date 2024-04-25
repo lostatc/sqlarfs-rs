@@ -169,9 +169,11 @@ impl<'conn> Store<'conn> {
     }
 
     pub fn delete_file(&self, path: &str) -> crate::Result<()> {
-        let num_updated = self
-            .tx()
-            .execute("DELETE FROM sqlar WHERE name = ?1", (path,))?;
+        // Deleting files must be recursive so that the archive doesn't end up with orphan files.
+        let num_updated = self.tx().execute(
+            "DELETE FROM sqlar WHERE name = ?1 OR name GLOB ?1 || '/?*'",
+            (path,),
+        )?;
 
         if num_updated == 0 {
             return Err(crate::ErrorKind::NotFound.into());

@@ -380,6 +380,38 @@ fn deleting_file_errors_when_it_does_not_exist() -> sqlarfs::Result<()> {
     })
 }
 
+#[test]
+fn deleting_file_recursively_deletes_descendants() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut dir = archive.open("dir")?;
+        dir.create_dir()?;
+
+        let mut file_a = archive.open("dir/file_a")?;
+        file_a.create_file()?;
+
+        let mut subdir = archive.open("dir/subdir")?;
+        subdir.create_dir()?;
+
+        let mut file_b = archive.open("dir/subdir/file_b")?;
+        file_b.create_file()?;
+
+        let mut dir = archive.open("dir")?;
+        expect!(dir.delete()).to(be_ok());
+        expect!(dir.exists()).to(be_ok()).to(be_false());
+
+        let file_a = archive.open("dir/file_a")?;
+        expect!(file_a.exists()).to(be_ok()).to(be_false());
+
+        let subdir = archive.open("dir/subdir")?;
+        expect!(subdir.exists()).to(be_ok()).to(be_false());
+
+        let file_b = archive.open("dir/subdir/file_b")?;
+        expect!(file_b.exists()).to(be_ok()).to(be_false());
+
+        Ok(())
+    })
+}
+
 //
 // `File::compression` / `File::set_compression`
 //

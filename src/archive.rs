@@ -146,57 +146,42 @@ impl<'conn> Archive<'conn> {
         to: Q,
         opts: &ArchiveOptions,
     ) -> crate::Result<()> {
-        // On Unix-like systems, we set the file mode based on the mode bits in the archive.
-        #[cfg(unix)]
         archive_tree(
             self,
             from.as_ref(),
             to.as_ref(),
             opts,
+            // On Unix-like systems, we set the file mode based on the mode bits in the archive.
+            #[cfg(unix)]
             &super::mode::UnixModeAdapter,
-        )?;
-
-        // On unsupported platforms (currently any non-Unix-like platform), we use the umask.
-        #[cfg(not(unix))]
-        archive_tree(
-            self,
-            from.as_ref(),
-            to.as_ref(),
-            opts,
+            // On unsupported platforms (currently any non-Unix-like platform), we use the umask.
+            #[cfg(not(unix))]
             &super::mode::UmaskModeAdapter::new(self.umask),
-        )?;
-
-        Ok(())
+        )
     }
 
     /// Copy the directory tree in the archive at `from` into the filesystem at `to`.
     ///
     /// # Errors
     ///
+    /// - [`ErrorKind::NotFound`]: There is no file or directory in the archive at `from`.
     /// - [`ErrorKind::AlreadyExists`]: One of the files in `from` would overwrite an existing file
     /// in the filesystem.
     ///
+    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
     pub fn extract<P: AsRef<Path>, Q: AsRef<Path>>(&mut self, from: P, to: Q) -> crate::Result<()> {
-        // On Unix-like systems, we set the file mode based on the mode bits in the archive.
-        #[cfg(unix)]
         extract_tree(
             self,
             from.as_ref(),
             to.as_ref(),
+            // On Unix-like systems, we set the file mode based on the mode bits in the archive.
+            #[cfg(unix)]
             &super::mode::UnixModeAdapter,
-        )?;
-
-        // On unsupported platforms (currently any non-Unix-like platform), we use the umask.
-        #[cfg(not(unix))]
-        extract_tree(
-            self,
-            from.as_ref(),
-            to.as_ref(),
+            // On unsupported platforms (currently any non-Unix-like platform), we use the umask.
+            #[cfg(not(unix))]
             &super::mode::UmaskModeAdapter::new(self.umask),
-        )?;
-
-        Ok(())
+        )
     }
 
     /// The current umask for newly created files and directories.

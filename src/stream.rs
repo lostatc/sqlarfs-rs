@@ -37,13 +37,13 @@ impl Compression {
     pub const BEST: Self = Self::Deflate { level: 9 };
 }
 
-enum InnerReader<'a> {
+enum InnerReader<'conn> {
     #[cfg(feature = "deflate")]
-    Compressed(ZlibDecoder<Blob<'a>>),
-    Uncompressed(Blob<'a>),
+    Compressed(ZlibDecoder<Blob<'conn>>),
+    Uncompressed(Blob<'conn>),
 }
 
-impl<'a> fmt::Debug for InnerReader<'a> {
+impl<'conn> fmt::Debug for InnerReader<'conn> {
     #[cfg_attr(coverage_nightly, coverage(off))]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -54,7 +54,7 @@ impl<'a> fmt::Debug for InnerReader<'a> {
     }
 }
 
-impl<'a> Read for InnerReader<'a> {
+impl<'conn> Read for InnerReader<'conn> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self {
             #[cfg(feature = "deflate")]
@@ -71,12 +71,12 @@ impl<'a> Read for InnerReader<'a> {
 ///
 /// [`File`]: crate::File
 #[derive(Debug)]
-pub struct FileReader<'a> {
-    inner: InnerReader<'a>,
+pub struct FileReader<'conn> {
+    inner: InnerReader<'conn>,
 }
 
-impl<'a> FileReader<'a> {
-    pub(super) fn new(blob: FileBlob<'a>) -> crate::Result<Self> {
+impl<'conn> FileReader<'conn> {
+    pub(super) fn new(blob: FileBlob<'conn>) -> crate::Result<Self> {
         if blob.is_compressed() {
             #[cfg(feature = "deflate")]
             return Ok(Self {
@@ -93,7 +93,7 @@ impl<'a> FileReader<'a> {
     }
 }
 
-impl<'a> Read for FileReader<'a> {
+impl<'conn> Read for FileReader<'conn> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.inner.read(buf)
     }

@@ -159,7 +159,7 @@ impl<'conn> Transaction<'conn> {
     }
 
     /// Get a mutable reference to the [`Archive`] holding this transaction.
-    pub fn archive_mut<'a>(&'a mut self) -> &'a mut Archive<'conn> {
+    pub fn archive_mut(&mut self) -> &mut Archive<'conn> {
         &mut self.archive
     }
 

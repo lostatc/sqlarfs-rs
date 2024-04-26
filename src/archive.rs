@@ -60,7 +60,7 @@ impl<'conn> Archive<'conn> {
     /// - [`ErrorKind::InvalidArgs`]: The given `path` is empty.
     ///
     /// [`ErrorKind::InvalidArgs`]: crate::ErrorKind::InvalidArgs
-    pub fn open<'a, P: AsRef<Path>>(&'a mut self, path: P) -> crate::Result<File<'conn, 'a>> {
+    pub fn open<'ar, P: AsRef<Path>>(&'ar mut self, path: P) -> crate::Result<File<'conn, 'ar>> {
         // Opening a file must take a mutable receiver to ensure that the user can't get lwo
         // handles to the same file. Otherwise they could do things like open the blob twice or
         // edit the row while the blob is open.

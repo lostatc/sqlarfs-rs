@@ -51,19 +51,19 @@ fn unwrap_path_parent(path: &Path) -> &Path {
 /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
 /// [`ErrorKind::CompressionNotSupported`]: crate::ErrorKind::CompressionNotSupported
 #[derive(Debug)]
-pub struct File<'conn, 'a> {
+pub struct File<'conn, 'ar> {
     // We store this internally as a string because the contract of this type requires the path to
     // be valid Unicode, which `PathBuf` does not guarantee.
     path: String,
     compression: Compression,
     umask: FileMode,
-    store: &'a mut Store<'conn>,
+    store: &'ar mut Store<'conn>,
 }
 
-impl<'conn, 'a> File<'conn, 'a> {
+impl<'conn, 'ar> File<'conn, 'ar> {
     pub(super) fn new(
         path: &Path,
-        store: &'a mut Store<'conn>,
+        store: &'ar mut Store<'conn>,
         umask: FileMode,
     ) -> crate::Result<Self> {
         if path == Path::new("") {

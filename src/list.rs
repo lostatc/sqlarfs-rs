@@ -164,7 +164,7 @@ impl ListOptions {
 ///
 /// [`Archive::list`]: crate::Archive::list
 /// [`Archive::list_with`]: crate::Archive::list_with
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct ListEntry {
     pub(super) path: PathBuf,
     pub(super) metadata: FileMetadata,

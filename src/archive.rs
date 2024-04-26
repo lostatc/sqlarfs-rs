@@ -127,6 +127,7 @@ impl<'conn> Archive<'conn> {
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: There is no file or directory at `from`.
+    /// - [`ErrorKind::NotFound`]: The parent directory of `to` does not exist.
     /// - [`ErrorKind::NotFound`]: [`ArchiveOptions::children`] was `true` and `to` does not exist.
     /// - [`ErrorKind::NotADirectory`]: [`ArchiveOptions::children`] was `true` and the file at
     /// `to` already exists and is not a directory.

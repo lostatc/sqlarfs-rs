@@ -26,6 +26,20 @@ fn archiving_when_source_path_does_not_exist_errors() -> sqlarfs::Result<()> {
 }
 
 #[test]
+fn archiving_when_dest_path_has_no_parent_dir_errors() -> sqlarfs::Result<()> {
+    let temp_file = tempfile::NamedTempFile::new()?;
+
+    connection()?.exec(|archive| {
+        expect!(archive.archive(temp_file.path(), "nonexistent/file"))
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::NotFound));
+
+        Ok(())
+    })
+}
+
+#[test]
 fn archiving_when_dest_path_already_exists_errors() -> sqlarfs::Result<()> {
     let temp_file = tempfile::NamedTempFile::new()?;
 

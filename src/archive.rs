@@ -165,11 +165,15 @@ impl<'conn> Archive<'conn> {
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: There is no file or directory in the archive at `from`.
+    /// - [`ErrorKind::NotFound`]: The parent directory of `to` does not exist.
     /// - [`ErrorKind::AlreadyExists`]: One of the files in `from` would overwrite an existing file
+    /// - [`ErrorKind::InvalidArgs`]: The given `from` path is an absolute path.
+    /// - [`ErrorKind::InvalidArgs`]: The given `from` path is not valid Unicode.
     /// in the filesystem.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
+    /// [`ErrorKind::InvalidArgs`]: crate::ErrorKind::InvalidArgs
     pub fn extract<P: AsRef<Path>, Q: AsRef<Path>>(&mut self, from: P, to: Q) -> crate::Result<()> {
         extract_tree(
             self,

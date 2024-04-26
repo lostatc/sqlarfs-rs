@@ -7,6 +7,7 @@ use super::metadata::{FileMetadata, FileType};
 pub enum ListSort {
     Size,
     Mtime,
+    Depth,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,9 +80,26 @@ impl ListOptions {
         self
     }
 
+    /// Sort by depth in the directory tree.
+    ///
+    /// This ensures parents always come before their children (or children before their parents in
+    /// descending mode).
+    ///
+    /// This is mutually exclusive with [`ListOptions::by_mtime`] and [`ListOptions::by_size`].
+    pub fn by_depth(mut self) -> Self {
+        if self.sort.is_some() {
+            self.is_invalid = true;
+            return self;
+        }
+
+        self.sort = Some(ListSort::Depth);
+
+        self
+    }
+
     /// Sort by last modification time.
     ///
-    /// This is mutually exclusive with [`ListOptions::by_size`].
+    /// This is mutually exclusive with [`ListOptions::by_depth`] and [`ListOptions::by_size`].
     pub fn by_mtime(mut self) -> Self {
         if self.sort.is_some() {
             self.is_invalid = true;
@@ -97,7 +115,8 @@ impl ListOptions {
     ///
     /// If this is specified, then the list will only contain regular files, skipping directories.
     ///
-    /// This is mutually exclusive with [`ListOptions::by_mtime`] and [`ListOptions::file_type`].
+    /// This is mutually exclusive with [`ListOptions::by_depth`], [`ListOptions::by_mtime`] and
+    /// [`ListOptions::file_type`].
     pub fn by_size(mut self) -> Self {
         if self.sort.is_some() || self.file_type.is_some() {
             self.is_invalid = true;

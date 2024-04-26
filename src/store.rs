@@ -319,11 +319,12 @@ impl<'conn> Store<'conn> {
 
     pub fn list_files(&self, opts: &ListOptions) -> crate::Result<ListEntries> {
         let order_column = match opts.sort {
-            Some(ListSort::Size) => "sz",
-            Some(ListSort::Mtime) => "mtime",
+            Some(ListSort::Size) => "s.sz",
+            Some(ListSort::Mtime) => "s.mtime",
+            Some(ListSort::Depth) => "p.segments",
             // The contract of `Archive::list` and `Archive::list_with` is that default sort order
             // is unspecified.
-            None => "rowid",
+            None => "s.rowid",
         };
 
         let direction = match opts.direction {
@@ -333,14 +334,23 @@ impl<'conn> Store<'conn> {
 
         let stmt = self.tx().prepare(&format!(
             "
+            WITH path_segments AS (
+                SELECT
+                    name,
+                    length(name) - length(replace(name, '/', '')) AS segments
+                FROM
+                    sqlar
+            )
             SELECT
-                name, mode, mtime, sz
+                s.name, s.mode, s.mtime, s.sz
             FROM
-                sqlar
+                sqlar AS s
+            JOIN
+                path_segments AS p ON s.name = p.name
             WHERE
-                iif(?1 = '', true, name GLOB ?1 || '/?*')
-                AND iif(?3 IS NULL, true, (mode & ?2) = ?3)
-                AND iif(?4 IS NULL, true, (mode & ?2) = ?4)
+                iif(?1 = '', true, s.name GLOB ?1 || '/?*')
+                AND iif(?3 IS NULL, true, (s.mode & ?2) = ?3)
+                AND iif(?4 IS NULL, true, (s.mode & ?2) = ?4)
             ORDER BY
                 {order_column} {direction}
         "

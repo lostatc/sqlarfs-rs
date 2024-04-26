@@ -6,8 +6,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use sqlarfs::{ErrorKind, FileMetadata, FileMode, FileType, ListOptions};
 use xpct::{
-    be_err, be_ok, be_some, be_zero, consist_of, contain_element, equal, expect, fields,
-    match_fields, why,
+    be_err, be_gt, be_lt, be_ok, be_some, be_zero, consist_of, contain_element, equal, expect,
+    fields, match_fields, why,
 };
 
 use common::{connection, truncate_mtime};
@@ -293,6 +293,88 @@ fn list_with_sort_by_size() -> sqlarfs::Result<()> {
                 PathBuf::from("size 2"),
                 PathBuf::from("size 1"),
             ]));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn list_with_sort_by_depth() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        archive.open("a")?.create_dir()?;
+        archive.open("a/b")?.create_dir()?;
+        archive.open("c")?.create_dir()?;
+        archive.open("a/b/d")?.create_file()?;
+
+        // Technically, the default sort order is unspecified. As currently implemented, it's based
+        // on the SQLite rowid, which represents the order in which paths were added to the
+        // archive. We need to ensure the order is *not* sorted by depth by default so that this
+        // test doesn't pass when it should fail.
+        expect!(archive.list_with(&ListOptions::new()))
+            .to(be_ok())
+            .iter_try_map(|entry| Ok(entry?.into_path()))
+            .to(equal(vec![
+                PathBuf::from("a"),
+                PathBuf::from("a/b"),
+                PathBuf::from("c"),
+                PathBuf::from("a/b/d"),
+            ]));
+
+        let entries = expect!(archive.list_with(&ListOptions::new().by_depth().asc()))
+            .to(be_ok())
+            .iter_try_map(|entry| Ok(entry?.into_path()))
+            .into_inner();
+
+        let path_a = entries
+            .iter()
+            .position(|entry| entry == Path::new("a"))
+            .unwrap();
+        let path_b = entries
+            .iter()
+            .position(|entry| entry == Path::new("a/b"))
+            .unwrap();
+        let path_c = entries
+            .iter()
+            .position(|entry| entry == Path::new("c"))
+            .unwrap();
+        let path_d = entries
+            .iter()
+            .position(|entry| entry == Path::new("a/b/d"))
+            .unwrap();
+
+        expect!(path_a).to(be_lt(path_b));
+        expect!(path_a).to(be_lt(path_d));
+        expect!(path_c).to(be_lt(path_b));
+        expect!(path_c).to(be_lt(path_d));
+        expect!(path_b).to(be_lt(path_d));
+
+        let entries = expect!(archive.list_with(&ListOptions::new().by_depth().desc()))
+            .to(be_ok())
+            .iter_try_map(|entry| Ok(entry?.into_path()))
+            .into_inner();
+
+        let path_a = entries
+            .iter()
+            .position(|entry| entry == Path::new("a"))
+            .unwrap();
+        let path_b = entries
+            .iter()
+            .position(|entry| entry == Path::new("a/b"))
+            .unwrap();
+        let path_c = entries
+            .iter()
+            .position(|entry| entry == Path::new("c"))
+            .unwrap();
+        let path_d = entries
+            .iter()
+            .position(|entry| entry == Path::new("a/b/d"))
+            .unwrap();
+
+        expect!(path_a).to(be_gt(path_b));
+        expect!(path_a).to(be_gt(path_d));
+        expect!(path_c).to(be_gt(path_b));
+        expect!(path_c).to(be_gt(path_d));
+        expect!(path_b).to(be_gt(path_d));
 
         Ok(())
     })

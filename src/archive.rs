@@ -170,6 +170,13 @@ impl<'conn> Archive<'conn> {
     }
 
     /// Copy the directory tree in the archive at `from` into the filesystem at `to`.
+    ///
+    /// # Errors
+    ///
+    /// - [`ErrorKind::AlreadyExists`]: One of the files in `from` would overwrite an existing file
+    /// in the filesystem.
+    ///
+    /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
     pub fn extract<P: AsRef<Path>, Q: AsRef<Path>>(&mut self, from: P, to: Q) -> crate::Result<()> {
         // On Unix-like systems, we set the file mode based on the mode bits in the archive.
         #[cfg(unix)]

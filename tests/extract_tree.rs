@@ -21,7 +21,7 @@ fn extracting_when_source_path_does_not_exist_errors() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn extracting_when_dest_path_has_no_parent_dir_errors() -> sqlarfs::Result<()> {
+fn extracting_when_source_is_a_file_and_dest_has_no_parent_dir_errors() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         archive.open("file")?.create_file()?;
 
@@ -35,7 +35,22 @@ fn extracting_when_dest_path_has_no_parent_dir_errors() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn archiving_when_dest_path_already_exists_and_is_a_file_errors() -> sqlarfs::Result<()> {
+fn extracting_when_source_is_a_dir_and_dest_has_no_parent_dir_errors() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        archive.open("dir")?.create_dir()?;
+
+        expect!(archive.extract("dir", "/nonexistent/dest"))
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::NotFound));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn archiving_when_source_is_a_file_and_dest_already_exists_and_is_a_file_errors(
+) -> sqlarfs::Result<()> {
     let temp_file = tempfile::NamedTempFile::new()?;
 
     connection()?.exec(|archive| {
@@ -51,13 +66,48 @@ fn archiving_when_dest_path_already_exists_and_is_a_file_errors() -> sqlarfs::Re
 }
 
 #[test]
-fn archiving_when_dest_path_already_exists_and_is_a_dir_errors() -> sqlarfs::Result<()> {
+fn archiving_when_source_is_a_file_and_dest_already_exists_and_is_a_dir_errors(
+) -> sqlarfs::Result<()> {
     let temp_dir = tempfile::tempdir()?;
 
     connection()?.exec(|archive| {
         archive.open("file")?.create_file()?;
 
         expect!(archive.extract("file", temp_dir.path()))
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::AlreadyExists));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn archiving_when_source_is_a_dir_and_dest_already_exists_and_is_a_file_errors(
+) -> sqlarfs::Result<()> {
+    let temp_file = tempfile::NamedTempFile::new()?;
+
+    connection()?.exec(|archive| {
+        archive.open("dir")?.create_dir()?;
+
+        expect!(archive.extract("dir", temp_file.path()))
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::AlreadyExists));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn archiving_when_source_is_a_dir_and_dest_already_exists_and_is_a_dir_errors(
+) -> sqlarfs::Result<()> {
+    let temp_dir = tempfile::tempdir()?;
+
+    connection()?.exec(|archive| {
+        archive.open("dir")?.create_dir()?;
+
+        expect!(archive.extract("dir", temp_dir.path()))
             .to(be_err())
             .map(|err| err.into_kind())
             .to(equal(ErrorKind::AlreadyExists));

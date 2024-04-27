@@ -118,7 +118,8 @@ impl<'conn> Archive<'conn> {
     /// - [`ErrorKind::NotADirectory`]: [`ArchiveOptions::children`] was `true` and the file at
     /// `to` already exists and is not a directory.
     /// - [`ErrorKind::AlreadyExists`]: One of the files in `from` would overwrite an existing file
-    /// in the archive.
+    /// in the archive (and [`ArchiveOptions::replace`] and [`ArchiveOptions::update`] were both
+    /// `false`).
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory

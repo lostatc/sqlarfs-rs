@@ -17,6 +17,8 @@ use super::mode::{ReadMode, WriteMode};
 /// [`Archive::archive_with`]: crate::Archive::archive_with
 #[derive(Debug, Clone)]
 pub struct ArchiveOptions {
+    replace: bool,
+    update: bool,
     follow_symlinks: bool,
     children: bool,
     recursive: bool,
@@ -33,11 +35,29 @@ impl ArchiveOptions {
     /// Create a new [`ArchiveOptions`] default settings.
     pub fn new() -> Self {
         Self {
+            replace: false,
+            update: false,
             follow_symlinks: true,
             children: false,
             recursive: true,
             preserve_metadata: true,
         }
+    }
+
+    /// Overwrite existing files in the archive.
+    ///
+    /// This is mutually exclusive with [`ArchiveOptions::update`].
+    pub fn replace(mut self, replace: bool) -> Self {
+        self.replace = replace;
+        self
+    }
+
+    /// Overwrite existing files in the archive, but only if the mtime has changed.
+    ///
+    /// This is mutually exclusive with [`ArchiveOptions::replace`].
+    pub fn update(mut self, update: bool) -> Self {
+        self.update = update;
+        self
     }
 
     /// Follow symbolic links.

@@ -15,7 +15,11 @@ use super::tree::ArchiveOptions;
 /// A SQLite archive is a SQLite database with a table named `sqlar` that conforms to a specific
 /// schema. A SQLite archive may contain other tables, and this library will ignore them.
 ///
-/// All file paths in a SQLite archive are relative paths.
+/// All file paths in a SQLite archive are relative paths; trying to use an absolute path will
+/// result in an error.
+///
+/// All file paths in a SQLite archive are encoded using the database encoding; trying to use a
+/// path that is not valid Unicode will result in an error.
 ///
 /// [`Connection::exec`]: crate::Connection::exec
 #[derive(Debug)]
@@ -46,20 +50,6 @@ impl<'conn> Archive<'conn> {
     /// handle to a file that may or may not exist.
     ///
     /// See [`File::exists`] to check if the file actually exists in the archive.
-    ///
-    /// All file paths in a SQLite archive are relative paths; this method returns an error if the
-    /// given `path` is an absolute path.
-    ///
-    /// All file paths in a SQLite archive are encoded using the database encoding; this method
-    /// returns an error if the given `path` is not valid Unicode.
-    ///
-    /// # Errors
-    ///
-    /// - [`ErrorKind::InvalidArgs`]: The given `path` is an absolute path.
-    /// - [`ErrorKind::InvalidArgs`]: The given `path` is not valid Unicode.
-    /// - [`ErrorKind::InvalidArgs`]: The given `path` is empty.
-    ///
-    /// [`ErrorKind::InvalidArgs`]: crate::ErrorKind::InvalidArgs
     pub fn open<'ar, P: AsRef<Path>>(&'ar mut self, path: P) -> crate::Result<File<'conn, 'ar>> {
         // Opening a file must take a mutable receiver to ensure that the user can't get lwo
         // handles to the same file. Otherwise they could do things like open the blob twice or
@@ -78,9 +68,7 @@ impl<'conn> Archive<'conn> {
     ///
     /// This accepts a [`ListOptions`] to sort and filter the results.
     ///
-    /// # Errors
-    ///
-    /// - [`ErrorKind::InvalidArgs`]: Mutually exclusive options were specified together in
+    /// This returns an error if mutually exclusive options were specified together in
     /// [`ListOptions`].
     ///
     /// # Examples
@@ -100,8 +88,6 @@ impl<'conn> Archive<'conn> {
     /// }
     /// # sqlarfs::Result::Ok(())
     /// ```
-    ///
-    /// [`ErrorKind::InvalidArgs`]: crate::ErrorKind::InvalidArgs
     pub fn list_with(&mut self, opts: &ListOptions) -> crate::Result<ListEntries> {
         if opts.is_invalid {
             return Err(crate::Error::msg(
@@ -133,13 +119,10 @@ impl<'conn> Archive<'conn> {
     /// `to` already exists and is not a directory.
     /// - [`ErrorKind::AlreadyExists`]: One of the files in `from` would overwrite an existing file
     /// in the archive.
-    /// - [`ErrorKind::InvalidArgs`]: The given `to` path is an absolute path.
-    /// - [`ErrorKind::InvalidArgs`]: The given `to` path is not valid Unicode.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
-    /// [`ErrorKind::InvalidArgs`]: crate::ErrorKind::InvalidArgs
     pub fn archive_with<P: AsRef<Path>, Q: AsRef<Path>>(
         &mut self,
         from: P,
@@ -166,13 +149,10 @@ impl<'conn> Archive<'conn> {
     /// - [`ErrorKind::NotFound`]: There is no file or directory in the archive at `from`.
     /// - [`ErrorKind::NotFound`]: The parent directory of `to` does not exist.
     /// - [`ErrorKind::AlreadyExists`]: One of the files in `from` would overwrite an existing file
-    /// - [`ErrorKind::InvalidArgs`]: The given `from` path is an absolute path.
-    /// - [`ErrorKind::InvalidArgs`]: The given `from` path is not valid Unicode.
     /// in the filesystem.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
-    /// [`ErrorKind::InvalidArgs`]: crate::ErrorKind::InvalidArgs
     pub fn extract<P: AsRef<Path>, Q: AsRef<Path>>(&mut self, from: P, to: Q) -> crate::Result<()> {
         self.extract_tree(
             from.as_ref(),

@@ -179,6 +179,11 @@ pub enum ErrorKind {
     /// A resource was not found.
     NotFound,
 
+    // As a rule, we don't document this error kind as a possible error return in the API docs
+    // because a) there may be several possible cases where it could be returned and b) it
+    // generally represents an error on the part of the user and isn't useful to catch. We may
+    // still document the circumstances that could lean to this error, but not that this specific
+    // error kind would be returned.
     /// Some arguments were invalid.
     InvalidArgs,
 

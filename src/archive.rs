@@ -5,7 +5,7 @@ use crate::FileMode;
 use super::file::File;
 use super::list::{ListEntries, ListOptions};
 use super::store::Store;
-use super::tree::{archive_tree, extract_tree, ArchiveOptions};
+use super::tree::ArchiveOptions;
 
 /// A SQLite archive.
 ///
@@ -146,8 +146,7 @@ impl<'conn> Archive<'conn> {
         to: Q,
         opts: &ArchiveOptions,
     ) -> crate::Result<()> {
-        archive_tree(
-            self,
+        self.archive_tree(
             from.as_ref(),
             to.as_ref(),
             opts,
@@ -175,8 +174,7 @@ impl<'conn> Archive<'conn> {
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
     /// [`ErrorKind::InvalidArgs`]: crate::ErrorKind::InvalidArgs
     pub fn extract<P: AsRef<Path>, Q: AsRef<Path>>(&mut self, from: P, to: Q) -> crate::Result<()> {
-        extract_tree(
-            self,
+        self.extract_tree(
             from.as_ref(),
             to.as_ref(),
             // On Unix-like systems, we set the file mode based on the mode bits in the archive.

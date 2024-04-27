@@ -96,179 +96,175 @@ fn read_metadata(path: &Path, follow_symlinks: bool) -> crate::Result<fs::Metada
     }
 }
 
-pub fn archive_tree<T>(
-    archive: &mut Archive,
-    src_root: &Path,
-    dest_root: &Path,
-    opts: &ArchiveOptions,
-    mode_adapter: &T,
-) -> crate::Result<()>
-where
-    T: ReadMode,
-{
-    if dest_root == Path::new("") && !opts.children {
-        return Err(crate::Error::msg(
+impl<'conn> Archive<'conn> {
+    pub(super) fn archive_tree<T>(
+        &mut self,
+        src_root: &Path,
+        dest_root: &Path,
+        opts: &ArchiveOptions,
+        mode_adapter: &T,
+    ) -> crate::Result<()>
+    where
+        T: ReadMode,
+    {
+        if dest_root == Path::new("") && !opts.children {
+            return Err(crate::Error::msg(
             crate::ErrorKind::InvalidArgs,
             "Cannot use an empty path as the destination directory unless archiving the children of the source directory."
         ));
-    }
+        }
 
-    let src_is_dir = read_metadata(src_root, opts.follow_symlinks)?.is_dir();
+        let src_is_dir = read_metadata(src_root, opts.follow_symlinks)?.is_dir();
 
-    let mut stack = if opts.children && src_is_dir {
-        fs::read_dir(src_root)?
-            .map(|entry| entry.map(|entry| entry.path()))
-            .collect::<Result<Vec<_>, _>>()?
-    } else {
-        vec![src_root.to_path_buf()]
-    };
-
-    while let Some(path) = stack.pop() {
-        let metadata = read_metadata(&path, opts.follow_symlinks)?;
-
-        let file_type = if metadata.is_file() {
-            FileType::File
-        } else if metadata.is_dir() {
-            FileType::Dir
+        let mut stack = if opts.children && src_is_dir {
+            fs::read_dir(src_root)?
+                .map(|entry| entry.map(|entry| entry.path()))
+                .collect::<Result<Vec<_>, _>>()?
         } else {
-            // We ignore special files.
-            continue;
+            vec![src_root.to_path_buf()]
         };
 
-        let dest_path = dest_root.join(path
+        while let Some(path) = stack.pop() {
+            let metadata = read_metadata(&path, opts.follow_symlinks)?;
+
+            let file_type = if metadata.is_file() {
+                FileType::File
+            } else if metadata.is_dir() {
+                FileType::Dir
+            } else {
+                // We ignore special files.
+                continue;
+            };
+
+            let dest_path = dest_root.join(path
             .strip_prefix(src_root)
             .expect("Could not get path relative to ancestor while walking the directory tree. This is a bug.")
         );
-        dbg!(&dest_path);
+            dbg!(&dest_path);
 
-        let mut archive_file = archive.open(dest_path)?;
+            let mut archive_file = self.open(dest_path)?;
 
-        if opts.preserve_metadata {
-            let mode = mode_adapter.read_mode(&path, &metadata)?;
+            if opts.preserve_metadata {
+                let mode = mode_adapter.read_mode(&path, &metadata)?;
 
-            // `std::fs::Metadata::modified` returns an error when mtime isn't available on the current
-            // platform, in which case we just don't set the mtime in the archive.
-            let mtime = metadata.modified().ok();
+                // `std::fs::Metadata::modified` returns an error when mtime isn't available on the current
+                // platform, in which case we just don't set the mtime in the archive.
+                let mtime = metadata.modified().ok();
 
-            // Create the file with its metadata.
-            archive_file.create_with(file_type, mode, mtime)?;
-        } else {
-            match file_type {
-                FileType::File => archive_file.create_file()?,
-                FileType::Dir => archive_file.create_dir()?,
-            }
-        }
-
-        match file_type {
-            FileType::File => {
-                // Copy the file contents.
-                let mut fs_file = fs::File::open(&path)?;
-                archive_file.write_file(&mut fs_file)?;
-            }
-            FileType::Dir if opts.recursive => {
-                for entry in fs::read_dir(&path)? {
-                    let entry = entry?;
-                    let path = entry.path();
-                    stack.push(path);
+                // Create the file with its metadata.
+                archive_file.create_with(file_type, mode, mtime)?;
+            } else {
+                match file_type {
+                    FileType::File => archive_file.create_file()?,
+                    FileType::Dir => archive_file.create_dir()?,
                 }
             }
-            _ => {}
+
+            match file_type {
+                FileType::File => {
+                    // Copy the file contents.
+                    let mut fs_file = fs::File::open(&path)?;
+                    archive_file.write_file(&mut fs_file)?;
+                }
+                FileType::Dir if opts.recursive => {
+                    for entry in fs::read_dir(&path)? {
+                        let entry = entry?;
+                        let path = entry.path();
+                        stack.push(path);
+                    }
+                }
+                _ => {}
+            }
         }
+
+        Ok(())
     }
 
-    Ok(())
-}
+    pub(super) fn extract_file<T>(
+        &mut self,
+        src_path: &Path,
+        dest_path: &Path,
+        metadata: &FileMetadata,
+        mode_adapter: &T,
+    ) -> crate::Result<()>
+    where
+        T: WriteMode,
+    {
+        match metadata.kind {
+            Some(FileType::File) => {
+                let mut fs_file = fs::OpenOptions::new()
+                    .create_new(true)
+                    .write(true)
+                    .open(dest_path)
+                    .map_err(|err| match err.kind() {
+                        io::ErrorKind::AlreadyExists => {
+                            crate::Error::new(crate::ErrorKind::AlreadyExists, err)
+                        }
+                        io::ErrorKind::NotFound => {
+                            crate::Error::new(crate::ErrorKind::NotFound, err)
+                        }
+                        _ => err.into(),
+                    })?;
 
-pub fn extract_file<T>(
-    archive: &mut Archive,
-    src_path: &Path,
-    dest_path: &Path,
-    metadata: &FileMetadata,
-    mode_adapter: &T,
-) -> crate::Result<()>
-where
-    T: WriteMode,
-{
-    match metadata.kind {
-        Some(FileType::File) => {
-            let mut fs_file = fs::OpenOptions::new()
-                .create_new(true)
-                .write(true)
-                .open(dest_path)
-                .map_err(|err| match err.kind() {
+                if let Some(mtime) = metadata.mtime {
+                    fs_file.set_modified(mtime)?;
+                }
+
+                let mut archive_file = self.open(src_path)?;
+                let mut reader = archive_file.reader()?;
+
+                io::copy(&mut reader, &mut fs_file)?;
+            }
+            Some(FileType::Dir) => {
+                fs::create_dir(dest_path).map_err(|err| match err.kind() {
                     io::ErrorKind::AlreadyExists => {
                         crate::Error::new(crate::ErrorKind::AlreadyExists, err)
                     }
                     io::ErrorKind::NotFound => crate::Error::new(crate::ErrorKind::NotFound, err),
                     _ => err.into(),
                 })?;
-
-            if let Some(mtime) = metadata.mtime {
-                fs_file.set_modified(mtime)?;
             }
-
-            let mut archive_file = archive.open(src_path)?;
-            let mut reader = archive_file.reader()?;
-
-            io::copy(&mut reader, &mut fs_file)?;
+            // This library doesn't allow putting special files or files without a mode into the
+            // archive, but if it was generated by another implementation, we have no idea what
+            // kind of data might be in there.
+            None => return Ok(()),
         }
-        Some(FileType::Dir) => {
-            fs::create_dir(dest_path).map_err(|err| match err.kind() {
-                io::ErrorKind::AlreadyExists => {
-                    crate::Error::new(crate::ErrorKind::AlreadyExists, err)
-                }
-                io::ErrorKind::NotFound => crate::Error::new(crate::ErrorKind::NotFound, err),
-                _ => err.into(),
-            })?;
+
+        if let Some(mode) = metadata.mode {
+            mode_adapter.write_mode(dest_path, mode)?;
         }
-        // This library doesn't allow putting special files or files without a mode into the
-        // archive, but if it was generated by another implementation, we have no idea what
-        // kind of data might be in there.
-        None => return Ok(()),
+
+        Ok(())
     }
 
-    if let Some(mode) = metadata.mode {
-        mode_adapter.write_mode(dest_path, mode)?;
-    }
+    pub(super) fn extract_tree<T>(
+        &mut self,
+        src_root: &Path,
+        dest_root: &Path,
+        mode_adapter: &T,
+    ) -> crate::Result<()>
+    where
+        T: WriteMode,
+    {
+        let metadata = self.open(src_root)?.metadata()?;
 
-    Ok(())
-}
+        self.extract_file(src_root, dest_root, &metadata, mode_adapter)?;
 
-pub fn extract_tree<T>(
-    archive: &mut Archive,
-    src_root: &Path,
-    dest_root: &Path,
-    mode_adapter: &T,
-) -> crate::Result<()>
-where
-    T: WriteMode,
-{
-    let metadata = archive.open(src_root)?.metadata()?;
+        // We need to collect this into a vector because iterating over the entries will borrow the
+        // `Archive`, and we need to borrow it mutably to copy the file contents.
+        let list_opts = ListOptions::new().descendants_of(src_root).by_depth();
+        let entries = self.list_with(&list_opts)?.collect::<Result<Vec<_>, _>>()?;
 
-    extract_file(archive, src_root, dest_root, &metadata, mode_adapter)?;
-
-    // We need to collect this into a vector because iterating over the entries will borrow the
-    // `Archive`, and we need to borrow it mutably to copy the file contents.
-    let list_opts = ListOptions::new().descendants_of(src_root).by_depth();
-    let entries = archive
-        .list_with(&list_opts)?
-        .collect::<Result<Vec<_>, _>>()?;
-
-    for entry in entries {
-        let dest_path = dest_root.join(
+        for entry in entries {
+            let dest_path = dest_root.join(
             entry.path
                 .strip_prefix(src_root)
                 .expect("Could not get path relative to ancestor while walking the directory tree. This is a bug.")
         );
 
-        extract_file(
-            archive,
-            entry.path(),
-            &dest_path,
-            entry.metadata(),
-            mode_adapter,
-        )?;
-    }
+            self.extract_file(entry.path(), &dest_path, entry.metadata(), mode_adapter)?;
+        }
 
-    Ok(())
+        Ok(())
+    }
 }

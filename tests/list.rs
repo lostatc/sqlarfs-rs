@@ -6,8 +6,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use sqlarfs::{ErrorKind, FileMetadata, FileMode, FileType, ListOptions};
 use xpct::{
-    be_err, be_gt, be_lt, be_ok, be_some, be_zero, consist_of, contain_element, equal, expect,
-    fields, match_fields, why,
+    be_empty, be_err, be_gt, be_lt, be_ok, be_some, be_zero, consist_of, contain_element, equal,
+    expect, fields, match_fields, why,
 };
 
 use common::{connection, truncate_mtime};
@@ -204,6 +204,22 @@ fn list_with_filter_descendants() -> sqlarfs::Result<()> {
             PathBuf::from("one/two"),
             PathBuf::from("one/two/d"),
         ]));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn list_with_filter_descendants_of_regular_file() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        archive.open("file")?.create_file()?;
+
+        let paths = archive
+            .list_with(&ListOptions::new().descendants_of("file"))?
+            .map(|entry| Ok(entry?.into_path()))
+            .collect::<sqlarfs::Result<Vec<_>>>()?;
+
+        expect!(paths).to(be_empty());
 
         Ok(())
     })

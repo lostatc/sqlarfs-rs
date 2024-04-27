@@ -60,6 +60,10 @@ impl ListOptions {
     /// Only return files that are descendants of the given `directory`.
     ///
     /// This returns all descendants, not just immediate children.
+    ///
+    /// This does not include the `directory` itself in the list of descendants.
+    ///
+    /// If `directory` is a regular file, the returned list will be empty.
     pub fn descendants_of<P: AsRef<Path>>(mut self, directory: P) -> Self {
         self.ancestor = Some(directory.as_ref().to_path_buf());
 

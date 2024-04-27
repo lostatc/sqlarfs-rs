@@ -199,6 +199,7 @@ where
                     io::ErrorKind::AlreadyExists => {
                         crate::Error::new(crate::ErrorKind::AlreadyExists, err)
                     }
+                    io::ErrorKind::NotFound => crate::Error::new(crate::ErrorKind::NotFound, err),
                     _ => err.into(),
                 })?;
 
@@ -216,6 +217,7 @@ where
                 io::ErrorKind::AlreadyExists => {
                     crate::Error::new(crate::ErrorKind::AlreadyExists, err)
                 }
+                io::ErrorKind::NotFound => crate::Error::new(crate::ErrorKind::NotFound, err),
                 _ => err.into(),
             })?;
         }

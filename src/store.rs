@@ -256,8 +256,8 @@ impl<'conn> Store<'conn> {
 
     pub fn set_mode(&self, path: &str, mode: Option<FileMode>) -> crate::Result<()> {
         let num_updated = self.tx().execute(
-            "UPDATE sqlar SET mode = ?1 WHERE name = ?2",
-            (mode.map(|mode| mode.bits()), path),
+            "UPDATE sqlar SET mode = mode & ?1 | ?2 WHERE name = ?3",
+            (TYPE_MASK, mode.map(|mode| mode.bits()), path),
         )?;
 
         if num_updated == 0 {

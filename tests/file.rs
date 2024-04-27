@@ -500,6 +500,25 @@ fn set_file_mode_errors_when_file_does_not_exist() -> sqlarfs::Result<()> {
     })
 }
 
+#[test]
+fn set_file_mode_preserves_file_type() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut file = archive.open("file")?;
+        file.create_file()?;
+
+        let mode = FileMode::OWNER_R | FileMode::OWNER_W | FileMode::GROUP_R | FileMode::OTHER_R;
+        file.set_mode(Some(mode))?;
+
+        expect!(file.metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.kind)
+            .to(be_some())
+            .to(equal(FileType::File));
+
+        Ok(())
+    })
+}
+
 //
 // `File::set_mtime`
 //

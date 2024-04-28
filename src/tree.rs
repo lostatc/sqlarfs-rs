@@ -23,6 +23,7 @@ pub struct ArchiveOptions {
     children: bool,
     recursive: bool,
     preserve_metadata: bool,
+    is_valid: bool,
 }
 
 impl Default for ArchiveOptions {
@@ -41,6 +42,7 @@ impl ArchiveOptions {
             children: false,
             recursive: true,
             preserve_metadata: true,
+            is_valid: true,
         }
     }
 
@@ -48,6 +50,10 @@ impl ArchiveOptions {
     ///
     /// This is mutually exclusive with [`ArchiveOptions::update`].
     pub fn replace(mut self, replace: bool) -> Self {
+        if self.update {
+            self.is_valid = false;
+        }
+
         self.replace = replace;
         self
     }
@@ -56,6 +62,10 @@ impl ArchiveOptions {
     ///
     /// This is mutually exclusive with [`ArchiveOptions::replace`].
     pub fn update(mut self, update: bool) -> Self {
+        if self.replace {
+            self.is_valid = false;
+        }
+
         self.update = update;
         self
     }
@@ -127,6 +137,13 @@ impl<'conn> Archive<'conn> {
     where
         T: ReadMode,
     {
+        if !opts.is_valid {
+            return Err(crate::Error::msg(
+                crate::ErrorKind::InvalidArgs,
+                "Mutually exclusive options were used together in `ArchiveOptions`.",
+            ));
+        }
+
         if dest_root == Path::new("") && !opts.children {
             return Err(crate::Error::msg(
             crate::ErrorKind::InvalidArgs,
@@ -145,11 +162,11 @@ impl<'conn> Archive<'conn> {
         };
 
         while let Some(path) = stack.pop() {
-            let metadata = read_metadata(&path, opts.follow_symlinks)?;
+            let fs_metadata = read_metadata(&path, opts.follow_symlinks)?;
 
-            let file_type = if metadata.is_file() {
+            let file_type = if fs_metadata.is_file() {
                 FileType::File
-            } else if metadata.is_dir() {
+            } else if fs_metadata.is_dir() {
                 FileType::Dir
             } else {
                 // We ignore special files.
@@ -164,12 +181,39 @@ impl<'conn> Archive<'conn> {
 
             let mut archive_file = self.open(dest_path)?;
 
+            if opts.replace {
+                match archive_file.delete() {
+                    Ok(_) => {}
+                    Err(err) if err.kind() == &crate::ErrorKind::NotFound => {}
+                    Err(err) => return Err(err),
+                }
+            }
+
+            // TODO: Figure out how to handle directories.
+            if opts.update {
+                match archive_file.metadata() {
+                    Ok(FileMetadata {
+                        mtime: Some(archive_mtime),
+                        ..
+                    }) => {
+                        if let Ok(fs_mtime) = fs_metadata.modified() {
+                            if fs_mtime > archive_mtime {
+                                archive_file.delete()?;
+                            }
+                        }
+                    }
+                    Err(err) if err.kind() == &crate::ErrorKind::NotFound => {}
+                    Err(err) => return Err(err),
+                    _ => {}
+                };
+            }
+
             if opts.preserve_metadata {
-                let mode = mode_adapter.read_mode(&path, &metadata)?;
+                let mode = mode_adapter.read_mode(&path, &fs_metadata)?;
 
                 // `std::fs::Metadata::modified` returns an error when mtime isn't available on the current
                 // platform, in which case we just don't set the mtime in the archive.
-                let mtime = metadata.modified().ok();
+                let mtime = fs_metadata.modified().ok();
 
                 // Create the file with its metadata.
                 archive_file.create_with(file_type, mode, mtime)?;

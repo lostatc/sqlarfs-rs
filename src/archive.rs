@@ -15,12 +15,6 @@ use super::tree::ArchiveOptions;
 /// A SQLite archive is a SQLite database with a table named `sqlar` that conforms to a specific
 /// schema. A SQLite archive may contain other tables, and this library will ignore them.
 ///
-/// All file paths in a SQLite archive are relative paths; trying to use an absolute path will
-/// result in an error.
-///
-/// All file paths in a SQLite archive are encoded using the database encoding; trying to use a
-/// path that is not valid Unicode will result in an error.
-///
 /// [`Connection::exec`]: crate::Connection::exec
 #[derive(Debug)]
 pub struct Archive<'conn> {

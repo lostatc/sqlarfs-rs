@@ -106,44 +106,30 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     }
 
     fn validate_is_writable(&self) -> crate::Result<()> {
-        if self.store.has_dir_mode(&self.path)? {
-            Err(crate::Error::msg(
+        match self.store.read_metadata(&self.path)?.kind() {
+            FileType::File => Ok(()),
+            FileType::Dir => Err(crate::Error::msg(
                 crate::ErrorKind::IsADirectory,
-                "Cannot write to a file with a directory mode.",
-            ))
-        } else if self.store.has_descendants(&self.path)? {
-            Err(crate::Error::msg(
-                crate::ErrorKind::IsADirectory,
-                "Cannot write to a file that has descendants in the archive (i.e. is a directory).",
-            ))
-        } else if self.store.is_symlink(&self.path)? {
-            Err(crate::Error::msg(
+                "Cannot write to a directory.",
+            )),
+            FileType::Symlink => Err(crate::Error::msg(
                 crate::ErrorKind::IsASymlink,
-                "Cannot write to a file that is a symbolic link.",
-            ))
-        } else {
-            Ok(())
+                "Cannot write to a symbolic link.",
+            )),
         }
     }
 
     fn validate_is_readable(&self) -> crate::Result<()> {
-        if self.store.has_dir_mode(&self.path)? {
-            Err(crate::Error::msg(
+        match self.store.read_metadata(&self.path)?.kind() {
+            FileType::File => Ok(()),
+            FileType::Dir => Err(crate::Error::msg(
                 crate::ErrorKind::IsADirectory,
-                "Cannot read from a file with a directory mode.",
-            ))
-        } else if self.store.has_descendants(&self.path)? {
-            Err(crate::Error::msg(
-                crate::ErrorKind::IsADirectory,
-                "Cannot read from a file that has descendants in the archive (i.e. is a directory).",
-            ))
-        } else if self.store.is_symlink(&self.path)? {
-            Err(crate::Error::msg(
+                "Cannot read from a directory.",
+            )),
+            FileType::Symlink => Err(crate::Error::msg(
                 crate::ErrorKind::IsASymlink,
-                "Cannot read from a file that is a symbolic link.",
-            ))
-        } else {
-            Ok(())
+                "Cannot read from a symbolic link.",
+            )),
         }
     }
 
@@ -161,29 +147,19 @@ impl<'conn, 'ar> File<'conn, 'ar> {
             None => panic!("The given path is not valid Unicode, but we should have already checked for this when opening the file handle. This is a bug."),
         };
 
-        let parent_exists = match self.store.read_metadata(parent_str) {
-            Ok(_) => true,
-            Err(err) if err.kind() == &crate::ErrorKind::NotFound => false,
-            Err(err) => return Err(err),
-        };
-
-        if !parent_exists {
-            Err(crate::Error::msg(
+        match self.store.read_metadata(parent_str) {
+            Ok(metadata) => match metadata.kind() {
+                FileType::Dir => Ok(()),
+                _ => Err(crate::Error::msg(
+                    crate::ErrorKind::NotADirectory,
+                    "Cannot create a file whose parent is not a directory.",
+                )),
+            },
+            Err(err) if err.kind() == &crate::ErrorKind::NotFound => Err(crate::Error::msg(
                 crate::ErrorKind::NotFound,
                 "Cannot create a file whose parent does not exist.",
-            ))
-        } else if !self.store.has_dir_mode(parent_str)? {
-            Err(crate::Error::msg(
-                crate::ErrorKind::NotADirectory,
-                "Cannot create a file whose parent does not have the directory mode.",
-            ))
-        } else if self.store.has_nonzero_size_ancestor(&self.path)? {
-            Err(crate::Error::msg(
-                crate::ErrorKind::NotADirectory,
-                "Cannot create a file whose parent has a nonzero size (i.e. is not a directory).",
-            ))
-        } else {
-            Ok(())
+            )),
+            Err(err) => Err(err),
         }
     }
 

@@ -288,7 +288,7 @@ impl<'conn> Store<'conn> {
                         FileMetadata::File {
                             mode,
                             mtime,
-                            size: size as u64,
+                            size: size.try_into().expect("The file size in the database was negative, but we should have already checked for this. This is a bug."),
                         }
                     })
                 },
@@ -445,7 +445,7 @@ impl<'conn> Store<'conn> {
                 FileMetadata::File {
                     mode,
                     mtime,
-                    size: size as u64,
+                    size: size.try_into().expect("The file size in the database was negative, but we should have already checked for this. This is a bug."),
                 }
             };
 

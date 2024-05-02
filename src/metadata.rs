@@ -1,4 +1,4 @@
-use std::time::SystemTime;
+use std::{path::PathBuf, time::SystemTime};
 
 use bitflags::bitflags;
 
@@ -53,45 +53,52 @@ bitflags! {
     }
 }
 
-/// Metadata for a [`File`].
-///
-/// [`File`]: crate::File
+/// The metadata of a file in a SQLite archive.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
-pub struct FileMetadata {
-    /// The file mode (permissions).
-    pub mode: Option<FileMode>,
+pub enum FileMetadata {
+    /// A regular file.
+    File {
+        /// The file mode (permissions).
+        mode: Option<FileMode>,
 
-    /// The time the file was last modified.
-    ///
-    /// This value has second precision.
-    pub mtime: Option<SystemTime>,
+        /// The time the file was last modified.
+        mtime: Option<SystemTime>,
 
-    /// The uncompressed size of the file.
-    pub size: u64,
+        /// The uncompressed size of the file in bytes.
+        size: u64,
+    },
 
-    /// Whether this is a regular file or a directory.
-    ///
-    /// This can be `None` if the file had no mode in the database, or if the mode indicated the
-    /// file is a special file.
-    pub kind: Option<FileType>,
+    /// A directory.
+    Dir {
+        /// The file mode (permissions).
+        mode: Option<FileMode>,
+
+        /// The time the file was last modified.
+        mtime: Option<SystemTime>,
+    },
+
+    /// A symbolic link.
+    Symlink {
+        /// The path of the file the symbolic link points to.
+        target: PathBuf,
+    },
 }
 
 impl FileMetadata {
-    /// Whether this file is a regular file.
-    pub fn is_file(&self) -> bool {
-        matches!(self.kind, Some(FileType::File))
-    }
-
-    /// Whether this file is a directory.
-    pub fn is_dir(&self) -> bool {
-        matches!(self.kind, Some(FileType::Dir))
+    /// The [`FileType`] of this file.
+    pub fn kind(&self) -> FileType {
+        match self {
+            Self::File { .. } => FileType::File,
+            Self::Dir { .. } => FileType::Dir,
+            Self::Symlink { .. } => FileType::Symlink,
+        }
     }
 }
 
 pub const TYPE_MASK: u32 = 0o170000;
 pub const FILE_MODE: u32 = 0o100000;
 pub const DIR_MODE: u32 = 0o040000;
+pub const SYMLINK_MODE: u32 = 0o120000;
 
 /// The type of a file, either a regular file or a directory.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -101,18 +108,9 @@ pub enum FileType {
 
     /// A directory.
     Dir,
-}
 
-impl FileType {
-    pub(super) fn from_mode(mode: u32) -> Option<Self> {
-        if (mode & TYPE_MASK) == FILE_MODE {
-            Some(Self::File)
-        } else if (mode & TYPE_MASK) == DIR_MODE {
-            Some(Self::Dir)
-        } else {
-            None
-        }
-    }
+    /// A symbolic link.
+    Symlink,
 }
 
 impl FileMode {
@@ -124,30 +122,34 @@ impl FileMode {
         self.bits() | DIR_MODE
     }
 
+    pub(super) fn to_symlink_mode(self) -> u32 {
+        self.bits() | SYMLINK_MODE
+    }
+
     pub(super) fn from_mode(mode: u32) -> Self {
         Self::from_bits_truncate(mode & !TYPE_MASK)
     }
 }
 
 pub fn mode_from_umask(kind: FileType, umask: FileMode) -> FileMode {
-    let default = match kind {
+    match kind {
         FileType::File => {
-            FileMode::OWNER_R
+            !umask & FileMode::OWNER_R
                 | FileMode::OWNER_W
                 | FileMode::GROUP_R
                 | FileMode::GROUP_W
                 | FileMode::OTHER_R
                 | FileMode::OTHER_W
         }
-        FileType::Dir => FileMode::OWNER_RWX | FileMode::GROUP_RWX | FileMode::OTHER_RWX,
-    };
-
-    default & !umask
+        FileType::Dir => !umask & FileMode::OWNER_RWX | FileMode::GROUP_RWX | FileMode::OTHER_RWX,
+        // The permissions for a symlink are always 0o777, so we don't apply the umask.
+        FileType::Symlink => FileMode::OWNER_RWX | FileMode::GROUP_RWX | FileMode::OTHER_RWX,
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use xpct::{be_none, be_some, equal, expect};
+    use xpct::{equal, expect};
 
     use super::*;
 
@@ -165,6 +167,10 @@ mod tests {
         FileMode::OWNER_RWX | FileMode::GROUP_RWX | FileMode::OTHER_R | FileMode::OTHER_X
     }
 
+    fn test_symlink_mode() -> FileMode {
+        FileMode::OWNER_RWX | FileMode::GROUP_RWX | FileMode::OTHER_RWX
+    }
+
     #[test]
     fn get_file_mode_from_permissions() {
         expect!(test_file_mode().to_file_mode()).to(equal(0o100664));
@@ -176,22 +182,13 @@ mod tests {
     }
 
     #[test]
-    fn get_file_permissions_from_mode() {
-        expect!(FileMode::from_mode(0o100664)).to(equal(test_file_mode()));
-        expect!(FileMode::from_mode(0o040775)).to(equal(test_dir_mode()));
+    fn get_symlink_mode_from_permissions() {
+        expect!(test_symlink_mode().to_symlink_mode()).to(equal(0o120777));
     }
 
     #[test]
-    fn get_file_type_from_mode() {
-        expect!(FileType::from_mode(0o100664))
-            .to(be_some())
-            .to(equal(FileType::File));
-
-        expect!(FileType::from_mode(0o040775))
-            .to(be_some())
-            .to(equal(FileType::Dir));
-
-        // This is the mode for a symlink.
-        expect!(FileType::from_mode(0o120664)).to(be_none());
+    fn get_file_permissions_from_mode() {
+        expect!(FileMode::from_mode(0o100664)).to(equal(test_file_mode()));
+        expect!(FileMode::from_mode(0o040775)).to(equal(test_dir_mode()));
     }
 }

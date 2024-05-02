@@ -5,6 +5,7 @@ use rusqlite::blob::Blob;
 use rusqlite::{OptionalExtension, Savepoint};
 
 use crate::list::SortDirection;
+use crate::metadata::SYMLINK_MODE;
 
 use super::list::{ListEntries, ListEntry, ListMapFunc, ListOptions, ListSort};
 use super::metadata::{FileMetadata, FileMode, FileType, DIR_MODE, FILE_MODE, TYPE_MASK};
@@ -137,7 +138,15 @@ impl<'conn> Store<'conn> {
         kind: FileType,
         mode: FileMode,
         mtime: Option<SystemTime>,
+        symlink_target: Option<&str>,
     ) -> crate::Result<()> {
+        if symlink_target.is_some() && kind != FileType::Symlink {
+            return Err(crate::Error::msg(
+                crate::ErrorKind::InvalidArgs,
+                "Tried to create a non-symlink with a symlink target. This is a bug.",
+            ));
+        }
+
         let unix_mtime = mtime
             .map(|mtime| -> crate::Result<_> {
                 Ok(mtime
@@ -150,11 +159,23 @@ impl<'conn> Store<'conn> {
         let mode_bits = match kind {
             FileType::File => mode.to_file_mode(),
             FileType::Dir => mode.to_dir_mode(),
+            FileType::Symlink => mode.to_symlink_mode(),
+        };
+
+        let initial_size = match kind {
+            FileType::File => 0,
+            FileType::Dir => 0,
+            FileType::Symlink => -1,
+        };
+
+        let initial_data = match symlink_target {
+            Some(target) => target.as_bytes(),
+            None => &[],
         };
 
         let result = self.tx().execute(
-            "INSERT INTO sqlar (name, mode, mtime, sz, data) VALUES (?1, ?2, ?3, 0, zeroblob(0))",
-            (path, mode_bits, unix_mtime),
+            "INSERT INTO sqlar (name, mode, mtime, sz, data) VALUES (?1, ?2, ?3, ?4, ?5)",
+            (path, mode_bits, unix_mtime, initial_size, initial_data),
         );
 
         match result {
@@ -235,18 +256,40 @@ impl<'conn> Store<'conn> {
     pub fn read_metadata(&self, path: &str) -> crate::Result<FileMetadata> {
         self.tx()
             .query_row(
-                "SELECT mode, mtime, sz FROM sqlar WHERE name = ?1;",
+                "
+                SELECT
+                    mode,
+                    mtime,
+                    sz,
+                    iif(sz < 0, data, NULL) AS target,
+                    data IS NULL AS is_dir
+                FROM
+                    sqlar
+                WHERE
+                    name = ?1;
+                ",
                 (path,),
                 |row| {
-                    let raw_mode = row.get::<_, Option<u32>>(0)?;
+                    let mode = row.get::<_, Option<u32>>(0)?.map(FileMode::from_mode);
+                    let mtime = row
+                        .get::<_, Option<u64>>(1)?
+                        .map(|mtime_secs| UNIX_EPOCH + Duration::from_secs(mtime_secs));
+                    let size: i64 = row.get(2)?;
+                    let symlink_target: Option<String> = row.get(3)?;
+                    let is_dir: bool = row.get(4)?;
 
-                    Ok(FileMetadata {
-                        mode: raw_mode.map(FileMode::from_mode),
-                        mtime: row
-                            .get::<_, Option<u64>>(1)?
-                            .map(|mtime_secs| UNIX_EPOCH + Duration::from_secs(mtime_secs)),
-                        size: u64_from_usize(row.get(2)?),
-                        kind: raw_mode.and_then(FileType::from_mode),
+                    Ok(if let Some(target) = symlink_target {
+                        FileMetadata::Symlink {
+                            target: PathBuf::from(target),
+                        }
+                    } else if is_dir {
+                        FileMetadata::Dir { mode, mtime }
+                    } else {
+                        FileMetadata::File {
+                            mode,
+                            mtime,
+                            size: size as u64,
+                        }
                     })
                 },
             )
@@ -255,9 +298,10 @@ impl<'conn> Store<'conn> {
     }
 
     pub fn set_mode(&self, path: &str, mode: Option<FileMode>) -> crate::Result<()> {
+        // If the file is a symlink, this is a no-op. Symlinks always have 777 permissions.
         let num_updated = self.tx().execute(
-            "UPDATE sqlar SET mode = mode & ?1 | ?2 WHERE name = ?3",
-            (TYPE_MASK, mode.map(|mode| mode.bits()), path),
+            "UPDATE sqlar SET mode = iif(mode & ?1 = ?2, mode, mode & ?1 | ?3) WHERE name = ?4",
+            (TYPE_MASK, SYMLINK_MODE, mode.map(|mode| mode.bits()), path),
         )?;
 
         if num_updated == 0 {
@@ -342,7 +386,12 @@ impl<'conn> Store<'conn> {
                     sqlar
             )
             SELECT
-                s.name, s.mode, s.mtime, s.sz
+                s.name,
+                s.mode,
+                s.mtime,
+                s.sz,
+                iif(s.sz = -1, s.data, NULL) AS target,
+                s.data IS NULL AS is_dir
             FROM
                 sqlar AS s
             JOIN
@@ -372,23 +421,37 @@ impl<'conn> Store<'conn> {
             Box::new(match opts.file_type {
                 Some(FileType::File) => Some(FILE_MODE),
                 Some(FileType::Dir) => Some(DIR_MODE),
+                Some(FileType::Symlink) => Some(SYMLINK_MODE),
                 None => None,
             }),
         ];
 
         let map_func: ListMapFunc = Box::new(|row| {
-            let raw_mode = row.get::<_, Option<u32>>(1)?;
+            let mode = row.get::<_, Option<u32>>(1)?.map(FileMode::from_mode);
+            let mtime = row
+                .get::<_, Option<u64>>(2)?
+                .map(|mtime_secs| UNIX_EPOCH + Duration::from_secs(mtime_secs));
+            let size: i64 = row.get(3)?;
+            let symlink_target: Option<String> = row.get(4)?;
+            let is_dir: bool = row.get(5)?;
+
+            let metadata = if let Some(target) = symlink_target {
+                FileMetadata::Symlink {
+                    target: PathBuf::from(target),
+                }
+            } else if is_dir {
+                FileMetadata::Dir { mode, mtime }
+            } else {
+                FileMetadata::File {
+                    mode,
+                    mtime,
+                    size: size as u64,
+                }
+            };
 
             Ok(ListEntry {
                 path: PathBuf::from(row.get::<_, String>(0)?),
-                metadata: FileMetadata {
-                    mode: raw_mode.map(FileMode::from_mode),
-                    mtime: row
-                        .get::<_, Option<u64>>(2)?
-                        .map(|mtime_secs| UNIX_EPOCH + Duration::from_secs(mtime_secs)),
-                    size: row.get(3)?,
-                    kind: raw_mode.and_then(FileType::from_mode),
-                },
+                metadata,
             })
         });
 
@@ -412,6 +475,20 @@ impl<'conn> Store<'conn> {
     pub fn has_descendants(&self, path: &str) -> crate::Result<bool> {
         let result = self.tx().query_row(
             "SELECT name FROM sqlar WHERE name GLOB ?1 || '/?*' LIMIT 1",
+            (path,),
+            |_| Ok(()),
+        );
+
+        match result {
+            Ok(_) => Ok(true),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    pub fn is_symlink(&self, path: &str) -> crate::Result<bool> {
+        let result = self.tx().query_row(
+            "SELECT name FROM sqlar WHERE name = ?1 AND sz = -1 LIMIT 1",
             (path,),
             |_| Ok(()),
         );

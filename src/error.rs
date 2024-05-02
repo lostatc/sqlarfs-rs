@@ -123,6 +123,8 @@ impl From<Error> for io::Error {
             ErrorKind::IsADirectory => io::ErrorKind::Other,
             // When it's stable, we can use `std::io::ErrorKind::NotADirectory`.
             ErrorKind::NotADirectory => io::ErrorKind::Other,
+            ErrorKind::IsASymlink => io::ErrorKind::Other,
+            ErrorKind::NotASymlink => io::ErrorKind::Other,
             ErrorKind::CompressionNotSupported => io::ErrorKind::InvalidInput,
             ErrorKind::FileTooBig => io::ErrorKind::Other,
             ErrorKind::ReadOnly => io::ErrorKind::Other,
@@ -193,6 +195,12 @@ pub enum ErrorKind {
     /// A file was unexpectedly not a directory.
     NotADirectory,
 
+    /// A file was unexpectedly a symbolic link.
+    IsASymlink,
+
+    /// A file was unexpectedly not a symbolic link.
+    NotASymlink,
+
     /// Attempted to read a compressed file, but the `deflate` Cargo feature was disabled.
     CompressionNotSupported,
 
@@ -232,6 +240,8 @@ impl fmt::Display for ErrorKind {
             ErrorKind::InvalidArgs => "Some arguments were invalid.",
             ErrorKind::IsADirectory => "A file was unexpectedly a directory.",
             ErrorKind::NotADirectory => "A file was unexpectedly not a directory.",
+            ErrorKind::IsASymlink => "A file was unexpectedly a symbolic link.",
+            ErrorKind::NotASymlink => "A file was unexpectedly not a symbolic link.",
             ErrorKind::CompressionNotSupported => "Attempted to read a compressed file, but the `deflate` Cargo feature was disabled.",
             ErrorKind::FileTooBig => "Attempted to write more data to the SQLite archive than its maximum blob size will allow.",
             ErrorKind::ReadOnly => "Attempted to write to a read-only database.",

@@ -116,6 +116,11 @@ impl<'conn, 'ar> File<'conn, 'ar> {
                 crate::ErrorKind::IsADirectory,
                 "Cannot write to a file that has descendants in the archive (i.e. is a directory).",
             ))
+        } else if self.store.is_symlink(&self.path)? {
+            Err(crate::Error::msg(
+                crate::ErrorKind::IsASymlink,
+                "Cannot write to a file that is a symbolic link.",
+            ))
         } else {
             Ok(())
         }
@@ -131,6 +136,11 @@ impl<'conn, 'ar> File<'conn, 'ar> {
             Err(crate::Error::msg(
                 crate::ErrorKind::IsADirectory,
                 "Cannot read from a file that has descendants in the archive (i.e. is a directory).",
+            ))
+        } else if self.store.is_symlink(&self.path)? {
+            Err(crate::Error::msg(
+                crate::ErrorKind::IsASymlink,
+                "Cannot read from a file that is a symbolic link.",
             ))
         } else {
             Ok(())
@@ -216,6 +226,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// - [`File::create_dir`] to create a directory.
     /// - [`File::create_dir_all`] to create a directory and all its parent directories.
+    /// - [`File::create_symlink`] to create a symbolic link.
     /// - [`File::create_with`] to specify the metadata on file creation.
     ///
     /// # Errors
@@ -235,6 +246,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
             FileType::File,
             mode_from_umask(FileType::File, self.umask),
             Some(SystemTime::now()),
+            None,
         )
     }
 
@@ -247,6 +259,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// - [`File::create_file`] to create a regular file.
     /// - [`File::create_dir_all`] to create a directory and all its parent directories.
+    /// - [`File::create_symlink`] to create a symbolic link.
     /// - [`File::create_with`] to specify the metadata on file creation.
     ///
     /// # Errors
@@ -266,6 +279,58 @@ impl<'conn, 'ar> File<'conn, 'ar> {
             FileType::Dir,
             mode_from_umask(FileType::Dir, self.umask),
             Some(SystemTime::now()),
+            None,
+        )
+    }
+
+    /// Create a symbolic link if it doesn't already exist.
+    ///
+    /// This sets the file mode to `0o777` and sets the mtime to now. You can change the mtime with
+    /// [`File::set_mtime`].
+    ///
+    /// # See also
+    ///
+    /// - [`File::create_file`] to create a regular file.
+    /// - [`File::create_dir_all`] to create a directory and all its parent directories.
+    /// - [`File::create_with`] to specify the metadata on file creation.
+    ///
+    /// # Errors
+    ///
+    /// - [`ErrorKind::AlreadyExists`]: This file already exists in the archive.
+    /// - [`ErrorKind::NotFound`]: This file's parent directory does not exist.
+    /// - [`ErrorKind::NotADirectory`]: The file's parent is not a directory.
+    ///
+    /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
+    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
+    /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
+    pub fn create_symlink(&mut self, target: &Path) -> crate::Result<()> {
+        self.validate_can_be_created()?;
+
+        if target == Path::new("") {
+            return Err(crate::Error::msg(
+                crate::ErrorKind::InvalidArgs,
+                "The given link target path is empty.",
+            ));
+        }
+
+        let normalized_target = match target.as_os_str().to_str() {
+            Some(utf8_str) => utf8_str
+                .trim_end_matches(std::path::MAIN_SEPARATOR)
+                .to_owned(),
+            None => {
+                return Err(crate::Error::msg(
+                    crate::ErrorKind::InvalidArgs,
+                    "The given link target path is not valid Unicode.",
+                ))
+            }
+        };
+
+        self.store.create_file(
+            &self.path,
+            FileType::Dir,
+            mode_from_umask(FileType::Dir, self.umask),
+            Some(SystemTime::now()),
+            Some(normalized_target.as_str()),
         )
     }
 
@@ -280,6 +345,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// - [`File::create_file`] to create a regular file.
     /// - [`File::create_dir`] to create a directory.
+    /// - [`File::create_symlink`] to create a symbolic link.
     /// - [`File::create_with`] to specify the metadata on file creation.
     ///
     /// # Errors
@@ -298,7 +364,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
         }
 
         match self.metadata() {
-            Ok(metadata) if !metadata.is_dir() => {
+            Ok(metadata) if metadata.kind() != FileType::Dir => {
                 return Err(crate::Error::msg(
                     crate::ErrorKind::AlreadyExists,
                     "This file already exists, but is not a directory.",
@@ -329,6 +395,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
                     FileType::Dir,
                     mode,
                     Some(mtime),
+                    None,
                 );
 
                 match result {
@@ -347,10 +414,13 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// This accepts the initial file `mode` and `mtime`. It does not care about the current
     /// [`File::umask`].
     ///
+    /// This cannot be used to create a symbolic link. For that, use [`File::create_symlink`].
+    ///
     /// # See also
     ///
     /// - [`File::create_file`] to create a regular file with default permissions.
     /// - [`File::create_dir`] to create a directory with default permissions.
+    /// - [`File::create_symlink`] to create a symbolic link.
     /// - [`File::create_dir_all`] to create a directory and all its parent directories.
     ///
     /// # Errors
@@ -368,9 +438,16 @@ impl<'conn, 'ar> File<'conn, 'ar> {
         mode: FileMode,
         mtime: Option<SystemTime>,
     ) -> crate::Result<()> {
+        if kind == FileType::Symlink {
+            return Err(crate::Error::msg(
+                crate::ErrorKind::InvalidArgs,
+                "This method cannot be used to create a symbolic link.",
+            ));
+        }
+
         self.validate_can_be_created()?;
 
-        self.store.create_file(&self.path, kind, mode, mtime)
+        self.store.create_file(&self.path, kind, mode, mtime, None)
     }
 
     /// Delete the file from the archive.
@@ -420,6 +497,9 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// The file mode is nullable, so it's possible to set this to `None`.
     ///
+    /// Attempting to set the mode of a symlink is a no-op; Symlinks always have `0o777`
+    /// permissions.
+    ///
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
@@ -451,13 +531,25 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
     /// - [`ErrorKind::IsADirectory`]: The file is a directory.
+    /// - [`ErrorKind::IsASymlink`]: The file is a symbolic link.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
+    /// [`ErrorKind::IsASymlink`]: crate::ErrorKind::IsASymlink
     pub fn is_empty(&self) -> crate::Result<bool> {
         self.validate_is_readable()?;
 
-        Ok(self.metadata()?.size == 0)
+        match self.metadata()? {
+            FileMetadata::File { size, .. } => Ok(size == 0),
+            FileMetadata::Dir { .. } => Err(crate::Error::msg(
+                crate::ErrorKind::IsADirectory,
+                "Cannot get the size of a directory.",
+            )),
+            FileMetadata::Symlink { .. } => Err(crate::Error::msg(
+                crate::ErrorKind::IsASymlink,
+                "Cannot get the size of a symlink link.",
+            )),
+        }
     }
 
     /// Whether the contents of this file are compressed.
@@ -469,9 +561,11 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
     /// - [`ErrorKind::IsADirectory`]: The file is a directory.
+    /// - [`ErrorKind::IsASymlink`]: The file is a symbolic link.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
+    /// [`ErrorKind::IsASymlink`]: crate::ErrorKind::IsASymlink
     pub fn is_compressed(&self) -> crate::Result<bool> {
         self.validate_is_readable()?;
 
@@ -484,9 +578,11 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
     /// - [`ErrorKind::IsADirectory`]: The file is a directory.
+    /// - [`ErrorKind::IsASymlink`]: The file is a symbolic link.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
+    /// [`ErrorKind::IsASymlink`]: crate::ErrorKind::IsASymlink
     pub fn truncate(&mut self) -> crate::Result<()> {
         self.validate_is_writable()?;
 
@@ -516,10 +612,12 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// - [`ErrorKind::CompressionNotSupported`]: This file is compressed, but the `deflate` Cargo
     /// feature is disabled.
     /// - [`ErrorKind::IsADirectory`]: The file is a directory.
+    /// - [`ErrorKind::IsAsymlink`]: The file is a symbolic link.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::CompressionNotSupported`]: crate::ErrorKind::CompressionNotSupported
     /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
+    /// [`ErrorKind::IsASymlink`]: crate::ErrorKind::IsASymlink
     pub fn reader(&mut self) -> crate::Result<FileReader> {
         self.validate_is_readable()?;
 
@@ -692,9 +790,11 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
     /// - [`ErrorKind::IsADirectory`]: The file is a directory.
+    /// - [`ErrorKind::IsASymlink`]: The file is a symbolic link.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
+    /// [`ErrorKind::IsASymlink`]: crate::ErrorKind::IsASymlink
     pub fn write_from<R>(&mut self, reader: &mut R) -> crate::Result<()>
     where
         R: ?Sized + Read,
@@ -710,9 +810,11 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
     /// - [`ErrorKind::IsADirectory`]: The file is a directory.
+    /// - [`ErrorKind::IsASymlink`]: The file is a symbolic link.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
+    /// [`ErrorKind::IsASymlink`]: crate::ErrorKind::IsASymlink
     pub fn write_bytes(&mut self, bytes: &[u8]) -> crate::Result<()> {
         self.validate_is_writable()?;
 
@@ -754,9 +856,11 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
     /// - [`ErrorKind::IsADirectory`]: The file is a directory.
+    /// - [`ErrorKind::IsASymlink`]: The file is a symbolic link.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
+    /// [`ErrorKind::IsASymlink`]: crate::ErrorKind::IsASymlink
     pub fn write_str<S: AsRef<str>>(&mut self, s: S) -> crate::Result<()> {
         self.write_bytes(s.as_ref().as_bytes())
     }
@@ -771,9 +875,11 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
     /// - [`ErrorKind::IsADirectory`]: The file is a directory.
+    /// - [`ErrorKind::IsASymlink`]: The file is a symbolic link.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
+    /// [`ErrorKind::IsASymlink`]: crate::ErrorKind::IsASymlink
     pub fn write_file(&mut self, file: &mut fs::File) -> crate::Result<()> {
         // We know the size of the file, which enables some optimizations.
         let metadata = file.metadata()?;

@@ -178,9 +178,9 @@ impl<'conn> Archive<'conn> {
     /// Set the umask for newly created files and directories.
     ///
     /// This specifies the mode bits that will *not* be set, assuming the default mode for regular
-    /// files is `0o666` and the default mode for directories is `0o777`.
+    /// files is `666` and the default mode for directories is `777`.
     ///
-    /// The default umask is `FileMode::OTHER_W` (`0o002`).
+    /// The default umask is `FileMode::OTHER_W` (`002`).
     ///
     /// # Examples
     ///

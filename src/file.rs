@@ -333,7 +333,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
 
     /// Create a symbolic link if it doesn't already exist.
     ///
-    /// This sets the file mode to `0o777` and sets the mtime to now. You can change the mtime with
+    /// This sets the file mode to `777` and sets the mtime to now. You can change the mtime with
     /// [`File::set_mtime`].
     ///
     /// # See also
@@ -431,8 +431,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// The file mode is nullable, so it's possible to set this to `None`.
     ///
-    /// Attempting to set the mode of a symlink is a no-op; Symlinks always have `0o777`
-    /// permissions.
+    /// Attempting to set the mode of a symlink is a no-op; Symlinks always have `777` permissions.
     ///
     /// # Errors
     ///

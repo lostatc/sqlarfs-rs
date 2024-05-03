@@ -4,14 +4,17 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::time::SystemTime;
 
-use sqlarfs::{Compression, Connection, ErrorKind, FileMetadata, FileMode, FileType};
+use sqlarfs::{Compression, Connection, ErrorKind, FileMode, FileType};
 use tempfile::NamedTempFile;
 use xpct::{
-    be_empty, be_err, be_false, be_ok, be_some, be_true, be_zero, equal, expect, match_pattern,
-    pattern, why,
+    be_empty, be_err, be_false, be_ok, be_some, be_true, be_zero, equal, expect, fields,
+    match_fields, match_pattern, pattern, why,
 };
 
-use common::{connection, random_bytes, truncate_mtime, WRITE_DATA_SIZE};
+use common::{
+    connection, have_file_metadata, random_bytes, truncate_mtime, RegularFileMetadata,
+    WRITE_DATA_SIZE,
+};
 
 //
 // `File::path`
@@ -116,14 +119,8 @@ fn create_file_respects_file_umask() -> sqlarfs::Result<()> {
 
         expect!(file.metadata())
             .to(be_ok())
-            .map(|metadata| match metadata {
-                FileMetadata::File { mode, .. } => Some(mode),
-                _ => None,
-            })
-            .to(why(
-                be_some(),
-                "this is not the metadata for a regular file",
-            ))
+            .to(have_file_metadata())
+            .map(|metadata| metadata.mode)
             .to(why(be_some(), "the file mode is not set"))
             .to(equal(FileMode::OWNER_R | FileMode::OWNER_W));
 
@@ -229,40 +226,13 @@ fn file_metadata_when_creating_file_with_metadata() -> sqlarfs::Result<()> {
 
         let metadata = expect!(file.metadata()).to(be_ok()).into_inner();
 
-        expect!(&metadata)
-            .map(|metadata| match metadata {
-                FileMetadata::File { mode, .. } => Some(*mode),
-                _ => None,
-            })
-            .to(why(
-                be_some(),
-                "this is not the metadata for a regular file",
-            ))
-            .to(why(be_some(), "the file mode is not set"))
-            .to(equal(mode));
-
-        expect!(&metadata)
-            .map(|metadata| match metadata {
-                FileMetadata::File { mtime, .. } => Some(*mtime),
-                _ => None,
-            })
-            .to(why(
-                be_some(),
-                "this is not the metadata for a regular file",
-            ))
-            .to(why(be_some(), "the file mtime is not set"))
-            .to(equal(truncated_mtime));
-
-        expect!(&metadata)
-            .map(|metadata| match metadata {
-                FileMetadata::File { size, .. } => Some(*size),
-                _ => None,
-            })
-            .to(why(
-                be_some(),
-                "this is not the metadata for a regular file",
-            ))
-            .to(be_zero());
+        expect!(metadata.clone())
+            .to(have_file_metadata())
+            .to(match_fields(fields!(RegularFileMetadata {
+                mode: equal(Some(mode)),
+                mtime: equal(Some(truncated_mtime)),
+                size: be_zero(),
+            })));
 
         Ok(())
     })
@@ -292,14 +262,8 @@ fn file_size_is_zero_when_file_is_empty() -> sqlarfs::Result<()> {
 
         expect!(file.metadata())
             .to(be_ok())
-            .map(|metadata| match metadata {
-                FileMetadata::File { size, .. } => Some(size),
-                _ => None,
-            })
-            .to(why(
-                be_some(),
-                "this is not the metadata for a regular file",
-            ))
+            .to(have_file_metadata())
+            .map(|metadata| metadata.size)
             .to(be_zero());
 
         Ok(())
@@ -757,14 +721,8 @@ fn truncated_file_returns_no_bytes() -> sqlarfs::Result<()> {
 
         expect!(file.metadata())
             .to(be_ok())
-            .map(|metadata| match metadata {
-                FileMetadata::File { size, .. } => Some(size),
-                _ => None,
-            })
-            .to(why(
-                be_some(),
-                "this is not the metadata for a regular file",
-            ))
+            .to(have_file_metadata())
+            .map(|metadata| metadata.size)
             .to(be_zero());
 
         Ok(())

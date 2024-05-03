@@ -1,9 +1,13 @@
 #![allow(dead_code)]
 
+mod matchers;
+
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use rand::prelude::*;
 use sqlarfs::Connection;
+
+pub use matchers::*;
 
 pub const WRITE_DATA_SIZE: usize = 64;
 

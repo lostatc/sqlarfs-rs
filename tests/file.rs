@@ -529,6 +529,27 @@ fn set_file_mode_preserves_file_type() -> sqlarfs::Result<()> {
     })
 }
 
+#[test]
+fn set_file_mode_is_a_noop_for_symlinks() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut link = archive.open("link")?;
+        link.create_symlink("target")?;
+
+        let mode = FileMode::OWNER_R | FileMode::OWNER_W | FileMode::GROUP_R | FileMode::OTHER_R;
+        expect!(link.set_mode(Some(mode))).to(be_ok());
+
+        expect!(link.metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.mode())
+            .to(be_some())
+            .to(equal(
+                FileMode::OWNER_RWX | FileMode::GROUP_RWX | FileMode::OTHER_RWX,
+            ));
+
+        Ok(())
+    })
+}
+
 //
 // `File::set_mtime`
 //

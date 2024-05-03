@@ -7,6 +7,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use rand::prelude::*;
 use sqlarfs::Connection;
 
+#[allow(unused_imports)]
 pub use matchers::*;
 
 pub const WRITE_DATA_SIZE: usize = 64;

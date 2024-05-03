@@ -141,10 +141,7 @@ impl<'conn> Store<'conn> {
         symlink_target: Option<&str>,
     ) -> crate::Result<()> {
         if symlink_target.is_some() && kind != FileType::Symlink {
-            return Err(crate::Error::msg(
-                crate::ErrorKind::InvalidArgs,
-                "Tried to create a non-symlink with a symlink target. This is a bug.",
-            ));
+            panic!("Tried to create a non-symlink with a symlink target. This is a bug.");
         }
 
         let unix_mtime = mtime

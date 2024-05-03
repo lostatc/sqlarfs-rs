@@ -259,57 +259,6 @@ impl<'conn, 'ar> File<'conn, 'ar> {
         )
     }
 
-    /// Create a symbolic link if it doesn't already exist.
-    ///
-    /// This sets the file mode to `0o777` and sets the mtime to now. You can change the mtime with
-    /// [`File::set_mtime`].
-    ///
-    /// # See also
-    ///
-    /// - [`File::create_file`] to create a regular file.
-    /// - [`File::create_dir_all`] to create a directory and all its parent directories.
-    /// - [`File::create_with`] to specify the metadata on file creation.
-    ///
-    /// # Errors
-    ///
-    /// - [`ErrorKind::AlreadyExists`]: This file already exists in the archive.
-    /// - [`ErrorKind::NotFound`]: This file's parent directory does not exist.
-    /// - [`ErrorKind::NotADirectory`]: The file's parent is not a directory.
-    ///
-    /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
-    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
-    /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
-    pub fn create_symlink(&mut self, target: &Path) -> crate::Result<()> {
-        self.validate_can_be_created()?;
-
-        if target == Path::new("") {
-            return Err(crate::Error::msg(
-                crate::ErrorKind::InvalidArgs,
-                "The given link target path is empty.",
-            ));
-        }
-
-        let normalized_target = match target.as_os_str().to_str() {
-            Some(utf8_str) => utf8_str
-                .trim_end_matches(std::path::MAIN_SEPARATOR)
-                .to_owned(),
-            None => {
-                return Err(crate::Error::msg(
-                    crate::ErrorKind::InvalidArgs,
-                    "The given link target path is not valid Unicode.",
-                ))
-            }
-        };
-
-        self.store.create_file(
-            &self.path,
-            FileType::Dir,
-            mode_from_umask(FileType::Dir, self.umask),
-            Some(SystemTime::now()),
-            Some(normalized_target.as_str()),
-        )
-    }
-
     /// Create a directory and all its missing parent directories.
     ///
     /// Unlike [`File::create_dir`], this does not return an error if the directory already exists.
@@ -385,19 +334,71 @@ impl<'conn, 'ar> File<'conn, 'ar> {
         })
     }
 
+    /// Create a symbolic link if it doesn't already exist.
+    ///
+    /// This sets the file mode to `0o777` and sets the mtime to now. You can change the mtime with
+    /// [`File::set_mtime`].
+    ///
+    /// # See also
+    ///
+    /// - [`File::create_file`] to create a regular file.
+    /// - [`File::create_dir_all`] to create a directory and all its parent directories.
+    /// - [`File::create_with`] to specify the metadata on file creation.
+    ///
+    /// # Errors
+    ///
+    /// - [`ErrorKind::AlreadyExists`]: This file already exists in the archive.
+    /// - [`ErrorKind::NotFound`]: This file's parent directory does not exist.
+    /// - [`ErrorKind::NotADirectory`]: The file's parent is not a directory.
+    ///
+    /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
+    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
+    /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
+    pub fn create_symlink(&mut self, target: &Path) -> crate::Result<()> {
+        self.validate_can_be_created()?;
+
+        if target == Path::new("") {
+            return Err(crate::Error::msg(
+                crate::ErrorKind::InvalidArgs,
+                "The given link target path is empty.",
+            ));
+        }
+
+        let normalized_target = match target.as_os_str().to_str() {
+            Some(utf8_str) => utf8_str
+                .trim_end_matches(std::path::MAIN_SEPARATOR)
+                .to_owned(),
+            None => {
+                return Err(crate::Error::msg(
+                    crate::ErrorKind::InvalidArgs,
+                    "The given link target path is not valid Unicode.",
+                ))
+            }
+        };
+
+        self.store.create_file(
+            &self.path,
+            FileType::Symlink,
+            mode_from_umask(FileType::Symlink, self.umask),
+            Some(SystemTime::now()),
+            Some(normalized_target.as_str()),
+        )
+    }
+
     /// Create a file or directory if it doesn't already exist and set its metadata.
     ///
     /// This accepts the initial file `mode` and `mtime`. It does not care about the current
     /// [`File::umask`].
     ///
-    /// This cannot be used to create a symbolic link. For that, use [`File::create_symlink`].
+    /// The mode of symbolic links is always `0o777`. Attempting to create a symbolic link with a
+    /// different file mode will return an error.
     ///
     /// # See also
     ///
     /// - [`File::create_file`] to create a regular file with default permissions.
     /// - [`File::create_dir`] to create a directory with default permissions.
-    /// - [`File::create_symlink`] to create a symbolic link.
     /// - [`File::create_dir_all`] to create a directory and all its parent directories.
+    /// - [`File::create_symlink`] to create a symbolic link.
     ///
     /// # Errors
     ///
@@ -414,10 +415,10 @@ impl<'conn, 'ar> File<'conn, 'ar> {
         mode: FileMode,
         mtime: Option<SystemTime>,
     ) -> crate::Result<()> {
-        if kind == FileType::Symlink {
+        if kind == FileType::Symlink && mode != mode_from_umask(FileType::Symlink, self.umask) {
             return Err(crate::Error::msg(
                 crate::ErrorKind::InvalidArgs,
-                "This method cannot be used to create a symbolic link.",
+                "Symbolic links must have a mode of `0o777`.",
             ));
         }
 

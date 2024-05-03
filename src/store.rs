@@ -165,9 +165,14 @@ impl<'conn> Store<'conn> {
             FileType::Symlink => -1,
         };
 
-        let initial_data = match symlink_target {
-            Some(target) => target.as_bytes(),
-            None => &[],
+        let initial_data: Option<&[u8]> = match kind {
+            FileType::File => Some(&[]),
+            FileType::Dir => None,
+            FileType::Symlink => Some(
+                symlink_target
+                    .expect("Tried to create a symlink without a target. This is a bug.")
+                    .as_bytes(),
+            ),
         };
 
         let result = self.tx().execute(
@@ -275,6 +280,8 @@ impl<'conn> Store<'conn> {
                     let symlink_target: Option<String> = row.get(3)?;
                     let is_dir: bool = row.get(4)?;
 
+                    // We ignore the file mode in the database when determining the file type, but
+                    // we always try to set it correctly when writing to the database.
                     Ok(if let Some(target) = symlink_target {
                         FileMetadata::Symlink {
                             mtime,

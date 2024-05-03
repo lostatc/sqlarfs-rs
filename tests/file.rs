@@ -7,8 +7,8 @@ use std::time::SystemTime;
 use sqlarfs::{Compression, Connection, ErrorKind, FileMetadata, FileMode, FileType};
 use tempfile::NamedTempFile;
 use xpct::{
-    be_empty, be_err, be_false, be_none, be_ok, be_some, be_true, be_zero, equal, expect, fields,
-    match_fields, match_pattern, pattern,
+    be_empty, be_err, be_false, be_ok, be_some, be_true, be_zero, equal, expect, match_pattern,
+    pattern, why,
 };
 
 use common::{connection, random_bytes, truncate_mtime, WRITE_DATA_SIZE};
@@ -116,8 +116,15 @@ fn create_file_respects_file_umask() -> sqlarfs::Result<()> {
 
         expect!(file.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.mode)
-            .to(be_some())
+            .map(|metadata| match metadata {
+                FileMetadata::File { mode, .. } => Some(mode),
+                _ => None,
+            })
+            .to(why(
+                be_some(),
+                "this is not the metadata for a regular file",
+            ))
+            .to(why(be_some(), "the file mode is not set"))
             .to(equal(FileMode::OWNER_R | FileMode::OWNER_W));
 
         Ok(())
@@ -220,14 +227,42 @@ fn file_metadata_when_creating_file_with_metadata() -> sqlarfs::Result<()> {
 
         file.create_with(FileType::File, mode, Some(precise_mtime))?;
 
-        expect!(file.metadata())
-            .to(be_ok())
-            .to(match_fields(fields!(FileMetadata {
-                mtime: equal(Some(truncated_mtime)),
-                mode: equal(Some(mode)),
-                size: be_zero(),
-                kind: equal(Some(FileType::File)),
-            })));
+        let metadata = expect!(file.metadata()).to(be_ok()).into_inner();
+
+        expect!(&metadata)
+            .map(|metadata| match metadata {
+                FileMetadata::File { mode, .. } => Some(*mode),
+                _ => None,
+            })
+            .to(why(
+                be_some(),
+                "this is not the metadata for a regular file",
+            ))
+            .to(why(be_some(), "the file mode is not set"))
+            .to(equal(mode));
+
+        expect!(&metadata)
+            .map(|metadata| match metadata {
+                FileMetadata::File { mtime, .. } => Some(*mtime),
+                _ => None,
+            })
+            .to(why(
+                be_some(),
+                "this is not the metadata for a regular file",
+            ))
+            .to(why(be_some(), "the file mtime is not set"))
+            .to(equal(truncated_mtime));
+
+        expect!(&metadata)
+            .map(|metadata| match metadata {
+                FileMetadata::File { size, .. } => Some(*size),
+                _ => None,
+            })
+            .to(why(
+                be_some(),
+                "this is not the metadata for a regular file",
+            ))
+            .to(be_zero());
 
         Ok(())
     })
@@ -241,9 +276,8 @@ fn file_metadata_correctly_reports_directories() -> sqlarfs::Result<()> {
 
         expect!(dir.metadata())
             .to(be_ok())
-            .to(match_fields(fields!(FileMetadata {
-                kind: equal(Some(FileType::Dir)),
-            })));
+            .map(|metadata| metadata.kind())
+            .to(equal(FileType::Dir));
 
         Ok(())
     })
@@ -256,16 +290,24 @@ fn file_size_is_zero_when_file_is_empty() -> sqlarfs::Result<()> {
 
         file.create_file()?;
 
-        let metadata = file.metadata()?;
-
-        expect!(metadata.size).to(be_zero());
+        expect!(file.metadata())
+            .to(be_ok())
+            .map(|metadata| match metadata {
+                FileMetadata::File { size, .. } => Some(size),
+                _ => None,
+            })
+            .to(why(
+                be_some(),
+                "this is not the metadata for a regular file",
+            ))
+            .to(be_zero());
 
         Ok(())
     })
 }
 
 #[test]
-fn file_metadata_reports_no_file_type_when_mode_indicates_it_is_a_special_file(
+fn file_has_regular_file_metadata_even_when_mode_indicates_it_is_a_special_file(
 ) -> sqlarfs::Result<()> {
     let db_file = NamedTempFile::new()?;
 
@@ -286,16 +328,17 @@ fn file_metadata_reports_no_file_type_when_mode_indicates_it_is_a_special_file(
     conn.exec(|archive| {
         let file = archive.open("file")?;
 
-        let metadata = file.metadata()?;
-
-        expect!(metadata.kind).to(be_none());
+        expect!(file.metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.kind())
+            .to(equal(FileType::File));
 
         Ok(())
     })
 }
 
 #[test]
-fn file_metadata_reports_no_file_type_when_there_is_no_mode() -> sqlarfs::Result<()> {
+fn file_has_regular_file_metadata_even_when_there_is_no_mode() -> sqlarfs::Result<()> {
     let db_file = NamedTempFile::new()?;
 
     // Initialize the database with the `sqlar` table.
@@ -312,9 +355,10 @@ fn file_metadata_reports_no_file_type_when_there_is_no_mode() -> sqlarfs::Result
     conn.exec(|archive| {
         let file = archive.open("file")?;
 
-        let metadata = file.metadata()?;
-
-        expect!(metadata.kind).to(be_none());
+        expect!(file.metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.kind())
+            .to(equal(FileType::File));
 
         Ok(())
     })
@@ -468,7 +512,7 @@ fn set_file_mode() -> sqlarfs::Result<()> {
 
         expect!(file.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.mode)
+            .map(|metadata| metadata.mode())
             .to(be_some())
             .to(equal(FileMode::from_bits_truncate(0o664)));
 
@@ -478,7 +522,7 @@ fn set_file_mode() -> sqlarfs::Result<()> {
 
         expect!(file.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.mode)
+            .map(|metadata| metadata.mode())
             .to(be_some())
             .to(equal(mode));
 
@@ -511,8 +555,7 @@ fn set_file_mode_preserves_file_type() -> sqlarfs::Result<()> {
 
         expect!(file.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.kind)
-            .to(be_some())
+            .map(|metadata| metadata.kind())
             .to(equal(FileType::File));
 
         Ok(())
@@ -537,7 +580,7 @@ fn set_file_mtime() -> sqlarfs::Result<()> {
 
         expect!(file.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.mtime)
+            .map(|metadata| metadata.mtime())
             .to(be_some())
             .to(equal(truncated_mtime));
 
@@ -685,40 +728,6 @@ fn open_reader_errors_when_file_is_a_directory() -> sqlarfs::Result<()> {
     })
 }
 
-#[test]
-fn open_reader_errors_when_file_has_regular_file_mode_but_also_descendants() -> sqlarfs::Result<()>
-{
-    let db_file = NamedTempFile::new()?;
-
-    // Initialize the database with the `sqlar` table.
-    Connection::open(db_file.path())?;
-
-    let regular_file_mode = 0o100664;
-
-    let conn = rusqlite::Connection::open(db_file.path())?;
-    conn.execute(
-        "INSERT INTO sqlar (name, mode, sz, data) VALUES (?1, ?2, 0, zeroblob(0))",
-        ("dir", regular_file_mode),
-    )?;
-    conn.execute(
-        "INSERT INTO sqlar (name, mode, sz, data) VALUES (?1, ?2, 0, zeroblob(0))",
-        ("dir/file", regular_file_mode),
-    )?;
-
-    let mut conn = Connection::open(db_file.path())?;
-
-    conn.exec(|archive| {
-        let mut dir = archive.open("dir")?;
-
-        expect!(dir.reader())
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::IsADirectory));
-
-        Ok(())
-    })
-}
-
 //
 // `File::truncate`
 //
@@ -748,7 +757,14 @@ fn truncated_file_returns_no_bytes() -> sqlarfs::Result<()> {
 
         expect!(file.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.size)
+            .map(|metadata| match metadata {
+                FileMetadata::File { size, .. } => Some(size),
+                _ => None,
+            })
+            .to(why(
+                be_some(),
+                "this is not the metadata for a regular file",
+            ))
             .to(be_zero());
 
         Ok(())
@@ -811,40 +827,6 @@ fn write_bytes_errors_when_file_is_a_directory() -> sqlarfs::Result<()> {
         dir.create_dir()?;
 
         expect!(dir.write_bytes(b"file content"))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::IsADirectory));
-
-        Ok(())
-    })
-}
-
-#[test]
-fn write_bytes_errors_when_file_has_regular_file_mode_but_also_descendants() -> sqlarfs::Result<()>
-{
-    let db_file = NamedTempFile::new()?;
-
-    // Initialize the database with the `sqlar` table.
-    Connection::open(db_file.path())?;
-
-    let regular_file_mode = 0o100664;
-
-    let conn = rusqlite::Connection::open(db_file.path())?;
-    conn.execute(
-        "INSERT INTO sqlar (name, mode, sz, data) VALUES (?1, ?2, 0, zeroblob(0))",
-        ("dir", regular_file_mode),
-    )?;
-    conn.execute(
-        "INSERT INTO sqlar (name, mode, sz, data) VALUES (?1, ?2, 0, zeroblob(0))",
-        ("dir/file", regular_file_mode),
-    )?;
-
-    let mut conn = Connection::open(db_file.path())?;
-
-    conn.exec(|archive| {
-        let mut dir = archive.open("dir")?;
-
-        expect!(dir.write_bytes("file contents".as_bytes()))
             .to(be_err())
             .map(|err| err.into_kind())
             .to(equal(ErrorKind::IsADirectory));

@@ -113,6 +113,15 @@ impl FileMetadata {
             }
         }
     }
+
+    /// The file mode (permissions).
+    pub fn mode(&self) -> Option<FileMode> {
+        match self {
+            Self::File { mode, .. } | Self::Dir { mode, .. } => *mode,
+            // Symlinks always have a mode of `0o777`.
+            Self::Symlink { .. } => Some(mode_from_umask(FileType::Symlink, FileMode::empty())),
+        }
+    }
 }
 
 pub const TYPE_MASK: u32 = 0o170000;
@@ -154,14 +163,15 @@ impl FileMode {
 pub fn mode_from_umask(kind: FileType, umask: FileMode) -> FileMode {
     match kind {
         FileType::File => {
-            !umask & FileMode::OWNER_R
-                | FileMode::OWNER_W
-                | FileMode::GROUP_R
-                | FileMode::GROUP_W
-                | FileMode::OTHER_R
-                | FileMode::OTHER_W
+            !umask
+                & (FileMode::OWNER_R
+                    | FileMode::OWNER_W
+                    | FileMode::GROUP_R
+                    | FileMode::GROUP_W
+                    | FileMode::OTHER_R
+                    | FileMode::OTHER_W)
         }
-        FileType::Dir => !umask & FileMode::OWNER_RWX | FileMode::GROUP_RWX | FileMode::OTHER_RWX,
+        FileType::Dir => !umask & (FileMode::OWNER_RWX | FileMode::GROUP_RWX | FileMode::OTHER_RWX),
         // The permissions for a symlink are always 0o777, so we don't apply the umask.
         FileType::Symlink => FileMode::OWNER_RWX | FileMode::GROUP_RWX | FileMode::OTHER_RWX,
     }

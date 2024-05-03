@@ -277,7 +277,7 @@ impl<'conn> Store<'conn> {
                         .get::<_, Option<u64>>(1)?
                         .map(|mtime_secs| UNIX_EPOCH + Duration::from_secs(mtime_secs));
                     let size: i64 = row.get(2)?;
-                    let symlink_target: Option<String> = row.get(3)?;
+                    let symlink_target: Option<Vec<u8>> = row.get(3)?;
                     let is_dir: bool = row.get(4)?;
 
                     // We ignore the file mode in the database when determining the file type, but
@@ -285,7 +285,9 @@ impl<'conn> Store<'conn> {
                     Ok(if let Some(target) = symlink_target {
                         FileMetadata::Symlink {
                             mtime,
-                            target: PathBuf::from(target),
+                            // We don't allow non-Unicode symlink targets in the database, but we
+                            // don't know what might already be in there.
+                            target: PathBuf::from(String::from_utf8_lossy(&target).as_ref()),
                         }
                     } else if is_dir {
                         FileMetadata::Dir { mode, mtime }
@@ -437,13 +439,15 @@ impl<'conn> Store<'conn> {
                 .get::<_, Option<u64>>(2)?
                 .map(|mtime_secs| UNIX_EPOCH + Duration::from_secs(mtime_secs));
             let size: i64 = row.get(3)?;
-            let symlink_target: Option<String> = row.get(4)?;
+            let symlink_target: Option<Vec<u8>> = row.get(4)?;
             let is_dir: bool = row.get(5)?;
 
             let metadata = if let Some(target) = symlink_target {
                 FileMetadata::Symlink {
                     mtime,
-                    target: PathBuf::from(target),
+                    // We don't allow non-Unicode symlink targets in the database, but we
+                    // don't know what might already be in there.
+                    target: PathBuf::from(String::from_utf8_lossy(&target).as_ref()),
                 }
             } else if is_dir {
                 FileMetadata::Dir { mode, mtime }

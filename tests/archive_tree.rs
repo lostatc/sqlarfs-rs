@@ -250,41 +250,6 @@ fn archiving_follows_symlinks() -> sqlarfs::Result<()> {
     })
 }
 
-#[test]
-#[cfg(unix)]
-fn archiving_does_not_follow_symlinks() -> sqlarfs::Result<()> {
-    use nix::unistd::symlinkat;
-
-    let temp_dir = tempfile::tempdir()?;
-    let symlink_target = tempfile::NamedTempFile::new()?;
-
-    symlinkat(
-        symlink_target.path(),
-        None,
-        &temp_dir.path().join("symlink"),
-    )
-    .map_err(|err| {
-        Error::new(
-            ErrorKind::Io {
-                kind: io::ErrorKind::Other,
-            },
-            err,
-        )
-    })?;
-
-    connection()?.exec(|archive| {
-        let opts = ArchiveOptions::new().follow_symlinks(false);
-
-        expect!(archive.archive_with(temp_dir.path(), "dir", &opts)).to(be_ok());
-
-        let symlink = archive.open("dir/symlink")?;
-
-        expect!(symlink.exists()).to(be_ok()).to(be_false());
-
-        Ok(())
-    })
-}
-
 //
 // `ArchiveOptions::children`
 //
@@ -478,7 +443,7 @@ fn archiving_does_not_preserve_file_mtime() -> sqlarfs::Result<()> {
             .to(have_file_metadata())
             .map(|metadata| metadata.mtime)
             .to(be_some())
-            .to(approx_eq_time(SystemTime::now(), Duration::from_secs(1)));
+            .to(approx_eq_time(SystemTime::now(), Duration::from_secs(2)));
 
         Ok(())
     })

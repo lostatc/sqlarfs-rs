@@ -76,7 +76,7 @@ impl<'conn> Archive<'conn> {
     /// List the regular files that are descendants of `parent/dir` in descending order by size.
     ///
     /// ```
-    /// # use sqlarfs::{ListOptions, Connection};
+    /// # use sqlarfs::{ListOptions, Connection, FileMetadata};
     /// # let mut connection = Connection::open_in_memory()?;
     /// # let mut tx = connection.transaction()?;
     /// # let mut archive = tx.archive_mut();
@@ -84,7 +84,11 @@ impl<'conn> Archive<'conn> {
     ///
     /// for result in archive.list_with(&opts)? {
     ///     let entry = result?;
-    ///     println!("{}: {}", entry.path().to_string_lossy(), entry.metadata().size);
+    ///     let path = entry.path();
+    ///
+    ///     if let FileMetadata::File { size, .. } = entry.metadata() {
+    ///         println!("{}: {}", path.to_string_lossy(), size);
+    ///     }
     /// }
     /// # sqlarfs::Result::Ok(())
     /// ```

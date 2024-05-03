@@ -153,6 +153,9 @@ impl<'conn> Store<'conn> {
             })
             .transpose()?;
 
+        // While we don't rely on this information to determine the file type, we set the correct
+        // file mode bits when we create a file, because that's what the reference implementation
+        // does.
         let mode_bits = match kind {
             FileType::File => mode.to_file_mode(),
             FileType::Dir => mode.to_dir_mode(),
@@ -160,13 +163,14 @@ impl<'conn> Store<'conn> {
         };
 
         let initial_size = match kind {
-            FileType::File => 0,
-            FileType::Dir => 0,
+            FileType::File | FileType::Dir => 0,
+            // The negative size indicates that the file is a symlink.
             FileType::Symlink => -1,
         };
 
         let initial_data: Option<&[u8]> = match kind {
             FileType::File => Some(&[]),
+            // A NULL value in the `data` column indicates that the file is a directory.
             FileType::Dir => None,
             FileType::Symlink => Some(
                 symlink_target
@@ -280,8 +284,7 @@ impl<'conn> Store<'conn> {
                     let symlink_target: Option<Vec<u8>> = row.get(3)?;
                     let is_dir: bool = row.get(4)?;
 
-                    // We ignore the file mode in the database when determining the file type, but
-                    // we always try to set it correctly when writing to the database.
+                    // We ignore the file mode in the database when determining the file type.
                     Ok(if let Some(target) = symlink_target {
                         FileMetadata::Symlink {
                             mtime,

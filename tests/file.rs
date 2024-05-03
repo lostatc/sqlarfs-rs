@@ -12,8 +12,8 @@ use xpct::{
 };
 
 use common::{
-    connection, have_file_metadata, random_bytes, truncate_mtime, RegularFileMetadata,
-    WRITE_DATA_SIZE,
+    connection, have_file_metadata, have_symlink_metadata, random_bytes, truncate_mtime,
+    RegularFileMetadata, WRITE_DATA_SIZE,
 };
 
 //
@@ -128,35 +128,6 @@ fn create_file_respects_file_umask() -> sqlarfs::Result<()> {
     })
 }
 
-#[test]
-fn create_file_errors_when_parent_has_directory_mode_but_nonzero_size() -> sqlarfs::Result<()> {
-    let db_file = NamedTempFile::new()?;
-
-    // Initialize the database with the `sqlar` table.
-    Connection::open(db_file.path())?;
-
-    let dir_mode = 0o040775;
-
-    let conn = rusqlite::Connection::open(db_file.path())?;
-    conn.execute(
-        "INSERT INTO sqlar (name, mode, sz, data) VALUES (?1, ?2, 1, zeroblob(1))",
-        ("dir", dir_mode),
-    )?;
-
-    let mut conn = Connection::open(db_file.path())?;
-
-    conn.exec(|archive| {
-        let mut file = archive.open("dir/file")?;
-
-        expect!(file.create_file())
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::NotADirectory));
-
-        Ok(())
-    })
-}
-
 //
 // `File::create_dir_all`
 //
@@ -249,6 +220,37 @@ fn file_metadata_correctly_reports_directories() -> sqlarfs::Result<()> {
             .to(be_ok())
             .map(|metadata| metadata.kind())
             .to(equal(FileType::Dir));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn file_metadata_correctly_reports_symlinks() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut link = archive.open("link")?;
+        link.create_symlink("target")?;
+
+        expect!(link.metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.kind())
+            .to(equal(FileType::Symlink));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn file_metadata_contains_symlink_target() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut link = archive.open("link")?;
+        link.create_symlink("target")?;
+
+        expect!(link.metadata())
+            .to(be_ok())
+            .to(have_symlink_metadata())
+            .map(|metadata| metadata.target)
+            .to(equal(Path::new("target")));
 
         Ok(())
     })
@@ -627,6 +629,21 @@ fn is_file_empty_errors_when_it_is_a_directory() -> sqlarfs::Result<()> {
     })
 }
 
+#[test]
+fn is_file_empty_errors_when_it_is_a_symlink() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut link = archive.open("link")?;
+        link.create_symlink("target")?;
+
+        expect!(link.is_empty())
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::IsASymlink));
+
+        Ok(())
+    })
+}
+
 //
 // `File::is_compressed`
 //
@@ -660,6 +677,21 @@ fn is_file_compressed_errors_when_it_is_a_directory() -> sqlarfs::Result<()> {
     })
 }
 
+#[test]
+fn is_file_compressed_errors_when_it_is_a_symlink() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut link = archive.open("link")?;
+        link.create_symlink("target")?;
+
+        expect!(link.is_compressed())
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::IsASymlink));
+
+        Ok(())
+    })
+}
+
 //
 // `File::reader`
 //
@@ -688,6 +720,21 @@ fn open_reader_errors_when_file_is_a_directory() -> sqlarfs::Result<()> {
             .to(be_err())
             .map(|err| err.into_kind())
             .to(equal(ErrorKind::IsADirectory));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn open_reader_errors_when_file_is_a_symlink() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut link = archive.open("link")?;
+        link.create_symlink("target")?;
+
+        expect!(link.reader())
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::IsASymlink));
 
         Ok(())
     })
@@ -759,6 +806,21 @@ fn truncate_file_errors_when_it_is_a_directory() -> sqlarfs::Result<()> {
     })
 }
 
+#[test]
+fn truncate_file_errors_when_it_is_a_symlink() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut file = archive.open("link")?;
+        file.create_symlink("target")?;
+
+        expect!(file.truncate())
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::IsASymlink));
+
+        Ok(())
+    })
+}
+
 //
 // `File::write_bytes`
 //
@@ -794,9 +856,23 @@ fn write_bytes_errors_when_file_is_a_directory() -> sqlarfs::Result<()> {
     })
 }
 
+#[test]
+fn write_bytes_errors_when_file_is_a_symlink() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut link = archive.open("link")?;
+        link.create_symlink("target")?;
+
+        expect!(link.write_bytes(b"file content"))
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::IsASymlink));
+
+        Ok(())
+    })
+}
+
 //
 // `File::write_str`
-//
 //
 
 #[test]
@@ -823,6 +899,21 @@ fn write_string_errors_when_file_is_a_directory() -> sqlarfs::Result<()> {
             .to(be_err())
             .map(|err| err.into_kind())
             .to(equal(ErrorKind::IsADirectory));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn write_string_errors_when_file_is_a_symlink() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut link = archive.open("link")?;
+        link.create_symlink("target")?;
+
+        expect!(link.write_str("file content"))
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::IsASymlink));
 
         Ok(())
     })
@@ -861,6 +952,21 @@ fn write_from_reader_errors_when_file_is_a_directory() -> sqlarfs::Result<()> {
     })
 }
 
+#[test]
+fn write_from_reader_errors_when_file_is_a_symlink() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut link = archive.open("link")?;
+        link.create_symlink("target")?;
+
+        expect!(link.write_from(&mut "file content".as_bytes()))
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::IsASymlink));
+
+        Ok(())
+    })
+}
+
 //
 // `File::write_file`
 //
@@ -893,6 +999,23 @@ fn write_from_file_errors_when_file_is_a_directory() -> sqlarfs::Result<()> {
             .to(be_err())
             .map(|err| err.into_kind())
             .to(equal(ErrorKind::IsADirectory));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn write_from_file_errors_when_file_is_a_symlink() -> sqlarfs::Result<()> {
+    let mut temp_file = tempfile::tempfile()?;
+
+    connection()?.exec(|archive| {
+        let mut link = archive.open("link")?;
+        link.create_symlink("target")?;
+
+        expect!(link.write_file(&mut temp_file))
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::IsASymlink));
 
         Ok(())
     })

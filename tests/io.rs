@@ -7,7 +7,10 @@ use flate2::write::ZlibEncoder;
 use sqlarfs::Compression;
 use xpct::{be_false, be_ge, be_lt, be_ok, be_true, eq_diff, equal, expect};
 
-use common::{compressible_bytes, connection, incompressible_bytes, random_bytes, WRITE_DATA_SIZE};
+use common::{
+    compressible_bytes, connection, have_file_metadata, incompressible_bytes, random_bytes,
+    WRITE_DATA_SIZE,
+};
 
 // Some of our tests require inputs that we know for sure are compressible via zlib. Let's make
 // absolutely sure that the test data we are using is in fact compressible.
@@ -76,6 +79,7 @@ fn write_bytes_without_compression() -> sqlarfs::Result<()> {
 
         expect!(file.metadata())
             .to(be_ok())
+            .to(have_file_metadata())
             .map(|metadata| metadata.size)
             .try_into::<usize>()
             .to(equal(expected.len()));
@@ -108,6 +112,7 @@ fn write_incompressible_bytes_with_compression() -> sqlarfs::Result<()> {
 
         expect!(file.metadata())
             .to(be_ok())
+            .to(have_file_metadata())
             .map(|metadata| metadata.size)
             .try_into::<usize>()
             .to(equal(expected.len()));
@@ -140,6 +145,7 @@ fn write_compressible_bytes_with_compression() -> sqlarfs::Result<()> {
 
         expect!(file.metadata())
             .to(be_ok())
+            .to(have_file_metadata())
             .map(|metadata| metadata.size)
             .try_into::<usize>()
             .to(equal(expected.len()));
@@ -177,6 +183,7 @@ fn write_from_reader_without_compression() -> sqlarfs::Result<()> {
 
         expect!(file.metadata())
             .to(be_ok())
+            .to(have_file_metadata())
             .map(|metadata| metadata.size)
             .try_into::<usize>()
             .to(equal(expected.len()));
@@ -211,6 +218,7 @@ fn write_incompressible_data_from_reader_with_compression() -> sqlarfs::Result<(
 
         expect!(file.metadata())
             .to(be_ok())
+            .to(have_file_metadata())
             .map(|metadata| metadata.size)
             .try_into::<usize>()
             .to(equal(expected.len()));
@@ -245,6 +253,7 @@ fn write_compressible_data_from_reader_with_compression() -> sqlarfs::Result<()>
 
         expect!(file.metadata())
             .to(be_ok())
+            .to(have_file_metadata())
             .map(|metadata| metadata.size)
             .try_into::<usize>()
             .to(equal(expected.len()));
@@ -286,6 +295,7 @@ fn write_from_file_without_compression() -> sqlarfs::Result<()> {
 
         expect!(file.metadata())
             .to(be_ok())
+            .to(have_file_metadata())
             .map(|metadata| metadata.size)
             .try_into::<usize>()
             .to(equal(expected.len()));
@@ -325,6 +335,7 @@ fn write_incompressible_data_from_file_with_compression() -> sqlarfs::Result<()>
 
         expect!(file.metadata())
             .to(be_ok())
+            .to(have_file_metadata())
             .map(|metadata| metadata.size)
             .try_into::<usize>()
             .to(equal(expected.len()));
@@ -364,6 +375,7 @@ fn write_compressible_data_from_file_with_compression() -> sqlarfs::Result<()> {
 
         expect!(file.metadata())
             .to(be_ok())
+            .to(have_file_metadata())
             .map(|metadata| metadata.size)
             .try_into::<usize>()
             .to(equal(expected.len()));

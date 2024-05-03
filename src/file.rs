@@ -20,10 +20,10 @@ fn unwrap_path_parent(path: &Path) -> &Path {
 
 /// A file in a SQLite archive.
 ///
-/// A [`File`] is a handle to a file that may or may not exist in the SQLite archive. You can call
-/// [`File::create_file`] or [`File::create_dir`] to actually create the file if it doesn't already
-/// exist. Attempting to read or write data or metadata on this file will return an error if the
-/// file doesn't exist.
+/// A [`File`] is a handle to a regular file, directory, or symbolic link that may or may not exist
+/// in the SQLite archive. You can call [`File::create_file`], [`File::create_dir`], or
+/// [`File::create_symlink`] to actually create the file if it doesn't already exist. Attempting to
+/// read or write data or metadata on this file will return an error if the file doesn't exist.
 ///
 /// # Reading and writing
 ///
@@ -32,7 +32,7 @@ fn unwrap_path_parent(path: &Path) -> &Path {
 ///
 /// Writing to a file does not automatically update its [`FileMetadata::File::mtime`].
 ///
-/// Attempting to read from or write to a directory will return an error.
+/// Attempting to read from or write to a directory or symbolic link will return an error.
 ///
 /// # Compression
 ///

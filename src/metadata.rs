@@ -62,6 +62,8 @@ pub enum FileMetadata {
         mode: Option<FileMode>,
 
         /// The time the file was last modified.
+        ///
+        /// This has a precision of 1 second.
         mtime: Option<SystemTime>,
 
         /// The uncompressed size of the file in bytes.
@@ -74,11 +76,18 @@ pub enum FileMetadata {
         mode: Option<FileMode>,
 
         /// The time the file was last modified.
+        ///
+        /// This has a precision of 1 second.
         mtime: Option<SystemTime>,
     },
 
     /// A symbolic link.
     Symlink {
+        /// The time the file was last modified.
+        ///
+        /// This has a precision of 1 second.
+        mtime: Option<SystemTime>,
+
         /// The path of the file the symbolic link points to.
         target: PathBuf,
     },
@@ -91,6 +100,17 @@ impl FileMetadata {
             Self::File { .. } => FileType::File,
             Self::Dir { .. } => FileType::Dir,
             Self::Symlink { .. } => FileType::Symlink,
+        }
+    }
+
+    /// The time the file was last modified.
+    ///
+    /// This has a precision of 1 second.
+    pub fn mtime(&self) -> Option<SystemTime> {
+        match self {
+            Self::File { mtime, .. } | Self::Dir { mtime, .. } | Self::Symlink { mtime, .. } => {
+                *mtime
+            }
         }
     }
 }

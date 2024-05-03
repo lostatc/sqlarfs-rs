@@ -277,6 +277,7 @@ impl<'conn> Store<'conn> {
 
                     Ok(if let Some(target) = symlink_target {
                         FileMetadata::Symlink {
+                            mtime,
                             target: PathBuf::from(target),
                         }
                     } else if is_dir {
@@ -434,6 +435,7 @@ impl<'conn> Store<'conn> {
 
             let metadata = if let Some(target) = symlink_target {
                 FileMetadata::Symlink {
+                    mtime,
                     target: PathBuf::from(target),
                 }
             } else if is_dir {

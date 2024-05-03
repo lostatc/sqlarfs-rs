@@ -238,7 +238,9 @@ impl<'conn> Archive<'conn> {
                     mode_adapter.write_mode(dest_path, *mode)?;
                 }
             }
-            FileMetadata::Symlink { target } => {
+            // We currently do not attempt to set the mtime of symlinks, because Rust doesn't seem
+            // to provide a way to do that.
+            FileMetadata::Symlink { target, .. } => {
                 // This is a no-op on non-Unix-like systems.
                 #[cfg(unix)]
                 {

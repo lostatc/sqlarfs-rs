@@ -351,17 +351,19 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
-    pub fn create_symlink(&mut self, target: &Path) -> crate::Result<()> {
+    pub fn create_symlink<P: AsRef<Path>>(&mut self, target: P) -> crate::Result<()> {
+        let target_path = target.as_ref();
+
         self.validate_can_be_created()?;
 
-        if target == Path::new("") {
+        if target_path == Path::new("") {
             return Err(crate::Error::msg(
                 crate::ErrorKind::InvalidArgs,
                 "The given link target path is empty.",
             ));
         }
 
-        let normalized_target = match target.as_os_str().to_str() {
+        let normalized_target = match target_path.as_os_str().to_str() {
             Some(utf8_str) => utf8_str
                 .trim_end_matches(std::path::MAIN_SEPARATOR)
                 .to_owned(),

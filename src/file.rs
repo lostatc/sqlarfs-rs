@@ -203,7 +203,6 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// - [`File::create_dir`] to create a directory.
     /// - [`File::create_dir_all`] to create a directory and all its parent directories.
     /// - [`File::create_symlink`] to create a symbolic link.
-    /// - [`File::create_with`] to specify the metadata on file creation.
     ///
     /// # Errors
     ///
@@ -236,7 +235,6 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// - [`File::create_file`] to create a regular file.
     /// - [`File::create_dir_all`] to create a directory and all its parent directories.
     /// - [`File::create_symlink`] to create a symbolic link.
-    /// - [`File::create_with`] to specify the metadata on file creation.
     ///
     /// # Errors
     ///
@@ -271,7 +269,6 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// - [`File::create_file`] to create a regular file.
     /// - [`File::create_dir`] to create a directory.
     /// - [`File::create_symlink`] to create a symbolic link.
-    /// - [`File::create_with`] to specify the metadata on file creation.
     ///
     /// # Errors
     ///
@@ -342,8 +339,8 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// # See also
     ///
     /// - [`File::create_file`] to create a regular file.
+    /// - [`File::create_dir`] to create a directory.
     /// - [`File::create_dir_all`] to create a directory and all its parent directories.
-    /// - [`File::create_with`] to specify the metadata on file creation.
     ///
     /// # Errors
     ///
@@ -383,48 +380,6 @@ impl<'conn, 'ar> File<'conn, 'ar> {
             Some(SystemTime::now()),
             Some(normalized_target.as_str()),
         )
-    }
-
-    /// Create a file or directory if it doesn't already exist and set its metadata.
-    ///
-    /// This accepts the initial file `mode` and `mtime`. It does not care about the current
-    /// [`File::umask`].
-    ///
-    /// The mode of symbolic links is always `0o777`. Attempting to create a symbolic link with a
-    /// different file mode will return an error.
-    ///
-    /// # See also
-    ///
-    /// - [`File::create_file`] to create a regular file with default permissions.
-    /// - [`File::create_dir`] to create a directory with default permissions.
-    /// - [`File::create_dir_all`] to create a directory and all its parent directories.
-    /// - [`File::create_symlink`] to create a symbolic link.
-    ///
-    /// # Errors
-    ///
-    /// - [`ErrorKind::AlreadyExists`]: This file already exists in the archive.
-    /// - [`ErrorKind::NotFound`]: This file's parent directory does not exist.
-    /// - [`ErrorKind::NotADirectory`]: The file's parent is not a directory.
-    ///
-    /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
-    /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
-    /// [`ErrorKind::NotADirectory`]: crate::ErrorKind::NotADirectory
-    pub fn create_with(
-        &mut self,
-        kind: FileType,
-        mode: FileMode,
-        mtime: Option<SystemTime>,
-    ) -> crate::Result<()> {
-        if kind == FileType::Symlink && mode != mode_from_umask(FileType::Symlink, self.umask) {
-            return Err(crate::Error::msg(
-                crate::ErrorKind::InvalidArgs,
-                "Symbolic links must have a mode of `0o777`.",
-            ));
-        }
-
-        self.validate_can_be_created()?;
-
-        self.store.create_file(&self.path, kind, mode, mtime, None)
     }
 
     /// Delete the file from the archive.

@@ -139,12 +139,20 @@ impl<'conn> Archive<'conn> {
             };
 
             let dest_path = dest_root.join(path
-            .strip_prefix(src_root)
-            .expect("Could not get path relative to ancestor while walking the directory tree. This is a bug.")
-        );
-            dbg!(&dest_path);
+                .strip_prefix(src_root)
+                .expect("Could not get path relative to ancestor while walking the directory tree. This is a bug.")
+            );
 
             let mut archive_file = self.open(dest_path)?;
+
+            match file_type {
+                FileType::File => archive_file.create_file()?,
+                FileType::Dir => archive_file.create_dir()?,
+                FileType::Symlink => {
+                    let target = fs::read_link(&path)?;
+                    archive_file.create_symlink(&target)?;
+                }
+            }
 
             if opts.preserve_metadata {
                 let mode = mode_adapter.read_mode(&path, &metadata)?;
@@ -153,17 +161,8 @@ impl<'conn> Archive<'conn> {
                 // platform, in which case we just don't set the mtime in the archive.
                 let mtime = metadata.modified().ok();
 
-                // Create the file with its metadata.
-                archive_file.create_with(file_type, mode, mtime)?;
-            } else {
-                match file_type {
-                    FileType::File => archive_file.create_file()?,
-                    FileType::Dir => archive_file.create_dir()?,
-                    FileType::Symlink => {
-                        let target = fs::read_link(&path)?;
-                        archive_file.create_symlink(&target)?;
-                    }
-                }
+                archive_file.set_mode(Some(mode))?;
+                archive_file.set_mtime(mtime)?;
             }
 
             match file_type {

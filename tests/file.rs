@@ -216,13 +216,14 @@ fn create_dir_all_errors_if_regular_file_already_exists() -> sqlarfs::Result<()>
 #[test]
 fn file_metadata_when_creating_file_with_metadata() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        let mut file = archive.open("file")?;
-
         let mode = FileMode::OWNER_R | FileMode::OWNER_W | FileMode::GROUP_R | FileMode::OTHER_R;
         let precise_mtime = SystemTime::now();
         let truncated_mtime = truncate_mtime(precise_mtime);
 
-        file.create_with(FileType::File, mode, Some(precise_mtime))?;
+        let mut file = archive.open("file")?;
+        file.create_file()?;
+        file.set_mode(Some(mode))?;
+        file.set_mtime(Some(precise_mtime))?;
 
         let metadata = expect!(file.metadata()).to(be_ok()).into_inner();
 

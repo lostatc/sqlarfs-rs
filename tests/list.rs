@@ -44,20 +44,20 @@ fn list_all_paths_with_metadata() -> sqlarfs::Result<()> {
         let file3_mtime = UNIX_EPOCH + Duration::from_secs(3);
 
         let mut file1 = archive.open("file1")?;
-        file1.create_with(FileType::File, FileMode::OWNER_RWX, Some(file1_mtime))?;
+        file1.create_file()?;
+        file1.set_mode(Some(FileMode::OWNER_RWX))?;
+        file1.set_mtime(Some(file1_mtime))?;
         file1.write_str("123")?;
 
-        archive.open("file2")?.create_with(
-            FileType::File,
-            FileMode::GROUP_RWX,
-            Some(file2_mtime),
-        )?;
+        let mut file2 = archive.open("file2")?;
+        file2.create_file()?;
+        file2.set_mode(Some(FileMode::GROUP_RWX))?;
+        file2.set_mtime(Some(file2_mtime))?;
 
-        archive.open("file3")?.create_with(
-            FileType::File,
-            FileMode::OTHER_RWX,
-            Some(file3_mtime),
-        )?;
+        let mut file3 = archive.open("file3")?;
+        file3.create_file()?;
+        file3.set_mode(Some(FileMode::OTHER_RWX))?;
+        file3.set_mtime(Some(file3_mtime))?;
 
         let entries_by_path = archive
             .list()?

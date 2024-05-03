@@ -5,8 +5,8 @@ use std::fs;
 use std::io;
 use std::time::{Duration, SystemTime};
 
-use common::{connection, truncate_mtime};
-use sqlarfs::{ArchiveOptions, Error, ErrorKind, FileMode};
+use common::{connection, have_file_metadata, truncate_mtime};
+use sqlarfs::{ArchiveOptions, Error, ErrorKind, FileMode, FileType};
 use xpct::{approx_eq_time, be_err, be_false, be_ok, be_some, be_true, equal, expect};
 
 //
@@ -99,8 +99,8 @@ fn archive_regular_file() -> sqlarfs::Result<()> {
         expect!(file.exists()).to(be_ok()).to(be_true());
         expect!(file.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.is_file())
-            .to(be_true());
+            .map(|metadata| metadata.kind())
+            .to(equal(FileType::File));
 
         Ok(())
     })
@@ -118,8 +118,8 @@ fn archive_empty_directory() -> sqlarfs::Result<()> {
         expect!(file.exists()).to(be_ok()).to(be_true());
         expect!(file.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.is_dir())
-            .to(be_true());
+            .map(|metadata| metadata.kind())
+            .to(equal(FileType::Dir));
 
         Ok(())
     })
@@ -148,6 +148,7 @@ fn archiving_preserves_unix_file_mode() -> sqlarfs::Result<()> {
 
         expect!(file.metadata())
             .to(be_ok())
+            .to(have_file_metadata())
             .map(|metadata| metadata.mode)
             .to(be_some())
             .to(equal(FileMode::from_bits_truncate(expected_mode)));
@@ -171,6 +172,7 @@ fn archiving_preserves_file_mtime() -> sqlarfs::Result<()> {
 
         expect!(file.metadata())
             .to(be_ok())
+            .to(have_file_metadata())
             .map(|metadata| metadata.mtime)
             .to(be_some())
             .to(equal(expected_mtime));
@@ -241,8 +243,8 @@ fn archiving_follows_symlinks() -> sqlarfs::Result<()> {
         expect!(symlink.exists()).to(be_ok()).to(be_true());
         expect!(symlink.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.is_file())
-            .to(be_true());
+            .map(|metadata| metadata.kind())
+            .to(equal(FileType::File));
 
         Ok(())
     })
@@ -322,8 +324,8 @@ fn archive_directory_children_to_target() -> sqlarfs::Result<()> {
         expect!(file.exists()).to(be_ok()).to(be_true());
         expect!(file.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.is_file())
-            .to(be_true());
+            .map(|metadata| metadata.kind())
+            .to(equal(FileType::File));
 
         Ok(())
     })
@@ -347,8 +349,8 @@ fn archive_directory_children_to_archive_root() -> sqlarfs::Result<()> {
         expect!(file.exists()).to(be_ok()).to(be_true());
         expect!(file.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.is_file())
-            .to(be_true());
+            .map(|metadata| metadata.kind())
+            .to(equal(FileType::File));
 
         Ok(())
     })
@@ -411,8 +413,8 @@ fn archive_directory_children_when_source_is_file() -> sqlarfs::Result<()> {
         expect!(file.exists()).to(be_ok()).to(be_true());
         expect!(file.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.is_file())
-            .to(be_true());
+            .map(|metadata| metadata.kind())
+            .to(equal(FileType::File));
 
         Ok(())
     })
@@ -466,12 +468,14 @@ fn archiving_does_not_preserve_file_mtime() -> sqlarfs::Result<()> {
 
         expect!(file.metadata())
             .to(be_ok())
+            .to(have_file_metadata())
             .map(|metadata| metadata.mtime)
             .to(be_some())
             .to_not(equal(expected_mtime));
 
         expect!(file.metadata())
             .to(be_ok())
+            .to(have_file_metadata())
             .map(|metadata| metadata.mtime)
             .to(be_some())
             .to(approx_eq_time(SystemTime::now(), Duration::from_secs(1)));
@@ -505,6 +509,7 @@ fn archiving_does_not_preserve_unix_file_mode() -> sqlarfs::Result<()> {
 
         expect!(file.metadata())
             .to(be_ok())
+            .to(have_file_metadata())
             .map(|metadata| metadata.mode)
             .to(be_some())
             .to_not(equal(FileMode::from_bits_truncate(expected_mode)));

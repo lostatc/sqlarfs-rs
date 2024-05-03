@@ -16,7 +16,7 @@ jobs:
         # from a later version of Rust. If you update the MSRV here, update the
         # Cargo.toml as well.
       - name: "Install MSRV toolchain"
-        run: rustup toolchain install --profile minimal 1.70.0
+        run: rustup toolchain install --profile minimal 1.75.0
 
       - name: "Run cargo check --all-features"
         run: cargo check --all-features

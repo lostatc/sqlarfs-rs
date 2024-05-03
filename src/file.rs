@@ -30,7 +30,7 @@ fn unwrap_path_parent(path: &Path) -> &Path {
 /// You can read from the beginning of a file, but cannot seek through it. You can truncate and
 /// overwrite the file's contents, but cannot append to it.
 ///
-/// Writing to a file does not automatically update its [`FileMetadata::mtime`].
+/// Writing to a file does not automatically update its [`FileMetadata::File::mtime`].
 ///
 /// Attempting to read from or write to a directory will return an error.
 ///

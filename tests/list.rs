@@ -4,13 +4,13 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use sqlarfs::{ErrorKind, FileMetadata, FileMode, FileType, ListOptions};
+use sqlarfs::{ErrorKind, FileMode, FileType, ListOptions};
 use xpct::{
     be_empty, be_err, be_gt, be_lt, be_ok, be_some, be_zero, consist_of, contain_element, equal,
     expect, fields, match_fields, why,
 };
 
-use common::{connection, truncate_mtime};
+use common::{connection, have_file_metadata, truncate_mtime, RegularFileMetadata};
 
 //
 // `Archive::list`
@@ -69,33 +69,39 @@ fn list_all_paths_with_metadata() -> sqlarfs::Result<()> {
             .into_inner();
 
         expect!(file1_entry.path()).to(equal(Path::new("file1")));
-        expect!(file1_entry.metadata()).to(match_fields(fields!(&FileMetadata {
-            mode: equal(Some(FileMode::OWNER_RWX)),
-            mtime: equal(Some(file1_mtime)),
-            size: equal(3),
-        })));
+        expect!(file1_entry.metadata().to_owned())
+            .to(have_file_metadata())
+            .to(match_fields(fields!(RegularFileMetadata {
+                mode: equal(Some(FileMode::OWNER_RWX)),
+                mtime: equal(Some(file1_mtime)),
+                size: equal(3),
+            })));
 
         let file2_entry = expect!(entries_by_path.get(Path::new("file2")))
             .to(be_some())
             .into_inner();
 
         expect!(file2_entry.path()).to(equal(Path::new("file2")));
-        expect!(file2_entry.metadata()).to(match_fields(fields!(&FileMetadata {
-            mode: equal(Some(FileMode::GROUP_RWX)),
-            mtime: equal(Some(file2_mtime)),
-            size: be_zero(),
-        })));
+        expect!(file2_entry.metadata().to_owned())
+            .to(have_file_metadata())
+            .to(match_fields(fields!(RegularFileMetadata {
+                mode: equal(Some(FileMode::GROUP_RWX)),
+                mtime: equal(Some(file2_mtime)),
+                size: be_zero(),
+            })));
 
         let file3_entry = expect!(entries_by_path.get(Path::new("file3")))
             .to(be_some())
             .into_inner();
 
         expect!(file3_entry.path()).to(equal(Path::new("file3")));
-        expect!(file3_entry.metadata()).to(match_fields(fields!(&FileMetadata {
-            mode: equal(Some(FileMode::OTHER_RWX)),
-            mtime: equal(Some(file3_mtime)),
-            size: be_zero(),
-        })));
+        expect!(file3_entry.metadata().to_owned())
+            .to(have_file_metadata())
+            .to(match_fields(fields!(RegularFileMetadata {
+                mode: equal(Some(FileMode::OTHER_RWX)),
+                mtime: equal(Some(file3_mtime)),
+                size: be_zero(),
+            })));
 
         Ok(())
     })

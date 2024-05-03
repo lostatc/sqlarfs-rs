@@ -109,11 +109,11 @@ impl<'conn, 'ar> File<'conn, 'ar> {
         match self.store.read_metadata(&self.path)?.kind() {
             FileType::File => Ok(()),
             FileType::Dir => Err(crate::Error::msg(
-                crate::ErrorKind::IsADirectory,
+                crate::ErrorKind::NotARegularFile,
                 "Cannot write to a directory.",
             )),
             FileType::Symlink => Err(crate::Error::msg(
-                crate::ErrorKind::IsASymlink,
+                crate::ErrorKind::NotARegularFile,
                 "Cannot write to a symbolic link.",
             )),
         }
@@ -123,11 +123,11 @@ impl<'conn, 'ar> File<'conn, 'ar> {
         match self.store.read_metadata(&self.path)?.kind() {
             FileType::File => Ok(()),
             FileType::Dir => Err(crate::Error::msg(
-                crate::ErrorKind::IsADirectory,
+                crate::ErrorKind::NotARegularFile,
                 "Cannot read from a directory.",
             )),
             FileType::Symlink => Err(crate::Error::msg(
-                crate::ErrorKind::IsASymlink,
+                crate::ErrorKind::NotARegularFile,
                 "Cannot read from a symbolic link.",
             )),
         }
@@ -464,23 +464,21 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
-    /// - [`ErrorKind::IsADirectory`]: The file is a directory.
-    /// - [`ErrorKind::IsASymlink`]: The file is a symbolic link.
+    /// - [`ErrorKind::NotARegularFile`]: The file is a directory or a symbolic link.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
-    /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
-    /// [`ErrorKind::IsASymlink`]: crate::ErrorKind::IsASymlink
+    /// [`ErrorKind::NotARegularFile`]: crate::ErrorKind::NotARegularFile
     pub fn is_empty(&self) -> crate::Result<bool> {
         self.validate_is_readable()?;
 
         match self.metadata()? {
             FileMetadata::File { size, .. } => Ok(size == 0),
             FileMetadata::Dir { .. } => Err(crate::Error::msg(
-                crate::ErrorKind::IsADirectory,
+                crate::ErrorKind::NotARegularFile,
                 "Cannot get the size of a directory.",
             )),
             FileMetadata::Symlink { .. } => Err(crate::Error::msg(
-                crate::ErrorKind::IsASymlink,
+                crate::ErrorKind::NotARegularFile,
                 "Cannot get the size of a symlink link.",
             )),
         }
@@ -494,12 +492,10 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
-    /// - [`ErrorKind::IsADirectory`]: The file is a directory.
-    /// - [`ErrorKind::IsASymlink`]: The file is a symbolic link.
+    /// - [`ErrorKind::NotARegularFile`]: The file is a directory or a symbolic link.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
-    /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
-    /// [`ErrorKind::IsASymlink`]: crate::ErrorKind::IsASymlink
+    /// [`ErrorKind::NotARegularFile`]: crate::ErrorKind::NotARegularFile
     pub fn is_compressed(&self) -> crate::Result<bool> {
         self.validate_is_readable()?;
 
@@ -511,12 +507,10 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
-    /// - [`ErrorKind::IsADirectory`]: The file is a directory.
-    /// - [`ErrorKind::IsASymlink`]: The file is a symbolic link.
+    /// - [`ErrorKind::NotARegularFile`]: The file is a directory or a symbolic link.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
-    /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
-    /// [`ErrorKind::IsASymlink`]: crate::ErrorKind::IsASymlink
+    /// [`ErrorKind::NotARegularFile`]: crate::ErrorKind::NotARegularFile
     pub fn truncate(&mut self) -> crate::Result<()> {
         self.validate_is_writable()?;
 
@@ -545,13 +539,11 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// - [`ErrorKind::NotFound`]: This file does not exist.
     /// - [`ErrorKind::CompressionNotSupported`]: This file is compressed, but the `deflate` Cargo
     /// feature is disabled.
-    /// - [`ErrorKind::IsADirectory`]: The file is a directory.
-    /// - [`ErrorKind::IsAsymlink`]: The file is a symbolic link.
+    /// - [`ErrorKind::NotARegularFile`]: The file is a directory or a symbolic link.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
     /// [`ErrorKind::CompressionNotSupported`]: crate::ErrorKind::CompressionNotSupported
-    /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
-    /// [`ErrorKind::IsASymlink`]: crate::ErrorKind::IsASymlink
+    /// [`ErrorKind::NotARegularFile`]: crate::ErrorKind::NotARegularFile
     pub fn reader(&mut self) -> crate::Result<FileReader> {
         self.validate_is_readable()?;
 
@@ -723,12 +715,10 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
-    /// - [`ErrorKind::IsADirectory`]: The file is a directory.
-    /// - [`ErrorKind::IsASymlink`]: The file is a symbolic link.
+    /// - [`ErrorKind::NotARegularFile`]: The file is a directory or a symbolic link.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
-    /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
-    /// [`ErrorKind::IsASymlink`]: crate::ErrorKind::IsASymlink
+    /// [`ErrorKind::NotARegularFile`]: crate::ErrorKind::NotARegularFile
     pub fn write_from<R>(&mut self, reader: &mut R) -> crate::Result<()>
     where
         R: ?Sized + Read,
@@ -743,12 +733,10 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
-    /// - [`ErrorKind::IsADirectory`]: The file is a directory.
-    /// - [`ErrorKind::IsASymlink`]: The file is a symbolic link.
+    /// - [`ErrorKind::NotARegularFile`]: The file is a directory or a symbolic link.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
-    /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
-    /// [`ErrorKind::IsASymlink`]: crate::ErrorKind::IsASymlink
+    /// [`ErrorKind::NotARegularFile`]: crate::ErrorKind::NotARegularFile
     pub fn write_bytes(&mut self, bytes: &[u8]) -> crate::Result<()> {
         self.validate_is_writable()?;
 
@@ -789,12 +777,10 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
-    /// - [`ErrorKind::IsADirectory`]: The file is a directory.
-    /// - [`ErrorKind::IsASymlink`]: The file is a symbolic link.
+    /// - [`ErrorKind::NotARegularFile`]: The file is a directory or a symbolic link.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
-    /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
-    /// [`ErrorKind::IsASymlink`]: crate::ErrorKind::IsASymlink
+    /// [`ErrorKind::NotARegularFile`]: crate::ErrorKind::NotARegularFile
     pub fn write_str<S: AsRef<str>>(&mut self, s: S) -> crate::Result<()> {
         self.write_bytes(s.as_ref().as_bytes())
     }
@@ -808,12 +794,10 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// # Errors
     ///
     /// - [`ErrorKind::NotFound`]: This file does not exist.
-    /// - [`ErrorKind::IsADirectory`]: The file is a directory.
-    /// - [`ErrorKind::IsASymlink`]: The file is a symbolic link.
+    /// - [`ErrorKind::NotARegularFile`]: The file is a directory or a symbolic link.
     ///
     /// [`ErrorKind::NotFound`]: crate::ErrorKind::NotFound
-    /// [`ErrorKind::IsADirectory`]: crate::ErrorKind::IsADirectory
-    /// [`ErrorKind::IsASymlink`]: crate::ErrorKind::IsASymlink
+    /// [`ErrorKind::NotARegularFile`]: crate::ErrorKind::NotARegularFile
     pub fn write_file(&mut self, file: &mut fs::File) -> crate::Result<()> {
         // We know the size of the file, which enables some optimizations.
         let metadata = file.metadata()?;

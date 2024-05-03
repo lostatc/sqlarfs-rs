@@ -623,7 +623,7 @@ fn is_file_empty_errors_when_it_is_a_directory() -> sqlarfs::Result<()> {
         expect!(dir.is_empty())
             .to(be_err())
             .map(|err| err.into_kind())
-            .to(equal(ErrorKind::IsADirectory));
+            .to(equal(ErrorKind::NotARegularFile));
 
         Ok(())
     })
@@ -638,7 +638,7 @@ fn is_file_empty_errors_when_it_is_a_symlink() -> sqlarfs::Result<()> {
         expect!(link.is_empty())
             .to(be_err())
             .map(|err| err.into_kind())
-            .to(equal(ErrorKind::IsASymlink));
+            .to(equal(ErrorKind::NotARegularFile));
 
         Ok(())
     })
@@ -671,7 +671,7 @@ fn is_file_compressed_errors_when_it_is_a_directory() -> sqlarfs::Result<()> {
         expect!(dir.is_compressed())
             .to(be_err())
             .map(|err| err.into_kind())
-            .to(equal(ErrorKind::IsADirectory));
+            .to(equal(ErrorKind::NotARegularFile));
 
         Ok(())
     })
@@ -686,7 +686,7 @@ fn is_file_compressed_errors_when_it_is_a_symlink() -> sqlarfs::Result<()> {
         expect!(link.is_compressed())
             .to(be_err())
             .map(|err| err.into_kind())
-            .to(equal(ErrorKind::IsASymlink));
+            .to(equal(ErrorKind::NotARegularFile));
 
         Ok(())
     })
@@ -719,7 +719,7 @@ fn open_reader_errors_when_file_is_a_directory() -> sqlarfs::Result<()> {
         expect!(dir.reader())
             .to(be_err())
             .map(|err| err.into_kind())
-            .to(equal(ErrorKind::IsADirectory));
+            .to(equal(ErrorKind::NotARegularFile));
 
         Ok(())
     })
@@ -734,7 +734,7 @@ fn open_reader_errors_when_file_is_a_symlink() -> sqlarfs::Result<()> {
         expect!(link.reader())
             .to(be_err())
             .map(|err| err.into_kind())
-            .to(equal(ErrorKind::IsASymlink));
+            .to(equal(ErrorKind::NotARegularFile));
 
         Ok(())
     })
@@ -800,7 +800,7 @@ fn truncate_file_errors_when_it_is_a_directory() -> sqlarfs::Result<()> {
         expect!(file.truncate())
             .to(be_err())
             .map(|err| err.into_kind())
-            .to(equal(ErrorKind::IsADirectory));
+            .to(equal(ErrorKind::NotARegularFile));
 
         Ok(())
     })
@@ -815,7 +815,7 @@ fn truncate_file_errors_when_it_is_a_symlink() -> sqlarfs::Result<()> {
         expect!(file.truncate())
             .to(be_err())
             .map(|err| err.into_kind())
-            .to(equal(ErrorKind::IsASymlink));
+            .to(equal(ErrorKind::NotARegularFile));
 
         Ok(())
     })
@@ -850,7 +850,7 @@ fn write_bytes_errors_when_file_is_a_directory() -> sqlarfs::Result<()> {
         expect!(dir.write_bytes(b"file content"))
             .to(be_err())
             .map(|err| err.into_kind())
-            .to(equal(ErrorKind::IsADirectory));
+            .to(equal(ErrorKind::NotARegularFile));
 
         Ok(())
     })
@@ -865,7 +865,7 @@ fn write_bytes_errors_when_file_is_a_symlink() -> sqlarfs::Result<()> {
         expect!(link.write_bytes(b"file content"))
             .to(be_err())
             .map(|err| err.into_kind())
-            .to(equal(ErrorKind::IsASymlink));
+            .to(equal(ErrorKind::NotARegularFile));
 
         Ok(())
     })
@@ -898,7 +898,7 @@ fn write_string_errors_when_file_is_a_directory() -> sqlarfs::Result<()> {
         expect!(dir.write_str("file content"))
             .to(be_err())
             .map(|err| err.into_kind())
-            .to(equal(ErrorKind::IsADirectory));
+            .to(equal(ErrorKind::NotARegularFile));
 
         Ok(())
     })
@@ -913,7 +913,7 @@ fn write_string_errors_when_file_is_a_symlink() -> sqlarfs::Result<()> {
         expect!(link.write_str("file content"))
             .to(be_err())
             .map(|err| err.into_kind())
-            .to(equal(ErrorKind::IsASymlink));
+            .to(equal(ErrorKind::NotARegularFile));
 
         Ok(())
     })
@@ -946,7 +946,7 @@ fn write_from_reader_errors_when_file_is_a_directory() -> sqlarfs::Result<()> {
         expect!(dir.write_from(&mut "file content".as_bytes()))
             .to(be_err())
             .map(|err| err.into_kind())
-            .to(equal(ErrorKind::IsADirectory));
+            .to(equal(ErrorKind::NotARegularFile));
 
         Ok(())
     })
@@ -961,7 +961,7 @@ fn write_from_reader_errors_when_file_is_a_symlink() -> sqlarfs::Result<()> {
         expect!(link.write_from(&mut "file content".as_bytes()))
             .to(be_err())
             .map(|err| err.into_kind())
-            .to(equal(ErrorKind::IsASymlink));
+            .to(equal(ErrorKind::NotARegularFile));
 
         Ok(())
     })
@@ -998,7 +998,7 @@ fn write_from_file_errors_when_file_is_a_directory() -> sqlarfs::Result<()> {
         expect!(dir.write_file(&mut temp_file))
             .to(be_err())
             .map(|err| err.into_kind())
-            .to(equal(ErrorKind::IsADirectory));
+            .to(equal(ErrorKind::NotARegularFile));
 
         Ok(())
     })
@@ -1015,7 +1015,7 @@ fn write_from_file_errors_when_file_is_a_symlink() -> sqlarfs::Result<()> {
         expect!(link.write_file(&mut temp_file))
             .to(be_err())
             .map(|err| err.into_kind())
-            .to(equal(ErrorKind::IsASymlink));
+            .to(equal(ErrorKind::NotARegularFile));
 
         Ok(())
     })

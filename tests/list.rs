@@ -6,11 +6,13 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use sqlarfs::{ErrorKind, FileMode, FileType, ListOptions};
 use xpct::{
-    be_empty, be_err, be_gt, be_lt, be_ok, be_some, be_zero, consist_of, contain_element, equal,
-    expect, fields, match_fields, why,
+    be_empty, be_gt, be_lt, be_ok, be_some, be_zero, consist_of, contain_element, equal, expect,
+    fields, match_fields, why,
 };
 
-use common::{connection, have_file_metadata, truncate_mtime, RegularFileMetadata};
+use common::{
+    connection, have_error_kind, have_file_metadata, truncate_mtime, RegularFileMetadata,
+};
 
 //
 // `Archive::list`
@@ -116,10 +118,7 @@ fn specifying_mutually_exclusive_sort_options_errors() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let opts = ListOptions::new().by_size().by_mtime();
 
-        expect!(archive.list_with(&opts))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::InvalidArgs));
+        expect!(archive.list_with(&opts)).to(have_error_kind(ErrorKind::InvalidArgs));
 
         Ok(())
     })
@@ -130,10 +129,7 @@ fn specifying_mutually_exclusive_order_options_errors() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let opts = ListOptions::new().asc().desc();
 
-        expect!(archive.list_with(&opts))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::InvalidArgs));
+        expect!(archive.list_with(&opts)).to(have_error_kind(ErrorKind::InvalidArgs));
 
         Ok(())
     })
@@ -144,10 +140,7 @@ fn specifying_mutually_exclusive_file_type_options_errors() -> sqlarfs::Result<(
     connection()?.exec(|archive| {
         let opts = ListOptions::new().file_type(FileType::File).by_size();
 
-        expect!(archive.list_with(&opts))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::InvalidArgs));
+        expect!(archive.list_with(&opts)).to(have_error_kind(ErrorKind::InvalidArgs));
 
         Ok(())
     })

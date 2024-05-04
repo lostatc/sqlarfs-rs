@@ -5,9 +5,11 @@ use std::fs;
 use std::io::{self, prelude::*};
 use std::time::{Duration, SystemTime};
 
-use common::{connection, have_file_metadata, have_symlink_metadata, truncate_mtime};
+use common::{
+    connection, have_error_kind, have_file_metadata, have_symlink_metadata, truncate_mtime,
+};
 use sqlarfs::{ArchiveOptions, Error, ErrorKind, FileMode, FileType};
-use xpct::{approx_eq_time, be_err, be_false, be_ok, be_some, be_true, equal, expect};
+use xpct::{approx_eq_time, be_false, be_ok, be_some, be_true, equal, expect};
 
 //
 // `Archive::archive`
@@ -16,10 +18,7 @@ use xpct::{approx_eq_time, be_err, be_false, be_ok, be_some, be_true, equal, exp
 #[test]
 fn archiving_when_source_path_does_not_exist_errors() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        expect!(archive.archive("nonexistent", "dest"))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::NotFound));
+        expect!(archive.archive("nonexistent", "dest")).to(have_error_kind(ErrorKind::NotFound));
 
         Ok(())
     })
@@ -31,9 +30,7 @@ fn archiving_when_dest_path_has_no_parent_dir_errors() -> sqlarfs::Result<()> {
 
     connection()?.exec(|archive| {
         expect!(archive.archive(temp_file.path(), "nonexistent/file"))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::NotFound));
+            .to(have_error_kind(ErrorKind::NotFound));
 
         Ok(())
     })
@@ -48,9 +45,7 @@ fn archiving_when_dest_path_already_exists_errors() -> sqlarfs::Result<()> {
         target.create_file()?;
 
         expect!(archive.archive(temp_file.path(), "file"))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::AlreadyExists));
+            .to(have_error_kind(ErrorKind::AlreadyExists));
 
         Ok(())
     })
@@ -62,9 +57,7 @@ fn archiving_when_dest_path_is_absolute_errors() -> sqlarfs::Result<()> {
 
     connection()?.exec(|archive| {
         expect!(archive.archive(temp_file.path(), "/file"))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::InvalidArgs));
+            .to(have_error_kind(ErrorKind::InvalidArgs));
 
         Ok(())
     })
@@ -79,9 +72,7 @@ fn archiving_when_dest_path_is_not_valid_unicode_errors() -> sqlarfs::Result<()>
 
     connection()?.exec(|archive| {
         expect!(archive.archive(temp_file.path(), OsStr::from_bytes(b"invalid-unicode-\xff"),))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::InvalidArgs));
+            .to(have_error_kind(ErrorKind::InvalidArgs));
 
         Ok(())
     })
@@ -352,10 +343,7 @@ fn archiving_fails_when_source_is_root_and_children_is_false() -> sqlarfs::Resul
     connection()?.exec(|archive| {
         let temp_file = tempfile::NamedTempFile::new()?;
 
-        expect!(archive.archive(temp_file.path(), ""))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::InvalidArgs));
+        expect!(archive.archive(temp_file.path(), "")).to(have_error_kind(ErrorKind::InvalidArgs));
 
         Ok(())
     })
@@ -429,9 +417,7 @@ fn archiving_directory_children_when_target_is_file_errors() -> sqlarfs::Result<
         let opts = ArchiveOptions::new().children(true);
 
         expect!(archive.archive_with(temp_dir.path(), "file", &opts))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::NotADirectory));
+            .to(have_error_kind(ErrorKind::NotADirectory));
 
         Ok(())
     })
@@ -449,9 +435,7 @@ fn archiving_directory_children_when_target_doest_not_exist_errors() -> sqlarfs:
         let opts = ArchiveOptions::new().children(true);
 
         expect!(archive.archive_with(temp_dir.path(), "dir", &opts))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::NotFound));
+            .to(have_error_kind(ErrorKind::NotFound));
 
         Ok(())
     })

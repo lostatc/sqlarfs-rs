@@ -1,9 +1,9 @@
 use std::fs;
 use std::time::{Duration, SystemTime};
 
-use common::{connection, truncate_mtime};
+use common::{connection, have_error_kind, truncate_mtime};
 use sqlarfs::{ErrorKind, FileMode};
-use xpct::{be_err, be_ok, be_true, equal, expect};
+use xpct::{be_ok, be_true, equal, expect};
 
 mod common;
 
@@ -13,9 +13,7 @@ fn extracting_when_source_path_does_not_exist_errors() -> sqlarfs::Result<()> {
 
     connection()?.exec(|archive| {
         expect!(archive.extract("nonexistent", temp_dir.path().join("dest")))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::NotFound));
+            .to(have_error_kind(ErrorKind::NotFound));
 
         Ok(())
     })
@@ -27,9 +25,7 @@ fn extracting_when_source_is_a_file_and_dest_has_no_parent_dir_errors() -> sqlar
         archive.open("file")?.create_file()?;
 
         expect!(archive.extract("file", "/nonexistent/dest"))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::NotFound));
+            .to(have_error_kind(ErrorKind::NotFound));
 
         Ok(())
     })
@@ -41,9 +37,7 @@ fn extracting_when_source_is_a_dir_and_dest_has_no_parent_dir_errors() -> sqlarf
         archive.open("dir")?.create_dir()?;
 
         expect!(archive.extract("dir", "/nonexistent/dest"))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::NotFound));
+            .to(have_error_kind(ErrorKind::NotFound));
 
         Ok(())
     })
@@ -59,9 +53,7 @@ fn extracting_when_source_is_a_symlink_and_dest_has_no_parent_dir_errors() -> sq
             .create_symlink(symlink_target.path())?;
 
         expect!(archive.extract("symlink", "/nonexistent/dest"))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::NotFound));
+            .to(have_error_kind(ErrorKind::NotFound));
 
         Ok(())
     })
@@ -76,9 +68,7 @@ fn archiving_when_source_is_a_file_and_dest_already_exists_and_is_a_file_errors(
         archive.open("file")?.create_file()?;
 
         expect!(archive.extract("file", temp_file.path()))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::AlreadyExists));
+            .to(have_error_kind(ErrorKind::AlreadyExists));
 
         Ok(())
     })
@@ -93,9 +83,7 @@ fn archiving_when_source_is_a_file_and_dest_already_exists_and_is_a_dir_errors(
         archive.open("file")?.create_file()?;
 
         expect!(archive.extract("file", temp_dir.path()))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::AlreadyExists));
+            .to(have_error_kind(ErrorKind::AlreadyExists));
 
         Ok(())
     })
@@ -110,9 +98,7 @@ fn archiving_when_source_is_a_dir_and_dest_already_exists_and_is_a_file_errors(
         archive.open("dir")?.create_dir()?;
 
         expect!(archive.extract("dir", temp_file.path()))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::AlreadyExists));
+            .to(have_error_kind(ErrorKind::AlreadyExists));
 
         Ok(())
     })
@@ -127,9 +113,7 @@ fn archiving_when_source_is_a_dir_and_dest_already_exists_and_is_a_dir_errors(
         archive.open("dir")?.create_dir()?;
 
         expect!(archive.extract("dir", temp_dir.path()))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::AlreadyExists));
+            .to(have_error_kind(ErrorKind::AlreadyExists));
 
         Ok(())
     })
@@ -141,9 +125,7 @@ fn archiving_when_source_path_is_absolute_errors() -> sqlarfs::Result<()> {
 
     connection()?.exec(|archive| {
         expect!(archive.extract("/file", temp_dir.path().join("dest")))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::InvalidArgs));
+            .to(have_error_kind(ErrorKind::InvalidArgs));
 
         Ok(())
     })
@@ -162,9 +144,7 @@ fn archiving_when_source_path_is_not_valid_unicode_errors() -> sqlarfs::Result<(
             OsStr::from_bytes(b"invalid-unicode-\xff"),
             temp_dir.path().join("dest")
         ))
-        .to(be_err())
-        .map(|err| err.into_kind())
-        .to(equal(ErrorKind::InvalidArgs));
+        .to(have_error_kind(ErrorKind::InvalidArgs));
 
         Ok(())
     })
@@ -232,9 +212,7 @@ fn extract_symlink_when_dest_already_exists() -> sqlarfs::Result<()> {
             .create_symlink(symlink_target.path())?;
 
         expect!(archive.extract("symlink", &dest_path))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::AlreadyExists));
+            .to(have_error_kind(ErrorKind::AlreadyExists));
 
         Ok(())
     })

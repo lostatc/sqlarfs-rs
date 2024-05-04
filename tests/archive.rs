@@ -6,7 +6,7 @@ use std::path::Path;
 use sqlarfs::{ErrorKind, FileMode};
 use xpct::{be_err, be_ok, equal, expect};
 
-use common::connection;
+use common::{connection, have_error_kind};
 
 //
 // `Archive::open`
@@ -15,10 +15,7 @@ use common::connection;
 #[test]
 fn opening_file_with_absolute_path_errors() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        expect!(archive.open("/path/to/file"))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::InvalidArgs));
+        expect!(archive.open("/path/to/file")).to(have_error_kind(ErrorKind::InvalidArgs));
 
         Ok(())
     })
@@ -31,9 +28,7 @@ fn opening_file_with_non_utf8_path_errors() -> sqlarfs::Result<()> {
 
     connection()?.exec(|archive| {
         expect!(archive.open(OsStr::from_bytes(b"not/valid/utf8/\x80\x81")))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::InvalidArgs));
+            .to(have_error_kind(ErrorKind::InvalidArgs));
 
         Ok(())
     })
@@ -42,10 +37,7 @@ fn opening_file_with_non_utf8_path_errors() -> sqlarfs::Result<()> {
 #[test]
 fn opening_file_with_empty_path_errors() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        expect!(archive.open(""))
-            .to(be_err())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::InvalidArgs));
+        expect!(archive.open("")).to(have_error_kind(ErrorKind::InvalidArgs));
 
         Ok(())
     })

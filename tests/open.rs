@@ -1,9 +1,11 @@
+mod common;
+
 use std::fs;
 use std::io::prelude::*;
 
-use xpct::{be_err, be_ok, equal, expect};
-
+use common::have_error_kind;
 use sqlarfs::OpenOptions;
+use xpct::{be_err, be_ok, expect};
 
 //
 // `OpenOptions::open`
@@ -34,10 +36,7 @@ fn opening_errors_when_db_does_not_exist() -> sqlarfs::Result<()> {
 
     let result = OpenOptions::new().create(false).open(&temp_path);
 
-    expect!(result)
-        .to(be_err())
-        .map(|err| err.into_kind())
-        .to(equal(sqlarfs::ErrorKind::CannotOpen));
+    expect!(result).to(have_error_kind(sqlarfs::ErrorKind::CannotOpen));
 
     Ok(())
 }
@@ -50,10 +49,7 @@ fn any_db_operation_errors_when_file_is_not_a_db() -> sqlarfs::Result<()> {
 
     let result = OpenOptions::new().open(temp_file.path());
 
-    expect!(result)
-        .to(be_err())
-        .map(|err| err.into_kind())
-        .to(equal(sqlarfs::ErrorKind::NotADatabase));
+    expect!(result).to(have_error_kind(sqlarfs::ErrorKind::NotADatabase));
 
     Ok(())
 }
@@ -67,10 +63,7 @@ fn opening_read_only_errors_when_create_db_is_true() -> sqlarfs::Result<()> {
         .create(true)
         .open(temp_file.path());
 
-    expect!(result)
-        .to(be_err())
-        .map(|err| err.into_kind())
-        .to(equal(sqlarfs::ErrorKind::InvalidArgs));
+    expect!(result).to(have_error_kind(sqlarfs::ErrorKind::InvalidArgs));
 
     Ok(())
 }
@@ -89,10 +82,7 @@ fn any_write_operation_errors_when_db_is_read_only() -> sqlarfs::Result<()> {
 
     let result = conn.exec(|archive| archive.open("file")?.create_file());
 
-    expect!(result)
-        .to(be_err())
-        .map(|err| err.into_kind())
-        .to(equal(sqlarfs::ErrorKind::ReadOnly));
+    expect!(result).to(have_error_kind(sqlarfs::ErrorKind::ReadOnly));
 
     fs::remove_file(&temp_path)?;
 
@@ -108,10 +98,7 @@ fn initializing_read_only_db_errors() -> sqlarfs::Result<()> {
         .init(true)
         .open(temp_file.path());
 
-    expect!(result)
-        .to(be_err())
-        .map(|err| err.into_kind())
-        .to(equal(sqlarfs::ErrorKind::InvalidArgs));
+    expect!(result).to(have_error_kind(sqlarfs::ErrorKind::InvalidArgs));
 
     Ok(())
 }

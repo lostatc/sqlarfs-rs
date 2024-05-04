@@ -3,7 +3,7 @@ use std::time::SystemTime;
 
 use sqlarfs::{FileMetadata, FileMode};
 use xpct::core::Matcher;
-use xpct::{all, be_some, why};
+use xpct::{all, be_err, be_some, equal, why};
 
 #[derive(Debug)]
 pub struct RegularFileMetadata {
@@ -59,5 +59,18 @@ pub fn have_symlink_metadata<'a>() -> Matcher<'a, FileMetadata, SymlinkMetadata,
             be_some(),
             "this is not the metadata for a symbolic link",
         ))
+    })
+}
+
+pub fn have_error_kind<'a, T>(
+    kind: sqlarfs::ErrorKind,
+) -> Matcher<'a, sqlarfs::Result<T>, sqlarfs::ErrorKind, ()>
+where
+    T: std::fmt::Debug + 'a,
+{
+    all(|ctx| {
+        ctx.to(be_err())?
+            .map(|err: sqlarfs::Error| err.kind().clone())
+            .to(equal(kind))
     })
 }

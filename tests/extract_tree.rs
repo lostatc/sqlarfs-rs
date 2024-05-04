@@ -1,4 +1,5 @@
 use std::fs;
+use std::io;
 use std::time::{Duration, SystemTime};
 
 use common::{connection, have_error_kind, truncate_mtime};
@@ -91,6 +92,33 @@ fn extracting_when_source_is_a_file_and_dest_already_exists_and_is_a_dir_errors(
 }
 
 #[test]
+#[cfg(unix)]
+fn extracting_when_source_is_a_file_and_dest_already_exists_and_is_a_symlink_errors(
+) -> sqlarfs::Result<()> {
+    use nix::unistd::symlinkat;
+
+    let temp_dir = tempfile::tempdir()?;
+    let link_path = temp_dir.path().join("symlink");
+
+    symlinkat("/nonexistent", None, &link_path).map_err(|err| {
+        sqlarfs::Error::new(
+            ErrorKind::Io {
+                kind: io::ErrorKind::Other,
+            },
+            err,
+        )
+    })?;
+
+    connection()?.exec(|archive| {
+        archive.open("file")?.create_file()?;
+
+        expect!(archive.extract("file", &link_path)).to(have_error_kind(ErrorKind::AlreadyExists));
+
+        Ok(())
+    })
+}
+
+#[test]
 fn extracting_when_source_is_a_dir_and_dest_already_exists_and_is_a_file_errors(
 ) -> sqlarfs::Result<()> {
     let temp_file = tempfile::NamedTempFile::new()?;
@@ -114,6 +142,93 @@ fn extracting_when_source_is_a_dir_and_dest_already_exists_and_is_a_dir_errors(
         archive.open("dir")?.create_dir()?;
 
         expect!(archive.extract("dir", temp_dir.path()))
+            .to(have_error_kind(ErrorKind::AlreadyExists));
+
+        Ok(())
+    })
+}
+
+#[test]
+#[cfg(unix)]
+fn extracting_when_source_is_a_dir_and_dest_already_exists_and_is_a_symlink_errors(
+) -> sqlarfs::Result<()> {
+    use nix::unistd::symlinkat;
+
+    let temp_dir = tempfile::tempdir()?;
+    let link_path = temp_dir.path().join("symlink");
+
+    symlinkat("/nonexistent", None, &link_path).map_err(|err| {
+        sqlarfs::Error::new(
+            ErrorKind::Io {
+                kind: io::ErrorKind::Other,
+            },
+            err,
+        )
+    })?;
+
+    connection()?.exec(|archive| {
+        archive.open("dir")?.create_dir()?;
+
+        expect!(archive.extract("dir", &link_path)).to(have_error_kind(ErrorKind::AlreadyExists));
+
+        Ok(())
+    })
+}
+
+#[test]
+#[cfg(unix)]
+fn extracting_when_source_is_a_symlink_and_dest_already_exists_and_is_a_file_errors(
+) -> sqlarfs::Result<()> {
+    let temp_file = tempfile::NamedTempFile::new()?;
+
+    connection()?.exec(|archive| {
+        archive.open("symlink")?.create_symlink("/nonexistent")?;
+
+        expect!(archive.extract("symlink", temp_file.path()))
+            .to(have_error_kind(ErrorKind::AlreadyExists));
+
+        Ok(())
+    })
+}
+
+#[test]
+#[cfg(unix)]
+fn extracting_when_source_is_a_symlink_and_dest_already_exists_and_is_a_dir_errors(
+) -> sqlarfs::Result<()> {
+    let temp_dir = tempfile::tempdir()?;
+
+    connection()?.exec(|archive| {
+        archive.open("symlink")?.create_symlink("/nonexistent")?;
+
+        expect!(archive.extract("symlink", temp_dir.path()))
+            .to(have_error_kind(ErrorKind::AlreadyExists));
+
+        Ok(())
+    })
+}
+
+#[test]
+#[cfg(unix)]
+fn extracting_when_source_is_a_symlink_and_dest_already_exists_and_is_a_symlink_errors(
+) -> sqlarfs::Result<()> {
+    use nix::unistd::symlinkat;
+
+    let temp_dir = tempfile::tempdir()?;
+    let link_path = temp_dir.path().join("symlink");
+
+    symlinkat("/nonexistent", None, &link_path).map_err(|err| {
+        sqlarfs::Error::new(
+            ErrorKind::Io {
+                kind: io::ErrorKind::Other,
+            },
+            err,
+        )
+    })?;
+
+    connection()?.exec(|archive| {
+        archive.open("symlink")?.create_symlink("/nonexistent")?;
+
+        expect!(archive.extract("symlink", &link_path))
             .to(have_error_kind(ErrorKind::AlreadyExists));
 
         Ok(())

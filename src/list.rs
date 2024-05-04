@@ -16,12 +16,6 @@ pub enum SortDirection {
     Desc,
 }
 
-impl Default for SortDirection {
-    fn default() -> Self {
-        Self::Asc
-    }
-}
-
 /// Options for sorting and filtering a list of files.
 ///
 /// This is used with [`Archive::list_with`].
@@ -40,6 +34,7 @@ pub struct ListOptions {
 }
 
 impl Default for ListOptions {
+    #[cfg_attr(coverage_nightly, coverage(off))]
     fn default() -> Self {
         Self::new()
     }

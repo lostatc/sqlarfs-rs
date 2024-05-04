@@ -3,7 +3,7 @@ mod common;
 use std::ffi::OsStr;
 use std::io::prelude::*;
 use std::path::Path;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use sqlarfs::{Compression, Connection, ErrorKind, FileMode, FileType};
 use tempfile::NamedTempFile;
@@ -591,6 +591,20 @@ fn set_file_mtime_errors_when_file_does_not_exist() -> sqlarfs::Result<()> {
         let mut file = archive.open("file")?;
 
         expect!(file.set_mtime(None)).to(have_error_kind(ErrorKind::NotFound));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn set_file_mtime_with_pre_epoch_mtime_errors() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut file = archive.open("file")?;
+        file.create_file()?;
+
+        let pre_epoch_mtime = SystemTime::UNIX_EPOCH - Duration::from_secs(1);
+
+        expect!(file.set_mtime(Some(pre_epoch_mtime))).to(have_error_kind(ErrorKind::InvalidArgs));
 
         Ok(())
     })

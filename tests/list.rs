@@ -117,7 +117,9 @@ fn list_all_paths_with_metadata() -> sqlarfs::Result<()> {
 fn specifying_mutually_exclusive_sort_options_errors() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let opts = ListOptions::new().by_size().by_mtime();
+        expect!(archive.list_with(&opts)).to(have_error_kind(ErrorKind::InvalidArgs));
 
+        let opts = ListOptions::new().by_mtime().by_size();
         expect!(archive.list_with(&opts)).to(have_error_kind(ErrorKind::InvalidArgs));
 
         Ok(())
@@ -128,7 +130,9 @@ fn specifying_mutually_exclusive_sort_options_errors() -> sqlarfs::Result<()> {
 fn specifying_mutually_exclusive_order_options_errors() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let opts = ListOptions::new().asc().desc();
+        expect!(archive.list_with(&opts)).to(have_error_kind(ErrorKind::InvalidArgs));
 
+        let opts = ListOptions::new().desc().asc();
         expect!(archive.list_with(&opts)).to(have_error_kind(ErrorKind::InvalidArgs));
 
         Ok(())
@@ -139,7 +143,9 @@ fn specifying_mutually_exclusive_order_options_errors() -> sqlarfs::Result<()> {
 fn specifying_mutually_exclusive_file_type_options_errors() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let opts = ListOptions::new().file_type(FileType::File).by_size();
+        expect!(archive.list_with(&opts)).to(have_error_kind(ErrorKind::InvalidArgs));
 
+        let opts = ListOptions::new().by_size().file_type(FileType::File);
         expect!(archive.list_with(&opts)).to(have_error_kind(ErrorKind::InvalidArgs));
 
         Ok(())
@@ -559,6 +565,24 @@ fn list_with_filter_only_dirs() -> sqlarfs::Result<()> {
             .to(be_ok())
             .iter_try_map(|entry| Ok(entry?.into_path()))
             .to(consist_of(&[PathBuf::from("dir")]));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn list_with_filter_only_symlinks() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        archive.open("dir")?.create_dir()?;
+        archive.open("dir/file")?.create_file()?;
+        archive.open("dir/symlink")?.create_symlink("target")?;
+
+        let opts = ListOptions::new().file_type(FileType::Symlink);
+
+        expect!(archive.list_with(&opts))
+            .to(be_ok())
+            .iter_try_map(|entry| Ok(entry?.into_path()))
+            .to(consist_of(&[PathBuf::from("dir/symlink")]));
 
         Ok(())
     })

@@ -7,6 +7,7 @@ use std::time::{Duration, SystemTime};
 
 use common::{
     connection, have_error_kind, have_file_metadata, have_symlink_metadata, truncate_mtime,
+    with_timeout,
 };
 use sqlarfs::{ArchiveOptions, Error, ErrorKind, FileMode, FileType};
 use xpct::{approx_eq_time, be_false, be_ok, be_some, be_true, equal, expect};
@@ -557,5 +558,69 @@ fn archiving_does_not_preserve_unix_file_mode() -> sqlarfs::Result<()> {
             .to_not(equal(FileMode::from_bits_truncate(expected_mode)));
 
         Ok(())
+    })
+}
+
+#[test]
+#[cfg(unix)]
+fn archiving_with_filesystem_loop_in_parent_errors() -> sqlarfs::Result<()> {
+    use nix::unistd::symlinkat;
+
+    // The currently implementation uses recursion and will stack overflow if there's a filesystem
+    // loop before it times out. However, we should still set a timeout in case this implementation
+    // changes to one that doesn't use recursion.
+    with_timeout(Duration::from_secs(1), || {
+        let parent = tempfile::tempdir()?;
+
+        // Create a symlink that points to its parent.
+        symlinkat(parent.path(), None, &parent.path().join("symlink")).map_err(|err| {
+            Error::new(
+                ErrorKind::Io {
+                    kind: io::ErrorKind::Other,
+                },
+                err,
+            )
+        })?;
+
+        connection()?.exec(|archive| {
+            let opts = ArchiveOptions::new().follow_symlinks(true);
+
+            expect!(archive.archive_with(parent.path(), "dest", &opts))
+                .to(have_error_kind(ErrorKind::FilesystemLoop));
+
+            Ok(())
+        })
+    })
+}
+
+#[test]
+#[cfg(unix)]
+fn archiving_with_filesystem_loop_in_grandparent_errors() -> sqlarfs::Result<()> {
+    use nix::unistd::symlinkat;
+
+    with_timeout(Duration::from_secs(1), || {
+        let grandparent = tempfile::tempdir()?;
+        let parent = grandparent.path().join("parent");
+
+        fs::create_dir(&parent)?;
+
+        // Create a symlink that points to its parent.
+        symlinkat(grandparent.path(), None, &parent.join("symlink")).map_err(|err| {
+            Error::new(
+                ErrorKind::Io {
+                    kind: io::ErrorKind::Other,
+                },
+                err,
+            )
+        })?;
+
+        connection()?.exec(|archive| {
+            let opts = ArchiveOptions::new().follow_symlinks(true);
+
+            expect!(archive.archive_with(grandparent.path(), "dest", &opts))
+                .to(have_error_kind(ErrorKind::FilesystemLoop));
+
+            Ok(())
+        })
     })
 }

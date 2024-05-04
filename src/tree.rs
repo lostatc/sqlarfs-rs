@@ -104,6 +104,7 @@ impl<'conn> Archive<'conn> {
         dest_path: &Path,
         opts: &ArchiveOptions,
         mode_adapter: &T,
+        ancestor_stack: Vec<PathBuf>,
     ) -> crate::Result<()>
     where
         T: ReadMode,
@@ -129,8 +130,23 @@ impl<'conn> Archive<'conn> {
             FileType::Symlink => {
                 let target = fs::read_link(src_path)?;
 
+                for ancestor in &ancestor_stack {
+                    if same_file::is_same_file(&target, ancestor)? {
+                        return Err(crate::Error::msg(
+                            crate::ErrorKind::FilesystemLoop,
+                            "Encountered a symbolic link that references a parent directory while walking the directory tree.",
+                        ));
+                    }
+                }
+
                 if opts.follow_symlinks {
-                    return self.archive_file(&target, dest_path, opts, mode_adapter);
+                    return self.archive_file(
+                        &target,
+                        dest_path,
+                        opts,
+                        mode_adapter,
+                        ancestor_stack,
+                    );
                 } else {
                     archive_file.create_symlink(&target)?;
                 }
@@ -158,7 +174,10 @@ impl<'conn> Archive<'conn> {
                     let entry_path = entry?.path();
                     let dest_path = rebase_path(&entry_path, dest_path, src_path);
 
-                    self.archive_file(&entry_path, &dest_path, opts, mode_adapter)?;
+                    let mut ancestor_stack = ancestor_stack.clone();
+                    ancestor_stack.push(src_path.to_owned());
+
+                    self.archive_file(&entry_path, &dest_path, opts, mode_adapter, ancestor_stack)?;
                 }
             }
             _ => {}
@@ -167,7 +186,6 @@ impl<'conn> Archive<'conn> {
         Ok(())
     }
 
-    // TODO: Detect filesystem loops when following symlinks.
     pub(super) fn archive_tree<T>(
         &mut self,
         src_root: &Path,
@@ -197,7 +215,7 @@ impl<'conn> Archive<'conn> {
 
         for path in paths {
             let dest_path = rebase_path(&path, dest_root, src_root);
-            self.archive_file(&path, &dest_path, opts, mode_adapter)?;
+            self.archive_file(&path, &dest_path, opts, mode_adapter, vec![path.clone()])?;
         }
 
         Ok(())

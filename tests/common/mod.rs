@@ -2,6 +2,8 @@
 
 mod matchers;
 
+use std::sync::mpsc;
+use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use rand::prelude::*;
@@ -45,4 +47,22 @@ pub fn incompressible_bytes() -> Vec<u8> {
     let pool = (0..255).collect::<Vec<u8>>();
 
     pool.choose_multiple(&mut rng, 64).copied().collect()
+}
+
+pub fn with_timeout<F>(timeout: Duration, f: F) -> sqlarfs::Result<()>
+where
+    F: FnOnce() -> sqlarfs::Result<()> + Send + 'static,
+{
+    let (tx, rx) = mpsc::channel();
+
+    let handle = thread::spawn(move || {
+        let result = f();
+        tx.send(()).unwrap();
+        result
+    });
+
+    rx.recv_timeout(timeout)
+        .unwrap_or_else(|_| panic!("test timed out after {} seconds", timeout.as_secs()));
+
+    handle.join().unwrap()
 }

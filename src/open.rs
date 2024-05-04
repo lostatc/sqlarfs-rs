@@ -71,10 +71,9 @@ impl OpenOptions {
     ///
     /// # Errors
     ///
-    /// - [`ErrorKind::CannotOpen`]: The database does not exist and [`OpenOptions::create`] was
-    /// `false`.
+    /// - [`CannotOpen`]: The database does not exist and [`OpenOptions::create`] was `false`.
     ///
-    /// [`ErrorKind::CannotOpen`]: crate::ErrorKind::CannotOpen
+    /// [`CannotOpen`]: crate::ErrorKind::CannotOpen
     pub fn open<P: AsRef<Path>>(&mut self, path: P) -> crate::Result<Connection> {
         use rusqlite::OpenFlags;
 

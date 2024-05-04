@@ -54,10 +54,12 @@ fn archiving_when_dest_path_already_exists_errors() -> sqlarfs::Result<()> {
 
 #[test]
 fn archiving_when_dest_path_is_absolute_errors() -> sqlarfs::Result<()> {
+    let dest_path = if cfg!(windows) { r"C:\file" } else { "/file" };
+
     let temp_file = tempfile::NamedTempFile::new()?;
 
     connection()?.exec(|archive| {
-        expect!(archive.archive(temp_file.path(), "/file"))
+        expect!(archive.archive(temp_file.path(), dest_path))
             .to(have_error_kind(ErrorKind::InvalidArgs));
 
         Ok(())

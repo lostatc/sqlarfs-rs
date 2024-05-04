@@ -14,8 +14,14 @@ use common::{connection, have_error_kind};
 
 #[test]
 fn opening_file_with_absolute_path_errors() -> sqlarfs::Result<()> {
+    let path = if cfg!(windows) {
+        r"C:\path\to\file"
+    } else {
+        "/path/to/file"
+    };
+
     connection()?.exec(|archive| {
-        expect!(archive.open("/path/to/file")).to(have_error_kind(ErrorKind::InvalidArgs));
+        expect!(archive.open(path)).to(have_error_kind(ErrorKind::InvalidArgs));
 
         Ok(())
     })

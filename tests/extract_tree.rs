@@ -121,10 +121,11 @@ fn extracting_when_source_is_a_dir_and_dest_already_exists_and_is_a_dir_errors(
 
 #[test]
 fn extracting_when_source_path_is_absolute_errors() -> sqlarfs::Result<()> {
+    let src_path = if cfg!(windows) { r"C:\file" } else { "/file" };
     let temp_dir = tempfile::tempdir()?;
 
     connection()?.exec(|archive| {
-        expect!(archive.extract("/file", temp_dir.path().join("dest")))
+        expect!(archive.extract(src_path, temp_dir.path().join("dest")))
             .to(have_error_kind(ErrorKind::InvalidArgs));
 
         Ok(())

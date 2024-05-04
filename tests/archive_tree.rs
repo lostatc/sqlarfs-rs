@@ -604,7 +604,7 @@ fn archiving_with_filesystem_loop_in_grandparent_errors() -> sqlarfs::Result<()>
 
         fs::create_dir(&parent)?;
 
-        // Create a symlink that points to its parent.
+        // Create a symlink that points to its grandparent.
         symlinkat(grandparent.path(), None, &parent.join("symlink")).map_err(|err| {
             Error::new(
                 ErrorKind::Io {

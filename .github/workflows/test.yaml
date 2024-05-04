@@ -18,6 +18,8 @@ jobs:
       - name: "Install MSRV toolchain"
         run: rustup toolchain install --profile minimal 1.75.0
 
+      - uses: Swatinem/rust-cache@v2
+
       - name: "Run cargo check --all-features"
         run: cargo check --all-features
 
@@ -39,6 +41,12 @@ jobs:
       - name: "Install stable toolchain"
         run: rustup toolchain install --profile minimal stable
 
+      - uses: Swatinem/rust-cache@v2
+
+        # This library's test suite runs quite quickly, so it's worth just
+        # running all of them so we can see all test failures. Especially since
+        # this library is developed on a Linux machine and only tested on
+        # Windows and macOS in CI.
       - name: "Run cargo test --all-features"
         run: cargo test --all-features --no-fail-fast
 
@@ -53,6 +61,8 @@ jobs:
 
       - name: "Install stable toolchain"
         run: rustup toolchain install --profile minimal --component rustfmt clippy -- stable
+
+      - uses: Swatinem/rust-cache@v2
 
       - name: "Run cargo fmt"
         run: cargo fmt --all -- --check
@@ -70,6 +80,8 @@ jobs:
         uses: actions/checkout@v4
 
         # We use the nightly toolchain because that's the one used by docs.rs.
+        # In this case, there's no sense trying to use a build cache, because
+        # the cache will just be cleared on every nightly release.
       - name: "Install nightly toolchain"
         run: rustup toolchain install --profile minimal nightly
 

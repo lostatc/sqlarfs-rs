@@ -45,6 +45,7 @@ impl Connection {
     }
 
     /// Create a new builder for opening a [`Connection`].
+    #[cfg_attr(coverage_nightly, coverage(off))]
     pub fn builder() -> OpenOptions {
         OpenOptions::new()
     }
@@ -154,11 +155,13 @@ impl<'conn> Transaction<'conn> {
     }
 
     /// Get a reference to the [`Archive`] holding this transaction.
+    #[cfg_attr(coverage_nightly, coverage(off))]
     pub fn archive(&self) -> &Archive<'conn> {
         &self.archive
     }
 
     /// Get a mutable reference to the [`Archive`] holding this transaction.
+    #[cfg_attr(coverage_nightly, coverage(off))]
     pub fn archive_mut(&mut self) -> &mut Archive<'conn> {
         &mut self.archive
     }

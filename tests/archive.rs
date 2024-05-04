@@ -4,7 +4,7 @@ use std::ffi::OsStr;
 use std::path::Path;
 
 use sqlarfs::{ErrorKind, FileMode};
-use xpct::{be_err, be_ok, equal, expect};
+use xpct::{be_ok, equal, expect};
 
 use common::{connection, have_error_kind};
 

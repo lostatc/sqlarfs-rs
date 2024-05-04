@@ -3,7 +3,7 @@ use std::time::{Duration, SystemTime};
 
 use common::{connection, have_error_kind, into_sqlarfs_error, truncate_mtime};
 use sqlarfs::{ErrorKind, FileMode};
-use xpct::{be_ok, be_true, equal, expect};
+use xpct::{be_false, be_ok, be_true, equal, expect};
 
 mod common;
 
@@ -287,6 +287,26 @@ fn extract_symlink() -> sqlarfs::Result<()> {
         expect!(fs::read_link(dest_path))
             .to(be_ok())
             .to(equal(symlink_target.path()));
+
+        Ok(())
+    })
+}
+
+#[test]
+#[cfg(windows)]
+fn extracting_symlinks_is_a_noop_on_windows() -> sqlarfs::Result<()> {
+    let temp_dir = tempfile::tempdir()?;
+    let symlink_target = tempfile::NamedTempFile::new()?;
+    let dest_path = temp_dir.path().join("dest");
+
+    connection()?.exec(|archive| {
+        archive
+            .open("symlink")?
+            .create_symlink(symlink_target.path())?;
+
+        expect!(archive.extract("symlink", &dest_path)).to(be_ok());
+
+        expect!(dest_path.try_exists()).to(be_ok()).to(be_false());
 
         Ok(())
     })

@@ -241,6 +241,11 @@ impl<'conn> Archive<'conn> {
                         io::ErrorKind::AlreadyExists => {
                             crate::Error::new(crate::ErrorKind::AlreadyExists, err)
                         }
+                        // Windows will throw this error if the file already exists and is a
+                        // directory.
+                        io::ErrorKind::PermissionDenied if cfg!(windows) => {
+                            crate::Error::new(crate::ErrorKind::AlreadyExists, err)
+                        }
                         io::ErrorKind::NotFound => {
                             crate::Error::new(crate::ErrorKind::NotFound, err)
                         }

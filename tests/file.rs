@@ -89,7 +89,7 @@ fn create_file_with_trailing_slash_when_it_already_exists_without_one() -> sqlar
     connection()?.exec(|archive| {
         archive.open("file")?.create_file()?;
 
-        let mut file = archive.open("file/")?;
+        let mut file = archive.open(if cfg!(windows) { r"file\" } else { "file/" })?;
 
         expect!(file.create_file()).to(have_error_kind(ErrorKind::AlreadyExists));
 

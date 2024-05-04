@@ -44,6 +44,7 @@ fn extracting_when_source_is_a_dir_and_dest_has_no_parent_dir_errors() -> sqlarf
 }
 
 #[test]
+#[cfg(unix)]
 fn extracting_when_source_is_a_symlink_and_dest_has_no_parent_dir_errors() -> sqlarfs::Result<()> {
     let symlink_target = tempfile::NamedTempFile::new()?;
 

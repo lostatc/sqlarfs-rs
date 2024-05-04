@@ -40,7 +40,7 @@ jobs:
         run: rustup toolchain install --profile minimal stable
 
       - name: "Run cargo test --all-features"
-        run: cargo test --all-features
+        run: cargo test --all-features --no-fail-fast
 
   lints:
     name: "Lint"

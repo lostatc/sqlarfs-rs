@@ -84,7 +84,8 @@ fn any_write_operation_errors_when_db_is_read_only() -> sqlarfs::Result<()> {
 
     expect!(result).to(have_error_kind(sqlarfs::ErrorKind::ReadOnly));
 
-    fs::remove_file(&temp_path)?;
+    // The test shouldn't fail if this cleanup fails.
+    fs::remove_file(&temp_path).ok();
 
     Ok(())
 }

@@ -2,14 +2,14 @@ mod common;
 
 use std::ffi::OsStr;
 use std::fs;
-use std::io::{self, prelude::*};
+use std::io::prelude::*;
 use std::time::{Duration, SystemTime};
 
 use common::{
-    connection, have_error_kind, have_file_metadata, have_symlink_metadata, truncate_mtime,
-    with_timeout,
+    connection, have_error_kind, have_file_metadata, have_symlink_metadata, into_sqlarfs_error,
+    truncate_mtime, with_timeout,
 };
-use sqlarfs::{ArchiveOptions, Error, ErrorKind, FileMode, FileType};
+use sqlarfs::{ArchiveOptions, ErrorKind, FileMode, FileType};
 use xpct::{approx_eq_time, be_false, be_ok, be_some, be_true, equal, expect};
 
 //
@@ -185,15 +185,7 @@ fn archiving_skips_special_files() -> sqlarfs::Result<()> {
 
     let temp_dir = tempfile::tempdir()?;
 
-    mkfifo(&temp_dir.path().join("fifo"), UnixMode::S_IRWXU).map_err(|err| {
-        Error::new(
-            ErrorKind::Io {
-                kind: io::ErrorKind::Other,
-            },
-            err,
-        )
-    })?;
-
+    mkfifo(&temp_dir.path().join("fifo"), UnixMode::S_IRWXU).map_err(into_sqlarfs_error)?;
     connection()?.exec(|archive| {
         expect!(archive.archive(temp_dir.path(), "dir")).to(be_ok());
 
@@ -222,14 +214,7 @@ fn archiving_follows_symlinks() -> sqlarfs::Result<()> {
         None,
         &temp_dir.path().join("symlink"),
     )
-    .map_err(|err| {
-        Error::new(
-            ErrorKind::Io {
-                kind: io::ErrorKind::Other,
-            },
-            err,
-        )
-    })?;
+    .map_err(into_sqlarfs_error)?;
 
     connection()?.exec(|archive| {
         let opts = ArchiveOptions::new().follow_symlinks(true);
@@ -260,28 +245,14 @@ fn archiving_follows_chained_symlinks() -> sqlarfs::Result<()> {
         None,
         &temp_dir.path().join("symlink1"),
     )
-    .map_err(|err| {
-        Error::new(
-            ErrorKind::Io {
-                kind: io::ErrorKind::Other,
-            },
-            err,
-        )
-    })?;
+    .map_err(into_sqlarfs_error)?;
 
     symlinkat(
         &temp_dir.path().join("symlink1"),
         None,
         &temp_dir.path().join("symlink2"),
     )
-    .map_err(|err| {
-        Error::new(
-            ErrorKind::Io {
-                kind: io::ErrorKind::Other,
-            },
-            err,
-        )
-    })?;
+    .map_err(into_sqlarfs_error)?;
 
     connection()?.exec(|archive| {
         let opts = ArchiveOptions::new().follow_symlinks(true);
@@ -312,14 +283,7 @@ fn archiving_doest_not_follow_symlinks() -> sqlarfs::Result<()> {
         None,
         &temp_dir.path().join("symlink"),
     )
-    .map_err(|err| {
-        Error::new(
-            ErrorKind::Io {
-                kind: io::ErrorKind::Other,
-            },
-            err,
-        )
-    })?;
+    .map_err(into_sqlarfs_error)?;
 
     connection()?.exec(|archive| {
         expect!(archive.archive(temp_dir.path(), "dir")).to(be_ok());
@@ -579,14 +543,8 @@ fn archiving_with_filesystem_loop_in_parent_errors() -> sqlarfs::Result<()> {
         let parent = tempfile::tempdir()?;
 
         // Create a symlink that points to its parent.
-        symlinkat(parent.path(), None, &parent.path().join("symlink")).map_err(|err| {
-            Error::new(
-                ErrorKind::Io {
-                    kind: io::ErrorKind::Other,
-                },
-                err,
-            )
-        })?;
+        symlinkat(parent.path(), None, &parent.path().join("symlink"))
+            .map_err(into_sqlarfs_error)?;
 
         connection()?.exec(|archive| {
             let opts = ArchiveOptions::new().follow_symlinks(true);
@@ -611,14 +569,7 @@ fn archiving_with_filesystem_loop_in_grandparent_errors() -> sqlarfs::Result<()>
         fs::create_dir(&parent)?;
 
         // Create a symlink that points to its grandparent.
-        symlinkat(grandparent.path(), None, &parent.join("symlink")).map_err(|err| {
-            Error::new(
-                ErrorKind::Io {
-                    kind: io::ErrorKind::Other,
-                },
-                err,
-            )
-        })?;
+        symlinkat(grandparent.path(), None, &parent.join("symlink")).map_err(into_sqlarfs_error)?;
 
         connection()?.exec(|archive| {
             let opts = ArchiveOptions::new().follow_symlinks(true);

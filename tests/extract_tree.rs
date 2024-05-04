@@ -1,8 +1,7 @@
 use std::fs;
-use std::io;
 use std::time::{Duration, SystemTime};
 
-use common::{connection, have_error_kind, truncate_mtime};
+use common::{connection, have_error_kind, into_sqlarfs_error, truncate_mtime};
 use sqlarfs::{ErrorKind, FileMode};
 use xpct::{be_ok, be_true, equal, expect};
 
@@ -100,14 +99,7 @@ fn extracting_when_source_is_a_file_and_dest_already_exists_and_is_a_symlink_err
     let temp_dir = tempfile::tempdir()?;
     let link_path = temp_dir.path().join("symlink");
 
-    symlinkat("/nonexistent", None, &link_path).map_err(|err| {
-        sqlarfs::Error::new(
-            ErrorKind::Io {
-                kind: io::ErrorKind::Other,
-            },
-            err,
-        )
-    })?;
+    symlinkat("/nonexistent", None, &link_path).map_err(into_sqlarfs_error)?;
 
     connection()?.exec(|archive| {
         archive.open("file")?.create_file()?;
@@ -157,14 +149,7 @@ fn extracting_when_source_is_a_dir_and_dest_already_exists_and_is_a_symlink_erro
     let temp_dir = tempfile::tempdir()?;
     let link_path = temp_dir.path().join("symlink");
 
-    symlinkat("/nonexistent", None, &link_path).map_err(|err| {
-        sqlarfs::Error::new(
-            ErrorKind::Io {
-                kind: io::ErrorKind::Other,
-            },
-            err,
-        )
-    })?;
+    symlinkat("/nonexistent", None, &link_path).map_err(into_sqlarfs_error)?;
 
     connection()?.exec(|archive| {
         archive.open("dir")?.create_dir()?;
@@ -216,14 +201,7 @@ fn extracting_when_source_is_a_symlink_and_dest_already_exists_and_is_a_symlink_
     let temp_dir = tempfile::tempdir()?;
     let link_path = temp_dir.path().join("symlink");
 
-    symlinkat("/nonexistent", None, &link_path).map_err(|err| {
-        sqlarfs::Error::new(
-            ErrorKind::Io {
-                kind: io::ErrorKind::Other,
-            },
-            err,
-        )
-    })?;
+    symlinkat("/nonexistent", None, &link_path).map_err(into_sqlarfs_error)?;
 
     connection()?.exec(|archive| {
         archive.open("symlink")?.create_symlink("/nonexistent")?;

@@ -2,6 +2,7 @@
 
 mod matchers;
 
+use std::io;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -49,6 +50,8 @@ pub fn incompressible_bytes() -> Vec<u8> {
     pool.choose_multiple(&mut rng, 64).copied().collect()
 }
 
+// Run the given function in a separate thread with a timeout. This is for tests where the failure
+// case could result in them hanging.
 pub fn with_timeout<F>(timeout: Duration, f: F) -> sqlarfs::Result<()>
 where
     F: FnOnce() -> sqlarfs::Result<()> + Send + 'static,
@@ -65,4 +68,20 @@ where
         .unwrap_or_else(|_| panic!("test timed out after {} seconds", timeout.as_secs()));
 
     handle.join().unwrap()
+}
+
+// Convert an arbitrary error into a `sqlarfs::Error`. We don't have functionality like this in the
+// library specifically to force callers to explicitly choose a `sqlarfs::ErrorKind`. For tests,
+// however, that's not as important.
+pub fn into_sqlarfs_error<E>(err: E) -> sqlarfs::Error
+where
+    E: std::error::Error + Send + Sync + 'static,
+{
+    sqlarfs::Error::new(
+        // The error kind we use here is somewhat arbitrary.
+        sqlarfs::ErrorKind::Io {
+            kind: io::ErrorKind::Other,
+        },
+        err,
+    )
 }

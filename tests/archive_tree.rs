@@ -366,9 +366,13 @@ fn archive_directory_children_to_target() -> sqlarfs::Result<()> {
 
         let opts = ArchiveOptions::new().children(true);
 
-        expect!(archive.archive_with(temp_dir.path(), "dir", &opts,)).to(be_ok());
+        expect!(archive.archive_with(temp_dir.path(), "dir", &opts)).to(be_ok());
 
-        let file = archive.open("dir/file")?;
+        let file = archive.open(if cfg!(windows) {
+            r"dir\file"
+        } else {
+            "dir/file"
+        })?;
 
         expect!(file.exists()).to(be_ok()).to(be_true());
         expect!(file.metadata())

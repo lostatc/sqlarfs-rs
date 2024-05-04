@@ -60,7 +60,7 @@ fn extracting_when_source_is_a_symlink_and_dest_has_no_parent_dir_errors() -> sq
 }
 
 #[test]
-fn archiving_when_source_is_a_file_and_dest_already_exists_and_is_a_file_errors(
+fn extracting_when_source_is_a_file_and_dest_already_exists_and_is_a_file_errors(
 ) -> sqlarfs::Result<()> {
     let temp_file = tempfile::NamedTempFile::new()?;
 
@@ -75,7 +75,7 @@ fn archiving_when_source_is_a_file_and_dest_already_exists_and_is_a_file_errors(
 }
 
 #[test]
-fn archiving_when_source_is_a_file_and_dest_already_exists_and_is_a_dir_errors(
+fn extracting_when_source_is_a_file_and_dest_already_exists_and_is_a_dir_errors(
 ) -> sqlarfs::Result<()> {
     let temp_dir = tempfile::tempdir()?;
 
@@ -90,7 +90,7 @@ fn archiving_when_source_is_a_file_and_dest_already_exists_and_is_a_dir_errors(
 }
 
 #[test]
-fn archiving_when_source_is_a_dir_and_dest_already_exists_and_is_a_file_errors(
+fn extracting_when_source_is_a_dir_and_dest_already_exists_and_is_a_file_errors(
 ) -> sqlarfs::Result<()> {
     let temp_file = tempfile::NamedTempFile::new()?;
 
@@ -105,7 +105,7 @@ fn archiving_when_source_is_a_dir_and_dest_already_exists_and_is_a_file_errors(
 }
 
 #[test]
-fn archiving_when_source_is_a_dir_and_dest_already_exists_and_is_a_dir_errors(
+fn extracting_when_source_is_a_dir_and_dest_already_exists_and_is_a_dir_errors(
 ) -> sqlarfs::Result<()> {
     let temp_dir = tempfile::tempdir()?;
 
@@ -120,7 +120,7 @@ fn archiving_when_source_is_a_dir_and_dest_already_exists_and_is_a_dir_errors(
 }
 
 #[test]
-fn archiving_when_source_path_is_absolute_errors() -> sqlarfs::Result<()> {
+fn extracting_when_source_path_is_absolute_errors() -> sqlarfs::Result<()> {
     let temp_dir = tempfile::tempdir()?;
 
     connection()?.exec(|archive| {
@@ -133,7 +133,7 @@ fn archiving_when_source_path_is_absolute_errors() -> sqlarfs::Result<()> {
 
 #[test]
 #[cfg(unix)]
-fn archiving_when_source_path_is_not_valid_unicode_errors() -> sqlarfs::Result<()> {
+fn extracting_when_source_path_is_not_valid_unicode_errors() -> sqlarfs::Result<()> {
     use std::ffi::OsStr;
     use std::os::unix::ffi::OsStrExt;
 

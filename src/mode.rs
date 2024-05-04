@@ -1,6 +1,4 @@
 use std::fs;
-#[cfg(unix)]
-use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
 
 use super::metadata::FileMode;
@@ -18,14 +16,20 @@ pub trait WriteMode {
 #[cfg(unix)]
 pub struct UnixModeAdapter;
 
+#[cfg(unix)]
 impl ReadMode for UnixModeAdapter {
     fn read_mode(&self, _path: &Path, metadata: &fs::Metadata) -> crate::Result<FileMode> {
+        use std::os::unix::fs::MetadataExt;
+
         Ok(FileMode::from_mode(metadata.mode()))
     }
 }
 
+#[cfg(unix)]
 impl WriteMode for UnixModeAdapter {
     fn write_mode(&self, path: &Path, mode: FileMode) -> crate::Result<()> {
+        use std::os::unix::fs::PermissionsExt;
+
         let mut perms = fs::metadata(path)?.permissions();
         perms.set_mode(mode.bits());
         fs::set_permissions(path, perms)?;
@@ -71,7 +75,10 @@ mod tests {
     use xpct::{be_ok, equal, expect};
 
     #[test]
+    #[cfg(unix)]
     fn unix_mode_adapter_reads_mode() -> crate::Result<()> {
+        use std::os::unix::fs::PermissionsExt;
+
         let expected_mode = FileMode::OWNER_R | FileMode::GROUP_R | FileMode::OTHER_R;
         let adapter = UnixModeAdapter;
 
@@ -89,7 +96,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn unix_mode_adapter_writes_mode() -> crate::Result<()> {
+        use std::os::unix::fs::PermissionsExt;
+
         let expected_mode = FileMode::OWNER_R | FileMode::GROUP_R | FileMode::OTHER_R;
         let adapter = UnixModeAdapter;
 
@@ -113,6 +123,8 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn umask_mode_adapter_ignores_actual_file_mode() -> crate::Result<()> {
+        use std::os::unix::fs::PermissionsExt;
+
         let umask = FileMode::OTHER_W;
         let expected_mode = FileMode::OWNER_R
             | FileMode::OWNER_W
@@ -134,6 +146,8 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn umask_mode_adapter_does_not_set_file_mode() -> crate::Result<()> {
+        use std::os::unix::fs::PermissionsExt;
+
         let umask = FileMode::OTHER_W;
         let mode_to_set = FileMode::OWNER_R | FileMode::GROUP_R | FileMode::OTHER_R;
         let adapter = UmaskModeAdapter::new(umask);

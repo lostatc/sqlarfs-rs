@@ -1,6 +1,6 @@
 use std::fs;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::FileMetadata;
 
@@ -33,7 +33,7 @@ impl ArchiveOptions {
     /// Create a new [`ArchiveOptions`] default settings.
     pub fn new() -> Self {
         Self {
-            follow_symlinks: true,
+            follow_symlinks: false,
             children: false,
             recursive: true,
             preserve_metadata: true,
@@ -42,9 +42,10 @@ impl ArchiveOptions {
 
     /// Follow symbolic links.
     ///
-    /// If this is `false`, symbolic links will be silently skipped.
+    /// If this is `true`, the file the symbolic links points to will be archived instead of the
+    /// symbolic link itself.
     ///
-    /// The default is `true`.
+    /// The default is `false`.
     pub fn follow_symlinks(mut self, follow: bool) -> Self {
         self.follow_symlinks = follow;
         self
@@ -82,21 +83,91 @@ impl ArchiveOptions {
     }
 }
 
-fn read_metadata(path: &Path, follow_symlinks: bool) -> crate::Result<fs::Metadata> {
-    let metadata_result = if follow_symlinks {
-        fs::metadata(path)
-    } else {
-        fs::symlink_metadata(path)
-    };
-
-    match metadata_result {
+fn read_metadata(path: &Path) -> crate::Result<fs::Metadata> {
+    match fs::symlink_metadata(path) {
         Ok(metadata) => Ok(metadata),
         Err(err) if err.kind() == io::ErrorKind::NotFound => Err(crate::ErrorKind::NotFound.into()),
         Err(err) => Err(err.into()),
     }
 }
 
+fn rebase_path(path: &Path, new_base: &Path, old_base: &Path) -> PathBuf {
+    new_base.join(path.strip_prefix(old_base).expect(
+        "Could not get path relative to ancestor while walking the directory tree. This is a bug.",
+    ))
+}
+
 impl<'conn> Archive<'conn> {
+    pub(super) fn archive_file<T>(
+        &mut self,
+        src_path: &Path,
+        dest_path: &Path,
+        opts: &ArchiveOptions,
+        mode_adapter: &T,
+    ) -> crate::Result<()>
+    where
+        T: ReadMode,
+    {
+        let metadata = read_metadata(src_path)?;
+
+        let file_type = if metadata.is_file() {
+            FileType::File
+        } else if metadata.is_dir() {
+            FileType::Dir
+        } else if metadata.is_symlink() {
+            FileType::Symlink
+        } else {
+            // We ignore special files.
+            return Ok(());
+        };
+
+        let mut archive_file = self.open(dest_path)?;
+
+        match file_type {
+            FileType::File => archive_file.create_file()?,
+            FileType::Dir => archive_file.create_dir()?,
+            FileType::Symlink => {
+                let target = fs::read_link(src_path)?;
+
+                if opts.follow_symlinks {
+                    return self.archive_file(&target, dest_path, opts, mode_adapter);
+                } else {
+                    archive_file.create_symlink(&target)?;
+                }
+            }
+        }
+
+        if opts.preserve_metadata {
+            let mode = mode_adapter.read_mode(src_path, &metadata)?;
+            // `std::fs::Metadata::modified` returns an error when mtime isn't available on the
+            // current platform, in which case we just don't set the mtime in the archive.
+            let mtime = metadata.modified().ok();
+
+            archive_file.set_mode(Some(mode))?;
+            archive_file.set_mtime(mtime)?;
+        }
+
+        match file_type {
+            FileType::File => {
+                // Copy the file contents.
+                let mut fs_file = fs::File::open(src_path)?;
+                archive_file.write_file(&mut fs_file)?;
+            }
+            FileType::Dir if opts.recursive => {
+                for entry in fs::read_dir(src_path)? {
+                    let entry_path = entry?.path();
+                    let dest_path = rebase_path(&entry_path, dest_path, src_path);
+
+                    self.archive_file(&entry_path, &dest_path, opts, mode_adapter)?;
+                }
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    // TODO: Detect filesystem loops when following symlinks.
     pub(super) fn archive_tree<T>(
         &mut self,
         src_root: &Path,
@@ -109,14 +180,14 @@ impl<'conn> Archive<'conn> {
     {
         if dest_root == Path::new("") && !opts.children {
             return Err(crate::Error::msg(
-            crate::ErrorKind::InvalidArgs,
-            "Cannot use an empty path as the destination directory unless archiving the children of the source directory."
-        ));
+                crate::ErrorKind::InvalidArgs,
+                "Cannot use an empty path as the destination directory unless archiving the children of the source directory."
+            ));
         }
 
-        let src_is_dir = read_metadata(src_root, opts.follow_symlinks)?.is_dir();
+        let src_is_dir = read_metadata(src_root)?.is_dir();
 
-        let mut stack = if opts.children && src_is_dir {
+        let paths = if opts.children && src_is_dir {
             fs::read_dir(src_root)?
                 .map(|entry| entry.map(|entry| entry.path()))
                 .collect::<Result<Vec<_>, _>>()?
@@ -124,62 +195,9 @@ impl<'conn> Archive<'conn> {
             vec![src_root.to_path_buf()]
         };
 
-        while let Some(path) = stack.pop() {
-            let metadata = read_metadata(&path, opts.follow_symlinks)?;
-
-            let file_type = if metadata.is_file() {
-                FileType::File
-            } else if metadata.is_dir() {
-                FileType::Dir
-            } else if metadata.is_symlink() {
-                FileType::Symlink
-            } else {
-                // We ignore special files.
-                continue;
-            };
-
-            let dest_path = dest_root.join(path
-                .strip_prefix(src_root)
-                .expect("Could not get path relative to ancestor while walking the directory tree. This is a bug.")
-            );
-
-            let mut archive_file = self.open(dest_path)?;
-
-            match file_type {
-                FileType::File => archive_file.create_file()?,
-                FileType::Dir => archive_file.create_dir()?,
-                FileType::Symlink => {
-                    let target = fs::read_link(&path)?;
-                    archive_file.create_symlink(&target)?;
-                }
-            }
-
-            if opts.preserve_metadata {
-                let mode = mode_adapter.read_mode(&path, &metadata)?;
-
-                // `std::fs::Metadata::modified` returns an error when mtime isn't available on the current
-                // platform, in which case we just don't set the mtime in the archive.
-                let mtime = metadata.modified().ok();
-
-                archive_file.set_mode(Some(mode))?;
-                archive_file.set_mtime(mtime)?;
-            }
-
-            match file_type {
-                FileType::File => {
-                    // Copy the file contents.
-                    let mut fs_file = fs::File::open(&path)?;
-                    archive_file.write_file(&mut fs_file)?;
-                }
-                FileType::Dir if opts.recursive => {
-                    for entry in fs::read_dir(&path)? {
-                        let entry = entry?;
-                        let path = entry.path();
-                        stack.push(path);
-                    }
-                }
-                _ => {}
-            }
+        for path in paths {
+            let dest_path = rebase_path(&path, dest_root, src_root);
+            self.archive_file(&path, &dest_path, opts, mode_adapter)?;
         }
 
         Ok(())
@@ -280,12 +298,7 @@ impl<'conn> Archive<'conn> {
         let entries = self.list_with(&list_opts)?.collect::<Result<Vec<_>, _>>()?;
 
         for entry in entries {
-            let dest_path = dest_root.join(
-            entry.path
-                .strip_prefix(src_root)
-                .expect("Could not get path relative to ancestor while walking the directory tree. This is a bug.")
-        );
-
+            let dest_path = rebase_path(&entry.path, dest_root, src_root);
             self.extract_file(entry.path(), &dest_path, entry.metadata(), mode_adapter)?;
         }
 

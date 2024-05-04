@@ -2,10 +2,10 @@ mod common;
 
 use std::ffi::OsStr;
 use std::fs;
-use std::io;
+use std::io::{self, prelude::*};
 use std::time::{Duration, SystemTime};
 
-use common::{connection, have_file_metadata, truncate_mtime};
+use common::{connection, have_file_metadata, have_symlink_metadata, truncate_mtime};
 use sqlarfs::{ArchiveOptions, Error, ErrorKind, FileMode, FileType};
 use xpct::{approx_eq_time, be_err, be_false, be_ok, be_some, be_true, equal, expect};
 
@@ -162,7 +162,9 @@ fn archiving_preserves_file_mtime() -> sqlarfs::Result<()> {
     // Some time in the past.
     let expected_mtime = truncate_mtime(SystemTime::now() - Duration::from_secs(60));
 
-    let temp_file = tempfile::NamedTempFile::new()?;
+    let mut temp_file = tempfile::NamedTempFile::new()?;
+    write!(temp_file.as_file_mut(), "file contents")?;
+
     temp_file.as_file().set_modified(expected_mtime)?;
 
     connection()?.exec(|archive| {
@@ -210,12 +212,102 @@ fn archiving_skips_special_files() -> sqlarfs::Result<()> {
 }
 
 //
-// `ArchiveOptions::dereference`
+// `ArchiveOptions::follow_symlinks`
 //
 
 #[test]
 #[cfg(unix)]
 fn archiving_follows_symlinks() -> sqlarfs::Result<()> {
+    use nix::unistd::symlinkat;
+
+    let temp_dir = tempfile::tempdir()?;
+    let symlink_target = tempfile::NamedTempFile::new()?;
+
+    symlinkat(
+        symlink_target.path(),
+        None,
+        &temp_dir.path().join("symlink"),
+    )
+    .map_err(|err| {
+        Error::new(
+            ErrorKind::Io {
+                kind: io::ErrorKind::Other,
+            },
+            err,
+        )
+    })?;
+
+    connection()?.exec(|archive| {
+        let opts = ArchiveOptions::new().follow_symlinks(true);
+        expect!(archive.archive_with(temp_dir.path(), "dir", &opts)).to(be_ok());
+
+        let symlink = archive.open("dir/symlink")?;
+
+        expect!(symlink.exists()).to(be_ok()).to(be_true());
+        expect!(symlink.metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.kind())
+            .to(equal(FileType::File));
+
+        Ok(())
+    })
+}
+
+#[test]
+#[cfg(unix)]
+fn archiving_follows_chained_symlinks() -> sqlarfs::Result<()> {
+    use nix::unistd::symlinkat;
+
+    let temp_dir = tempfile::tempdir()?;
+    let symlink_target = tempfile::NamedTempFile::new()?;
+
+    symlinkat(
+        symlink_target.path(),
+        None,
+        &temp_dir.path().join("symlink1"),
+    )
+    .map_err(|err| {
+        Error::new(
+            ErrorKind::Io {
+                kind: io::ErrorKind::Other,
+            },
+            err,
+        )
+    })?;
+
+    symlinkat(
+        &temp_dir.path().join("symlink1"),
+        None,
+        &temp_dir.path().join("symlink2"),
+    )
+    .map_err(|err| {
+        Error::new(
+            ErrorKind::Io {
+                kind: io::ErrorKind::Other,
+            },
+            err,
+        )
+    })?;
+
+    connection()?.exec(|archive| {
+        let opts = ArchiveOptions::new().follow_symlinks(true);
+        expect!(archive.archive_with(temp_dir.path(), "dir", &opts)).to(be_ok());
+
+        let symlink = archive.open("dir/symlink2")?;
+
+        expect!(symlink.exists()).to(be_ok()).to(be_true());
+        expect!(symlink.metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.kind())
+            .to(equal(FileType::File));
+
+        Ok(())
+    })
+}
+
+#[test]
+#[cfg(unix)]
+fn archiving_doest_not_follow_symlinks() -> sqlarfs::Result<()> {
     use nix::unistd::symlinkat;
 
     let temp_dir = tempfile::tempdir()?;
@@ -243,8 +335,9 @@ fn archiving_follows_symlinks() -> sqlarfs::Result<()> {
         expect!(symlink.exists()).to(be_ok()).to(be_true());
         expect!(symlink.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.kind())
-            .to(equal(FileType::File));
+            .to(have_symlink_metadata())
+            .map(|metadata| metadata.target)
+            .to(equal(symlink_target.path()));
 
         Ok(())
     })
@@ -413,7 +506,7 @@ fn archive_non_recursively() -> sqlarfs::Result<()> {
 }
 
 //
-// `ArchiveOptions::preserve`
+// `ArchiveOptions::preserve_metadata`
 //
 
 #[test]

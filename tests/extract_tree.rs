@@ -1,3 +1,4 @@
+use std::fs;
 use std::time::{Duration, SystemTime};
 
 use common::{connection, truncate_mtime};
@@ -40,6 +41,24 @@ fn extracting_when_source_is_a_dir_and_dest_has_no_parent_dir_errors() -> sqlarf
         archive.open("dir")?.create_dir()?;
 
         expect!(archive.extract("dir", "/nonexistent/dest"))
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::NotFound));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn extracting_when_source_is_a_symlink_and_dest_has_no_parent_dir_errors() -> sqlarfs::Result<()> {
+    let symlink_target = tempfile::NamedTempFile::new()?;
+
+    connection()?.exec(|archive| {
+        archive
+            .open("symlink")?
+            .create_symlink(symlink_target.path())?;
+
+        expect!(archive.extract("symlink", "/nonexistent/dest"))
             .to(be_err())
             .map(|err| err.into_kind())
             .to(equal(ErrorKind::NotFound));
@@ -166,6 +185,56 @@ fn extract_regular_file() -> sqlarfs::Result<()> {
             .to(be_ok())
             .map(|metadata| metadata.is_file())
             .to(be_true());
+
+        Ok(())
+    })
+}
+
+#[test]
+#[cfg(unix)]
+fn extract_symlink() -> sqlarfs::Result<()> {
+    let temp_dir = tempfile::tempdir()?;
+    let symlink_target = tempfile::NamedTempFile::new()?;
+    let dest_path = temp_dir.path().join("dest");
+
+    connection()?.exec(|archive| {
+        archive
+            .open("symlink")?
+            .create_symlink(symlink_target.path())?;
+
+        expect!(archive.extract("symlink", &dest_path)).to(be_ok());
+
+        expect!(dest_path.exists()).to(be_true());
+        expect!(dest_path.symlink_metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.file_type().is_symlink())
+            .to(be_true());
+        expect!(fs::read_link(dest_path))
+            .to(be_ok())
+            .to(equal(symlink_target.path()));
+
+        Ok(())
+    })
+}
+
+#[test]
+#[cfg(unix)]
+fn extract_symlink_when_dest_already_exists() -> sqlarfs::Result<()> {
+    let temp_dir = tempfile::tempdir()?;
+    let symlink_target = tempfile::NamedTempFile::new()?;
+    let dest_path = temp_dir.path().join("dest");
+
+    fs::File::create(&dest_path)?;
+
+    connection()?.exec(|archive| {
+        archive
+            .open("symlink")?
+            .create_symlink(symlink_target.path())?;
+
+        expect!(archive.extract("symlink", &dest_path))
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::AlreadyExists));
 
         Ok(())
     })

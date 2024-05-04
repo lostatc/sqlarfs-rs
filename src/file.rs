@@ -472,14 +472,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
 
         match self.metadata()? {
             FileMetadata::File { size, .. } => Ok(size == 0),
-            FileMetadata::Dir { .. } => Err(crate::Error::msg(
-                crate::ErrorKind::NotARegularFile,
-                "Cannot get the size of a directory.",
-            )),
-            FileMetadata::Symlink { .. } => Err(crate::Error::msg(
-                crate::ErrorKind::NotARegularFile,
-                "Cannot get the size of a symlink link.",
-            )),
+            _ => unreachable!("By this point, we should have already checked that the file is a regular file. This is a bug."),
         }
     }
 

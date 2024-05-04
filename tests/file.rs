@@ -1,5 +1,6 @@
 mod common;
 
+use std::ffi::OsStr;
 use std::io::prelude::*;
 use std::path::Path;
 use std::time::SystemTime;
@@ -175,6 +176,41 @@ fn create_dir_all_errors_if_regular_file_already_exists() -> sqlarfs::Result<()>
             .to(be_err())
             .map(|err| err.into_kind())
             .to(equal(ErrorKind::AlreadyExists));
+
+        Ok(())
+    })
+}
+
+//
+// `File::create_symlink`
+//
+
+#[test]
+fn create_symlink_with_empty_target_errors() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let mut link = archive.open("link")?;
+
+        expect!(link.create_symlink(""))
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::InvalidArgs));
+
+        Ok(())
+    })
+}
+
+#[test]
+#[cfg(unix)]
+fn create_symlink_with_non_utf8_target_errors() -> sqlarfs::Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+
+    connection()?.exec(|archive| {
+        let mut link = archive.open("link")?;
+
+        expect!(link.create_symlink(OsStr::from_bytes(b"not/valid/utf8/\x80\x81")))
+            .to(be_err())
+            .map(|err| err.into_kind())
+            .to(equal(ErrorKind::InvalidArgs));
 
         Ok(())
     })

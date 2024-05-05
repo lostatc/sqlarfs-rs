@@ -286,6 +286,37 @@ fn archiving_doest_not_follow_symlinks() -> sqlarfs::Result<()> {
     .map_err(into_sqlarfs_error)?;
 
     connection()?.exec(|archive| {
+        expect!(archive.archive(temp_dir.path().join("symlink"), "symlink")).to(be_ok());
+
+        let symlink = archive.open("symlink")?;
+
+        expect!(symlink.exists()).to(be_ok()).to(be_true());
+        expect!(symlink.metadata())
+            .to(be_ok())
+            .to(have_symlink_metadata())
+            .map(|metadata| metadata.target)
+            .to(equal(symlink_target.path()));
+
+        Ok(())
+    })
+}
+
+#[test]
+#[cfg(unix)]
+fn archiving_doest_not_follow_symlink_children_of_directory() -> sqlarfs::Result<()> {
+    use nix::unistd::symlinkat;
+
+    let temp_dir = tempfile::tempdir()?;
+    let symlink_target = tempfile::NamedTempFile::new()?;
+
+    symlinkat(
+        symlink_target.path(),
+        None,
+        &temp_dir.path().join("symlink"),
+    )
+    .map_err(into_sqlarfs_error)?;
+
+    connection()?.exec(|archive| {
         expect!(archive.archive(temp_dir.path(), "dir")).to(be_ok());
 
         let symlink = archive.open("dir/symlink")?;

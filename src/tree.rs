@@ -215,7 +215,7 @@ impl<'conn> Archive<'conn> {
 
         for path in paths {
             let dest_path = rebase_path(&path, dest_root, src_root);
-            self.archive_file(&path, &dest_path, opts, mode_adapter, vec![path.clone()])?;
+            self.archive_file(&path, &dest_path, opts, mode_adapter, Vec::new())?;
         }
 
         Ok(())

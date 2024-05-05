@@ -129,9 +129,7 @@ fn archive_regular_file_with_data() -> sqlarfs::Result<()> {
 #[serial(change_directory)]
 #[cfg(unix)]
 fn archive_symlink() -> sqlarfs::Result<()> {
-    use nix::unistd::symlinkat;
-
-    use crate::common::into_sqlarfs_error;
+    use std::os::unix::fs::symlink;
 
     let db_dir = tempfile::tempdir()?;
     let reference_db = db_dir.path().join("reference.db");
@@ -139,12 +137,7 @@ fn archive_symlink() -> sqlarfs::Result<()> {
 
     let temp_dir = tempfile::tempdir()?;
     let symlink_target = tempfile::NamedTempFile::new()?;
-    symlinkat(
-        symlink_target.path(),
-        None,
-        &temp_dir.path().join("symlink"),
-    )
-    .map_err(into_sqlarfs_error)?;
+    symlink(symlink_target.path(), temp_dir.path().join("symlink"))?;
 
     env::set_current_dir(temp_dir.path())?;
 

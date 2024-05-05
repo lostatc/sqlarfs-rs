@@ -204,17 +204,12 @@ fn archiving_skips_special_files() -> sqlarfs::Result<()> {
 #[test]
 #[cfg(unix)]
 fn archiving_follows_symlinks() -> sqlarfs::Result<()> {
-    use nix::unistd::symlinkat;
+    use std::os::unix::fs::symlink;
 
     let temp_dir = tempfile::tempdir()?;
     let symlink_target = tempfile::NamedTempFile::new()?;
 
-    symlinkat(
-        symlink_target.path(),
-        None,
-        &temp_dir.path().join("symlink"),
-    )
-    .map_err(into_sqlarfs_error)?;
+    symlink(symlink_target.path(), temp_dir.path().join("symlink"))?;
 
     connection()?.exec(|archive| {
         let opts = ArchiveOptions::new().follow_symlinks(true);
@@ -235,24 +230,17 @@ fn archiving_follows_symlinks() -> sqlarfs::Result<()> {
 #[test]
 #[cfg(unix)]
 fn archiving_follows_chained_symlinks() -> sqlarfs::Result<()> {
-    use nix::unistd::symlinkat;
+    use std::os::unix::fs::symlink;
 
     let temp_dir = tempfile::tempdir()?;
     let symlink_target = tempfile::NamedTempFile::new()?;
 
-    symlinkat(
-        symlink_target.path(),
-        None,
-        &temp_dir.path().join("symlink1"),
-    )
-    .map_err(into_sqlarfs_error)?;
+    symlink(symlink_target.path(), temp_dir.path().join("symlink1"))?;
 
-    symlinkat(
-        &temp_dir.path().join("symlink1"),
-        None,
-        &temp_dir.path().join("symlink2"),
-    )
-    .map_err(into_sqlarfs_error)?;
+    symlink(
+        temp_dir.path().join("symlink1"),
+        temp_dir.path().join("symlink2"),
+    )?;
 
     connection()?.exec(|archive| {
         let opts = ArchiveOptions::new().follow_symlinks(true);
@@ -273,17 +261,12 @@ fn archiving_follows_chained_symlinks() -> sqlarfs::Result<()> {
 #[test]
 #[cfg(unix)]
 fn archiving_doest_not_follow_symlinks() -> sqlarfs::Result<()> {
-    use nix::unistd::symlinkat;
+    use std::os::unix::fs::symlink;
 
     let temp_dir = tempfile::tempdir()?;
     let symlink_target = tempfile::NamedTempFile::new()?;
 
-    symlinkat(
-        symlink_target.path(),
-        None,
-        &temp_dir.path().join("symlink"),
-    )
-    .map_err(into_sqlarfs_error)?;
+    symlink(symlink_target.path(), temp_dir.path().join("symlink"))?;
 
     connection()?.exec(|archive| {
         expect!(archive.archive(temp_dir.path().join("symlink"), "symlink")).to(be_ok());
@@ -304,17 +287,12 @@ fn archiving_doest_not_follow_symlinks() -> sqlarfs::Result<()> {
 #[test]
 #[cfg(unix)]
 fn archiving_doest_not_follow_symlink_children_of_directory() -> sqlarfs::Result<()> {
-    use nix::unistd::symlinkat;
+    use std::os::unix::fs::symlink;
 
     let temp_dir = tempfile::tempdir()?;
     let symlink_target = tempfile::NamedTempFile::new()?;
 
-    symlinkat(
-        symlink_target.path(),
-        None,
-        &temp_dir.path().join("symlink"),
-    )
-    .map_err(into_sqlarfs_error)?;
+    symlink(symlink_target.path(), temp_dir.path().join("symlink"))?;
 
     connection()?.exec(|archive| {
         expect!(archive.archive(temp_dir.path(), "dir")).to(be_ok());
@@ -565,7 +543,7 @@ fn archiving_does_not_preserve_unix_file_mode() -> sqlarfs::Result<()> {
 #[test]
 #[cfg(unix)]
 fn archiving_with_filesystem_loop_in_parent_errors() -> sqlarfs::Result<()> {
-    use nix::unistd::symlinkat;
+    use std::os::unix::fs::symlink;
 
     // The currently implementation uses recursion and will stack overflow if there's a filesystem
     // loop before it times out. However, we should still set a timeout in case this implementation
@@ -574,8 +552,7 @@ fn archiving_with_filesystem_loop_in_parent_errors() -> sqlarfs::Result<()> {
         let parent = tempfile::tempdir()?;
 
         // Create a symlink that points to its parent.
-        symlinkat(parent.path(), None, &parent.path().join("symlink"))
-            .map_err(into_sqlarfs_error)?;
+        symlink(parent.path(), parent.path().join("symlink"))?;
 
         connection()?.exec(|archive| {
             let opts = ArchiveOptions::new().follow_symlinks(true);
@@ -591,7 +568,7 @@ fn archiving_with_filesystem_loop_in_parent_errors() -> sqlarfs::Result<()> {
 #[test]
 #[cfg(unix)]
 fn archiving_with_filesystem_loop_in_grandparent_errors() -> sqlarfs::Result<()> {
-    use nix::unistd::symlinkat;
+    use std::os::unix::fs::symlink;
 
     with_timeout(Duration::from_secs(1), || {
         let grandparent = tempfile::tempdir()?;
@@ -600,7 +577,7 @@ fn archiving_with_filesystem_loop_in_grandparent_errors() -> sqlarfs::Result<()>
         fs::create_dir(&parent)?;
 
         // Create a symlink that points to its grandparent.
-        symlinkat(grandparent.path(), None, &parent.join("symlink")).map_err(into_sqlarfs_error)?;
+        symlink(grandparent.path(), parent.join("symlink"))?;
 
         connection()?.exec(|archive| {
             let opts = ArchiveOptions::new().follow_symlinks(true);

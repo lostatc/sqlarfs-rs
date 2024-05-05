@@ -65,8 +65,14 @@ impl ReadMode for WindowsModeAdapter {
 
 #[cfg(any(windows, test))]
 impl WriteMode for WindowsModeAdapter {
-    fn write_mode(&self, _path: &Path, _mode: FileMode) -> crate::Result<()> {
-        // Do nothing; use the default permissions set by the OS.
+    fn write_mode(&self, path: &Path, mode: FileMode) -> crate::Result<()> {
+        let mut permissions = fs::metadata(path)?.permissions();
+        permissions.set_readonly(
+            !mode.contains(FileMode::OWNER_W | FileMode::GROUP_W | FileMode::OTHER_W),
+        );
+
+        fs::set_permissions(path, permissions)?;
+
         Ok(())
     }
 }
@@ -75,7 +81,7 @@ impl WriteMode for WindowsModeAdapter {
 mod tests {
     use super::*;
 
-    use xpct::{be_ok, equal, expect};
+    use xpct::{be_false, be_ok, be_true, equal, expect};
 
     #[test]
     #[cfg(unix)]
@@ -155,6 +161,59 @@ mod tests {
         expect!(adapter.read_mode(temp_file.path(), &fs::metadata(temp_file.path())?))
             .to(be_ok())
             .to(equal(expected_mode));
+
+        Ok(())
+    }
+
+    #[test]
+    fn windows_mode_adapter_writes_readwrite_permissions() -> crate::Result<()> {
+        let adapter = WindowsModeAdapter;
+        let expected_mode = FileMode::OWNER_R
+            | FileMode::OWNER_W
+            | FileMode::GROUP_R
+            | FileMode::GROUP_W
+            | FileMode::OTHER_R
+            | FileMode::OTHER_W;
+
+        let temp_file = tempfile::NamedTempFile::new()?;
+
+        let mut current_permissions = fs::metadata(temp_file.path())?.permissions();
+        current_permissions.set_readonly(true);
+        fs::set_permissions(temp_file.path(), current_permissions)?;
+
+        let current_permissions = fs::metadata(temp_file.path())?.permissions();
+        expect!(current_permissions.readonly()).to(be_true());
+
+        expect!(adapter.write_mode(temp_file.path(), expected_mode)).to(be_ok());
+
+        let actual_permissions = fs::metadata(temp_file.path())?.permissions();
+
+        expect!(actual_permissions.readonly()).to(be_false());
+
+        Ok(())
+    }
+
+    #[test]
+    #[allow(clippy::permissions_set_readonly_false)]
+    fn windows_mode_adapter_writes_readonly_permissions() -> crate::Result<()> {
+        let adapter = WindowsModeAdapter;
+        let expected_mode = FileMode::OWNER_R | FileMode::GROUP_R | FileMode::OTHER_R;
+
+        let temp_file = tempfile::NamedTempFile::new()?;
+
+        let mut current_permissions = fs::metadata(temp_file.path())?.permissions();
+
+        current_permissions.set_readonly(false);
+        fs::set_permissions(temp_file.path(), current_permissions)?;
+
+        let current_permissions = fs::metadata(temp_file.path())?.permissions();
+        expect!(current_permissions.readonly()).to(be_false());
+
+        expect!(adapter.write_mode(temp_file.path(), expected_mode)).to(be_ok());
+
+        let actual_permissions = fs::metadata(temp_file.path())?.permissions();
+
+        expect!(actual_permissions.readonly()).to(be_true());
 
         Ok(())
     }

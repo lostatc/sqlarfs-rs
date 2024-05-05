@@ -22,6 +22,8 @@ xpct = { version = "0.5.1", features = ["diff"] }
 [features]
 default = ["deflate"]
 deflate = ["dep:flate2"]
+# This feature is only used in tests and is not public API.
+reference-conformance-tests = []
 
 [lints.rust]
 unsafe_code = "forbid"

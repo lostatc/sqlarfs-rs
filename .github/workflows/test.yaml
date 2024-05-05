@@ -67,8 +67,18 @@ jobs:
         # running all of them so we can see all test failures. Especially since
         # this library is developed on a Linux machine and only tested on
         # Windows and macOS in CI.
+
+        # TODO: We don't run the conformance tests against the sqlar reference
+        # implementation on macOS because, for whatever reason, it doesn't
+        # support the `-A` flag. Maybe the version we install through Homebrew
+        # is compiled without that functionality?
       - name: "Run cargo test --all-features"
-        run: cargo test --all-features --no-fail-fast
+        if: ${{ runner.os == 'macOS' }}
+        run: cargo test --no-fail-fast
+
+      - name: "Run cargo test --all-features"
+        if: ${{ runner.os != 'macOS' }}
+        run: cargo test --features "reference-conformance-tests" --no-fail-fast
 
   lints:
     name: "Lint"

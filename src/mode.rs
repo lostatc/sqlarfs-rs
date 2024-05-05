@@ -2,7 +2,6 @@ use std::fs;
 use std::path::Path;
 
 use super::metadata::FileMode;
-use super::metadata::{mode_from_umask, FileType};
 
 pub trait ReadMode {
     fn read_mode(&self, path: &Path, metadata: &fs::Metadata) -> crate::Result<FileMode>;
@@ -38,30 +37,28 @@ impl WriteMode for UnixModeAdapter {
 }
 
 #[derive(Debug)]
-pub struct UmaskModeAdapter {
-    umask: FileMode,
-}
+#[cfg(any(windows, test))]
+pub struct WindowsModeAdapter;
 
-impl UmaskModeAdapter {
-    #[cfg(any(test, not(unix)))]
-    pub fn new(umask: FileMode) -> Self {
-        Self { umask }
-    }
-}
-
-impl ReadMode for UmaskModeAdapter {
+#[cfg(any(windows, test))]
+impl ReadMode for WindowsModeAdapter {
     fn read_mode(&self, _path: &Path, metadata: &fs::Metadata) -> crate::Result<FileMode> {
+        use super::metadata::{mode_from_umask, FileType};
+
         let kind = if metadata.is_dir() {
             FileType::Dir
         } else {
             FileType::File
         };
 
-        Ok(mode_from_umask(kind, self.umask))
+        // The reference sqlar implementation always uses `666`/`777` permissions when archiving
+        // files on Windows.
+        Ok(mode_from_umask(kind, FileMode::empty()))
     }
 }
 
-impl WriteMode for UmaskModeAdapter {
+#[cfg(any(windows, test))]
+impl WriteMode for WindowsModeAdapter {
     fn write_mode(&self, _path: &Path, _mode: FileMode) -> crate::Result<()> {
         // Do nothing; use the default permissions set by the OS.
         Ok(())
@@ -120,18 +117,23 @@ mod tests {
         Ok(())
     }
 
+    //
+    // Even though this adapter is only used on Windows, we test it on Unix because Unix-like
+    // platforms allow us to set the mode of the file to test against.
+    //
+
     #[test]
     #[cfg(unix)]
-    fn umask_mode_adapter_ignores_actual_file_mode() -> crate::Result<()> {
+    fn windows_mode_adapter_ignores_actual_file_mode() -> crate::Result<()> {
         use std::os::unix::fs::PermissionsExt;
 
-        let umask = FileMode::OTHER_W;
         let expected_mode = FileMode::OWNER_R
             | FileMode::OWNER_W
             | FileMode::GROUP_R
             | FileMode::GROUP_W
-            | FileMode::OTHER_R;
-        let adapter = UmaskModeAdapter::new(umask);
+            | FileMode::OTHER_R
+            | FileMode::OTHER_W;
+        let adapter = WindowsModeAdapter;
 
         let temp_file = tempfile::NamedTempFile::new()?;
         fs::set_permissions(temp_file.path(), fs::Permissions::from_mode(0o444))?;
@@ -145,12 +147,11 @@ mod tests {
 
     #[test]
     #[cfg(unix)]
-    fn umask_mode_adapter_does_not_set_file_mode() -> crate::Result<()> {
+    fn windows_mode_adapter_does_not_set_file_mode() -> crate::Result<()> {
         use std::os::unix::fs::PermissionsExt;
 
-        let umask = FileMode::OTHER_W;
         let mode_to_set = FileMode::OWNER_R | FileMode::GROUP_R | FileMode::OTHER_R;
-        let adapter = UmaskModeAdapter::new(umask);
+        let adapter = WindowsModeAdapter;
 
         let temp_file = tempfile::NamedTempFile::new()?;
 

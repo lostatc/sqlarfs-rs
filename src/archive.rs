@@ -137,12 +137,10 @@ impl<'conn> Archive<'conn> {
             from.as_ref(),
             to.as_ref(),
             opts,
-            // On Unix-like systems, we set the file mode based on the mode bits in the archive.
             #[cfg(unix)]
             &super::mode::UnixModeAdapter,
-            // On unsupported platforms (currently any non-Unix-like platform), we use the umask.
-            #[cfg(not(unix))]
-            &super::mode::UmaskModeAdapter::new(self.umask),
+            #[cfg(windows)]
+            &super::mode::WindowsModeAdapter,
         )
     }
 
@@ -161,12 +159,10 @@ impl<'conn> Archive<'conn> {
         self.extract_tree(
             from.as_ref(),
             to.as_ref(),
-            // On Unix-like systems, we set the file mode based on the mode bits in the archive.
             #[cfg(unix)]
             &super::mode::UnixModeAdapter,
-            // On unsupported platforms (currently any non-Unix-like platform), we use the umask.
-            #[cfg(not(unix))]
-            &super::mode::UmaskModeAdapter::new(self.umask),
+            #[cfg(windows)]
+            &super::mode::WindowsModeAdapter,
         )
     }
 

@@ -51,9 +51,15 @@ impl ReadMode for WindowsModeAdapter {
             FileType::File
         };
 
+        let umask = if metadata.permissions().readonly() {
+            FileMode::OWNER_W | FileMode::GROUP_W | FileMode::OTHER_W
+        } else {
+            FileMode::empty()
+        };
+
         // The reference sqlar implementation always uses `666`/`777` permissions when archiving
         // files on Windows.
-        Ok(mode_from_umask(kind, FileMode::empty()))
+        Ok(mode_from_umask(kind, umask))
     }
 }
 
@@ -117,26 +123,17 @@ mod tests {
         Ok(())
     }
 
-    //
-    // Even though this adapter is only used on Windows, we test it on Unix because Unix-like
-    // platforms allow us to set the mode of the file to test against.
-    //
-
     #[test]
-    #[cfg(unix)]
-    fn windows_mode_adapter_ignores_actual_file_mode() -> crate::Result<()> {
-        use std::os::unix::fs::PermissionsExt;
-
+    fn windows_mode_adapter_reads_readwrite_permissions() -> crate::Result<()> {
+        let adapter = WindowsModeAdapter;
         let expected_mode = FileMode::OWNER_R
             | FileMode::OWNER_W
             | FileMode::GROUP_R
             | FileMode::GROUP_W
             | FileMode::OTHER_R
             | FileMode::OTHER_W;
-        let adapter = WindowsModeAdapter;
 
         let temp_file = tempfile::NamedTempFile::new()?;
-        fs::set_permissions(temp_file.path(), fs::Permissions::from_mode(0o444))?;
 
         expect!(adapter.read_mode(temp_file.path(), &fs::metadata(temp_file.path())?))
             .to(be_ok())
@@ -146,21 +143,18 @@ mod tests {
     }
 
     #[test]
-    #[cfg(unix)]
-    fn windows_mode_adapter_does_not_set_file_mode() -> crate::Result<()> {
-        use std::os::unix::fs::PermissionsExt;
-
-        let mode_to_set = FileMode::OWNER_R | FileMode::GROUP_R | FileMode::OTHER_R;
+    fn windows_mode_adapter_reads_readonly_permissions() -> crate::Result<()> {
         let adapter = WindowsModeAdapter;
+        let expected_mode = FileMode::OWNER_R | FileMode::GROUP_R | FileMode::OTHER_R;
 
         let temp_file = tempfile::NamedTempFile::new()?;
+        let mut permissions = fs::metadata(temp_file.path())?.permissions();
+        permissions.set_readonly(true);
+        temp_file.as_file().set_permissions(permissions)?;
 
-        expect!(adapter.write_mode(temp_file.path(), mode_to_set)).to(be_ok());
-
-        let actual_mode = fs::metadata(temp_file.path())?.permissions().mode();
-        let just_permissions_bits = actual_mode & 0o777;
-
-        expect!(just_permissions_bits).to_not(equal(mode_to_set.bits()));
+        expect!(adapter.read_mode(temp_file.path(), &fs::metadata(temp_file.path())?))
+            .to(be_ok())
+            .to(equal(expected_mode));
 
         Ok(())
     }

@@ -90,6 +90,14 @@ impl<'conn, 'ar> File<'conn, 'ar> {
             }
         };
 
+        // SQLite archives created by the reference implementation normalize paths to always use
+        // forward slashes as the path separator.
+        let normalized_path = if cfg!(windows) {
+            normalized_path.replace(std::path::MAIN_SEPARATOR, "/")
+        } else {
+            normalized_path
+        };
+
         Ok(Self {
             path: normalized_path,
             store,

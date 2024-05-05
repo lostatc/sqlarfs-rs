@@ -64,7 +64,7 @@ jobs:
         # implementation on macOS because, for whatever reason, it doesn't
         # support the `-A` flag. Maybe the version we install through Homebrew
         # is compiled without that functionality?
-      - name: "Run cargo test --all-features"
+      - name: "Run cargo test --all-features (macOS)"
         if: ${{ runner.os == 'macOS' }}
         run: cargo test --no-fail-fast
 

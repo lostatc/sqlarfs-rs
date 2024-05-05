@@ -60,6 +60,9 @@ jobs:
         if: ${{ runner.os == 'Windows' }}
         run: choco install sqlite
 
+      - name: "Validate SQLite CLI tool version"
+        run: sqlite3 --version
+
         # This library's test suite runs quite quickly, so it's worth just
         # running all of them so we can see all test failures. Especially since
         # this library is developed on a Linux machine and only tested on

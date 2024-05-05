@@ -48,6 +48,9 @@ jobs:
         # The library bundles its own SQLite, but we still need to install the
         # SQLite CLI tool to run conformance tests against the reference sqlar
         # implementation.
+      - name: "Install sqlite3 CLI tool (Windows)"
+        if: ${{ runner.os == 'Windows' }}
+        run: choco install sqlite
 
       - name: "Validate SQLite CLI tool version"
         run: sqlite3 --version

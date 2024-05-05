@@ -168,15 +168,13 @@ impl<'conn> Store<'conn> {
             FileType::Symlink => -1,
         };
 
-        let initial_data: Option<&[u8]> = match kind {
-            FileType::File => Some(&[]),
+        let initial_data: Option<Box<dyn rusqlite::ToSql>> = match kind {
+            FileType::File => Some(Box::<Vec<u8>>::default()),
             // A NULL value in the `data` column indicates that the file is a directory.
             FileType::Dir => None,
-            FileType::Symlink => Some(
-                symlink_target
-                    .expect("Tried to create a symlink without a target. This is a bug.")
-                    .as_bytes(),
-            ),
+            FileType::Symlink => Some(Box::new(
+                symlink_target.expect("Tried to create a symlink without a target. This is a bug."),
+            )),
         };
 
         let result = self.tx().execute(
@@ -281,16 +279,16 @@ impl<'conn> Store<'conn> {
                         .get::<_, Option<u64>>(1)?
                         .map(|mtime_secs| UNIX_EPOCH + Duration::from_secs(mtime_secs));
                     let size: i64 = row.get(2)?;
-                    let symlink_target: Option<Vec<u8>> = row.get(3)?;
+                    // When the `data` column contains a symlink target, its type is `TEXT`, not
+                    // `BLOB`. Remember that columns in SQLite are dynamically typed.
+                    let symlink_target: Option<String> = row.get(3)?;
                     let is_dir: bool = row.get(4)?;
 
                     // We ignore the file mode in the database when determining the file type.
                     Ok(if let Some(target) = symlink_target {
                         FileMetadata::Symlink {
                             mtime,
-                            // We don't allow non-Unicode symlink targets in the database, but we
-                            // don't know what might already be in there.
-                            target: PathBuf::from(String::from_utf8_lossy(&target).as_ref()),
+                            target: PathBuf::from(target),
                         }
                     } else if is_dir {
                         FileMetadata::Dir { mode, mtime }
@@ -442,15 +440,15 @@ impl<'conn> Store<'conn> {
                 .get::<_, Option<u64>>(2)?
                 .map(|mtime_secs| UNIX_EPOCH + Duration::from_secs(mtime_secs));
             let size: i64 = row.get(3)?;
-            let symlink_target: Option<Vec<u8>> = row.get(4)?;
+            // When the `data` column contains a symlink target, its type is `TEXT`, not `BLOB`.
+            // Remember that columns in SQLite are dynamically typed.
+            let symlink_target: Option<String> = row.get(4)?;
             let is_dir: bool = row.get(5)?;
 
             let metadata = if let Some(target) = symlink_target {
                 FileMetadata::Symlink {
                     mtime,
-                    // We don't allow non-Unicode symlink targets in the database, but we
-                    // don't know what might already be in there.
-                    target: PathBuf::from(String::from_utf8_lossy(&target).as_ref()),
+                    target: PathBuf::from(target),
                 }
             } else if is_dir {
                 FileMetadata::Dir { mode, mtime }

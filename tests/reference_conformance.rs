@@ -35,7 +35,7 @@ struct SqlarTableRow {
     name: String,
     mode: Option<u32>,
     mtime: Option<u64>,
-    sz: Option<u64>,
+    sz: Option<i64>,
     data: Option<Vec<u8>>,
 }
 
@@ -47,12 +47,21 @@ fn dump_table(db: &Path) -> sqlarfs::Result<Vec<SqlarTableRow>> {
     .map_err(sqlarfs::Error::from)?
     .prepare("SELECT name, mode, mtime, sz, data FROM sqlar;")?
     .query_map([], |row| {
+        let name = row.get(0)?;
+        let mode = row.get(1)?;
+        let mtime = row.get(2)?;
+        let sz = row.get(3)?;
+
         Ok(SqlarTableRow {
-            name: row.get(0)?,
-            mode: row.get(1)?,
-            mtime: row.get(2)?,
-            sz: row.get(3)?,
-            data: row.get(4)?,
+            name,
+            mode,
+            mtime,
+            sz,
+            data: if sz == Some(-1) {
+                row.get::<_, String>(4)?.as_bytes().to_vec().into()
+            } else {
+                row.get(4)?
+            },
         })
     })?
     .collect::<Result<Vec<_>, _>>()

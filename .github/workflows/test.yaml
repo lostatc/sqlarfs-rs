@@ -49,18 +49,6 @@ jobs:
         # SQLite CLI tool to run conformance tests against the reference sqlar
         # implementation.
 
-      - name: "Install sqlite3 CLI tool (Linux)"
-        if: ${{ runner.os == 'Linux' }}
-        run: sudo apt install sqlite
-
-      - name: "Install sqlite3 CLI tool (macOS)"
-        if: ${{ runner.os == 'macOS' }}
-        run: brew install sqlite
-
-      - name: "Install sqlite3 CLI tool (Windows)"
-        if: ${{ runner.os == 'Windows' }}
-        run: choco install sqlite
-
       - name: "Validate SQLite CLI tool version"
         run: sqlite3 --version
 

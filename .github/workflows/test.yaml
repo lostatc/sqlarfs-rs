@@ -18,7 +18,8 @@ jobs:
       - name: "Install MSRV toolchain"
         run: rustup toolchain install --profile minimal 1.75.0
 
-      - uses: Swatinem/rust-cache@v2
+      - name: "Set up Rust build cache"
+        uses: Swatinem/rust-cache@v2
 
       - name: "Run cargo check --all-features"
         run: cargo check --all-features
@@ -92,7 +93,8 @@ jobs:
       - name: "Install stable toolchain"
         run: rustup toolchain install --profile minimal --component rustfmt clippy -- stable
 
-      - uses: Swatinem/rust-cache@v2
+      - name: "Set up Rust build cache"
+        uses: Swatinem/rust-cache@v2
 
       - name: "Run cargo fmt"
         run: cargo fmt --all -- --check
@@ -109,11 +111,11 @@ jobs:
       - name: "Checkout sources"
         uses: actions/checkout@v4
 
-        # We use the nightly toolchain because that's the one used by docs.rs.
-        # In this case, there's no sense trying to use a build cache, because
-        # the cache will just be cleared on every nightly release.
-      - name: "Install nightly toolchain"
-        run: rustup toolchain install --profile minimal nightly
+      - name: "Install stable toolchain"
+        run: rustup toolchain install --profile minimal stable
+
+      - name: "Set up Rust build cache"
+        uses: Swatinem/rust-cache@v2
 
       - name: "Run cargo doc"
-        run: cargo +nightly doc --all-features --no-deps
+        run: cargo doc --all-features --no-deps

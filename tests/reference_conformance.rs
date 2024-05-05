@@ -202,3 +202,31 @@ fn archive_directory_with_children() -> sqlarfs::Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[serial(change_directory)]
+fn archive_regular_file_with_readonly_permissions() -> sqlarfs::Result<()> {
+    let db_dir = tempfile::tempdir()?;
+    let reference_db = db_dir.path().join("reference.db");
+    let crate_db = db_dir.path().join("crate.db");
+
+    let temp_dir = tempfile::tempdir()?;
+    let file = fs::File::create(temp_dir.path().join("file"))?;
+
+    let mut permissions = file.metadata()?.permissions();
+    permissions.set_readonly(true);
+    file.set_permissions(permissions)?;
+
+    env::set_current_dir(temp_dir.path())?;
+
+    sqlar_command(&reference_db, &["--create", "file"])?;
+
+    Connection::open(&crate_db)?.exec(|archive| {
+        let opts = sqlarfs::ArchiveOptions::new().children(true);
+        archive.archive_with(temp_dir.path(), "", &opts)
+    })?;
+
+    expect!(dump_table(&crate_db)?).to(consist_of(dump_table(&reference_db)?));
+
+    Ok(())
+}

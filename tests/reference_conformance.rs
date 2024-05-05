@@ -75,7 +75,7 @@ fn dump_table(db: &Path) -> sqlarfs::Result<Vec<SqlarTableRow>> {
 //
 
 #[test]
-#[serial(sqlite3_cli)]
+#[serial(change_directory)]
 fn archive_empty_regular_file() -> sqlarfs::Result<()> {
     let db_dir = tempfile::tempdir()?;
     let reference_db = db_dir.path().join("reference.db");
@@ -99,7 +99,7 @@ fn archive_empty_regular_file() -> sqlarfs::Result<()> {
 }
 
 #[test]
-#[serial(sqlite3_cli)]
+#[serial(change_directory)]
 fn archive_regular_file_with_data() -> sqlarfs::Result<()> {
     let db_dir = tempfile::tempdir()?;
     let reference_db = db_dir.path().join("reference.db");
@@ -126,7 +126,42 @@ fn archive_regular_file_with_data() -> sqlarfs::Result<()> {
 }
 
 #[test]
-#[serial(sqlite3_cli)]
+#[serial(change_directory)]
+#[cfg(unix)]
+fn archive_symlink() -> sqlarfs::Result<()> {
+    use nix::unistd::symlinkat;
+
+    use crate::common::into_sqlarfs_error;
+
+    let db_dir = tempfile::tempdir()?;
+    let reference_db = db_dir.path().join("reference.db");
+    let crate_db = db_dir.path().join("crate.db");
+
+    let temp_dir = tempfile::tempdir()?;
+    let symlink_target = tempfile::NamedTempFile::new()?;
+    symlinkat(
+        symlink_target.path(),
+        None,
+        &temp_dir.path().join("symlink"),
+    )
+    .map_err(into_sqlarfs_error)?;
+
+    env::set_current_dir(temp_dir.path())?;
+
+    sqlar_command(&reference_db, &["--create", "symlink"])?;
+
+    Connection::open(&crate_db)?.exec(|archive| {
+        let opts = sqlarfs::ArchiveOptions::new().children(true);
+        archive.archive_with(temp_dir.path(), "", &opts)
+    })?;
+
+    expect!(dump_table(&crate_db)?).to(consist_of(dump_table(&reference_db)?));
+
+    Ok(())
+}
+
+#[test]
+#[serial(change_directory)]
 fn archive_empty_directory() -> sqlarfs::Result<()> {
     let db_dir = tempfile::tempdir()?;
     let reference_db = db_dir.path().join("reference.db");
@@ -150,29 +185,20 @@ fn archive_empty_directory() -> sqlarfs::Result<()> {
 }
 
 #[test]
-#[serial(sqlite3_cli)]
-#[cfg(unix)]
-fn archive_symlink() -> sqlarfs::Result<()> {
-    use nix::unistd::symlinkat;
-
-    use crate::common::into_sqlarfs_error;
-
+#[serial(change_directory)]
+fn archive_directory_with_children() -> sqlarfs::Result<()> {
     let db_dir = tempfile::tempdir()?;
     let reference_db = db_dir.path().join("reference.db");
     let crate_db = db_dir.path().join("crate.db");
 
     let temp_dir = tempfile::tempdir()?;
-    let symlink_target = tempfile::NamedTempFile::new()?;
-    symlinkat(
-        symlink_target.path(),
-        None,
-        &temp_dir.path().join("symlink"),
-    )
-    .map_err(into_sqlarfs_error)?;
+    fs::create_dir_all(temp_dir.path().join("source/dir"))?;
+    fs::File::create(temp_dir.path().join("source/file1"))?;
+    fs::File::create(temp_dir.path().join("source/dir/file2"))?;
 
     env::set_current_dir(temp_dir.path())?;
 
-    sqlar_command(&reference_db, &["--create", "symlink"])?;
+    sqlar_command(&reference_db, &["--create", "source"])?;
 
     Connection::open(&crate_db)?.exec(|archive| {
         let opts = sqlarfs::ArchiveOptions::new().children(true);

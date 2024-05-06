@@ -142,6 +142,12 @@ pub enum FileType {
     Symlink,
 }
 
+impl From<FileMetadata> for FileType {
+    fn from(metadata: FileMetadata) -> Self {
+        metadata.kind()
+    }
+}
+
 impl FileMode {
     pub(super) fn to_file_mode(self) -> u32 {
         self.bits() | FILE_MODE

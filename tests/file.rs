@@ -234,7 +234,7 @@ fn file_metadata_correctly_reports_directories() -> sqlarfs::Result<()> {
 
         expect!(dir.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.kind())
+            .into::<FileType>()
             .to(equal(FileType::Dir));
 
         Ok(())
@@ -249,7 +249,7 @@ fn file_metadata_correctly_reports_symlinks() -> sqlarfs::Result<()> {
 
         expect!(link.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.kind())
+            .into::<FileType>()
             .to(equal(FileType::Symlink));
 
         Ok(())
@@ -313,7 +313,7 @@ fn file_has_regular_file_metadata_even_when_mode_indicates_it_is_a_special_file(
 
         expect!(file.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.kind())
+            .into::<FileType>()
             .to(equal(FileType::File));
 
         Ok(())
@@ -340,7 +340,7 @@ fn file_has_regular_file_metadata_even_when_there_is_no_mode() -> sqlarfs::Resul
 
         expect!(file.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.kind())
+            .into::<FileType>()
             .to(equal(FileType::File));
 
         Ok(())
@@ -531,7 +531,7 @@ fn set_file_mode_preserves_file_type() -> sqlarfs::Result<()> {
 
         expect!(file.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.kind())
+            .into::<FileType>()
             .to(equal(FileType::File));
 
         Ok(())

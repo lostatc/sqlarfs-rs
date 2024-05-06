@@ -93,7 +93,7 @@ fn archive_regular_file() -> sqlarfs::Result<()> {
         expect!(file.exists()).to(be_ok()).to(be_true());
         expect!(file.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.kind())
+            .into::<FileType>()
             .to(equal(FileType::File));
 
         Ok(())
@@ -112,7 +112,7 @@ fn archive_empty_directory() -> sqlarfs::Result<()> {
         expect!(file.exists()).to(be_ok()).to(be_true());
         expect!(file.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.kind())
+            .into::<FileType>()
             .to(equal(FileType::Dir));
 
         Ok(())
@@ -220,7 +220,7 @@ fn archiving_follows_symlinks() -> sqlarfs::Result<()> {
         expect!(symlink.exists()).to(be_ok()).to(be_true());
         expect!(symlink.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.kind())
+            .into::<FileType>()
             .to(equal(FileType::File));
 
         Ok(())
@@ -251,7 +251,7 @@ fn archiving_follows_chained_symlinks() -> sqlarfs::Result<()> {
         expect!(symlink.exists()).to(be_ok()).to(be_true());
         expect!(symlink.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.kind())
+            .into::<FileType>()
             .to(equal(FileType::File));
 
         Ok(())
@@ -350,7 +350,7 @@ fn archive_directory_children_to_target() -> sqlarfs::Result<()> {
         expect!(file.exists()).to(be_ok()).to(be_true());
         expect!(file.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.kind())
+            .into::<FileType>()
             .to(equal(FileType::File));
 
         Ok(())
@@ -375,7 +375,7 @@ fn archive_directory_children_to_archive_root() -> sqlarfs::Result<()> {
         expect!(file.exists()).to(be_ok()).to(be_true());
         expect!(file.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.kind())
+            .into::<FileType>()
             .to(equal(FileType::File));
 
         Ok(())
@@ -435,7 +435,7 @@ fn archive_directory_children_when_source_is_file() -> sqlarfs::Result<()> {
         expect!(file.exists()).to(be_ok()).to(be_true());
         expect!(file.metadata())
             .to(be_ok())
-            .map(|metadata| metadata.kind())
+            .into::<FileType>()
             .to(equal(FileType::File));
 
         Ok(())

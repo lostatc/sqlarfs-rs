@@ -281,6 +281,23 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// - [`AlreadyExists`]: This file already exists in the archive and is not a directory.
     /// - [`NotADirectory`]: The file's parent is not a directory.
     ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use sqlarfs::Connection;
+    /// # let mut connection = Connection::open_in_memory()?;
+    /// # let mut tx = connection.transaction()?;
+    /// # let archive = tx.archive_mut();
+    /// let mut dir = archive.open("path/to/dir")?;
+    ///
+    /// // Creates all parent directories.
+    /// assert!(dir.create_dir_all().is_ok());
+    ///
+    /// // Does not fail if the directory already exists.
+    /// assert!(dir.create_dir_all().is_ok());
+    /// # sqlarfs::Result::Ok(())
+    /// ```
+    ///
     /// [`AlreadyExists`]: crate::ErrorKind::AlreadyExists
     /// [`NotADirectory`]: crate::ErrorKind::NotADirectory
     pub fn create_dir_all(&mut self) -> crate::Result<()> {
@@ -353,6 +370,26 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// - [`NotFound`]: This file's parent directory does not exist.
     /// - [`NotADirectory`]: The file's parent is not a directory.
     ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::path::PathBuf;
+    /// # use sqlarfs::{Connection, FileMetadata};
+    /// # let mut connection = Connection::open_in_memory()?;
+    /// # let mut tx = connection.transaction()?;
+    /// # let archive = tx.archive_mut();
+    /// let target = PathBuf::from("target");
+    ///
+    /// let mut symlink = archive.open("symlink")?;
+    /// symlink.create_symlink(&target)?;
+    ///
+    /// assert!(matches!(
+    ///     symlink.metadata()?,
+    ///     FileMetadata::Symlink { target: target, .. }
+    /// ));
+    /// # sqlarfs::Result::Ok(())
+    /// ```
+    ///
     /// [`AlreadyExists`]: crate::ErrorKind::AlreadyExists
     /// [`NotFound`]: crate::ErrorKind::NotFound
     /// [`NotADirectory`]: crate::ErrorKind::NotADirectory
@@ -401,8 +438,9 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// - [`NotFound`]: This file does not exist.
     ///
     /// # Examples
+    ///
     /// ```
-    /// # use sqlarfs::{Connection, FileMode};
+    /// # use sqlarfs::Connection;
     /// # let mut connection = Connection::open_in_memory()?;
     /// # let mut tx = connection.transaction()?;
     /// # let archive = tx.archive_mut();
@@ -442,6 +480,23 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// - [`NotFound`]: This file does not exist.
     ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use sqlarfs::{Connection, FileMode};
+    /// # let mut connection = Connection::open_in_memory()?;
+    /// # let mut tx = connection.transaction()?;
+    /// # let archive = tx.archive_mut();
+    /// let mode = FileMode::OWNER_R | FileMode::OWNER_W | FileMode::GROUP_R | FileMode::GROUP_W;
+    ///
+    /// let mut file = archive.open("file")?;
+    /// file.create_file()?;
+    /// file.set_mode(Some(mode))?;
+    ///
+    /// assert_eq!(file.metadata()?.mode(), Some(mode));
+    /// # sqlarfs::Result::Ok(())
+    /// ```
+    ///
     /// [`NotFound`]: crate::ErrorKind::NotFound
     pub fn set_mode(&mut self, mode: Option<FileMode>) -> crate::Result<()> {
         self.store.set_mode(&self.path, mode)
@@ -457,6 +512,26 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// # Errors
     ///
     /// - [`NotFound`]: This file does not exist.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::time::{UNIX_EPOCH, SystemTime, Duration};
+    /// # use sqlarfs::Connection;
+    /// # let mut connection = Connection::open_in_memory()?;
+    /// # let mut tx = connection.transaction()?;
+    /// # let archive = tx.archive_mut();
+    /// let mtime = SystemTime::now();
+    /// let mut file = archive.open("file")?;
+    /// file.create_file()?;
+    /// file.set_mtime(Some(mtime))?;
+    ///
+    /// // The mtime in a SQLite archive only has a precision of 1 second.
+    /// let truncated_mtime = UNIX_EPOCH + Duration::from_secs(mtime.duration_since(UNIX_EPOCH).unwrap().as_secs());
+    ///
+    /// assert_eq!(file.metadata()?.mtime(), Some(truncated_mtime));
+    /// # sqlarfs::Result::Ok(())
+    /// ```
     ///
     /// [`NotFound`]: crate::ErrorKind::NotFound
     pub fn set_mtime(&mut self, mtime: Option<SystemTime>) -> crate::Result<()> {
@@ -491,6 +566,30 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// - [`NotFound`]: This file does not exist.
     /// - [`NotARegularFile`]: The file is a directory or a symbolic link.
     ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use sqlarfs::{Connection, Compression};
+    /// # let mut connection = Connection::open_in_memory()?;
+    /// # let mut tx = connection.transaction()?;
+    /// # let archive = tx.archive_mut();
+    /// let compressible_data = " ".repeat(32);
+    ///
+    /// let mut file = archive.open("file")?;
+    /// file.create_file()?;
+    ///
+    /// file.set_compression(Compression::None);
+    /// file.write_str(&compressible_data)?;
+    ///
+    /// assert!(!file.is_compressed()?);
+    ///
+    /// file.set_compression(Compression::BEST);
+    /// file.write_str(&compressible_data)?;
+    ///
+    /// assert!(file.is_compressed()?);
+    /// # sqlarfs::Result::Ok(())
+    /// ```
+    ///
     /// [`NotFound`]: crate::ErrorKind::NotFound
     /// [`NotARegularFile`]: crate::ErrorKind::NotARegularFile
     pub fn is_compressed(&self) -> crate::Result<bool> {
@@ -505,6 +604,25 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// - [`NotFound`]: This file does not exist.
     /// - [`NotARegularFile`]: The file is a directory or a symbolic link.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use sqlarfs::Connection;
+    /// # let mut connection = Connection::open_in_memory()?;
+    /// # let mut tx = connection.transaction()?;
+    /// # let archive = tx.archive_mut();
+    /// let mut file = archive.open("file")?;
+    /// file.create_file()?;
+    /// file.write_str("Hello, world!")?;
+    ///
+    /// assert!(!file.is_empty()?);
+    ///
+    /// file.truncate()?;
+    ///
+    /// assert!(file.is_empty()?);
+    /// # sqlarfs::Result::Ok(())
+    /// ```
     ///
     /// [`NotFound`]: crate::ErrorKind::NotFound
     /// [`NotARegularFile`]: crate::ErrorKind::NotARegularFile
@@ -537,6 +655,25 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// - [`CompressionNotSupported`]: This file is compressed, but the `deflate` Cargo feature is
     /// disabled.
     /// - [`NotARegularFile`]: The file is a directory or a symbolic link.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::io::prelude::*;
+    /// # use sqlarfs::Connection;
+    /// # let mut connection = Connection::open_in_memory()?;
+    /// # let mut tx = connection.transaction()?;
+    /// # let archive = tx.archive_mut();
+    /// let mut file = archive.open("file")?;
+    /// file.create_file()?;
+    /// file.write_str("Hello, world!")?;
+    ///
+    /// let mut contents = String::new();
+    /// file.reader()?.read_to_string(&mut contents)?;
+    ///
+    /// assert_eq!(contents, "Hello, world!");
+    /// # sqlarfs::Result::Ok(())
+    /// ```
     ///
     /// [`NotFound`]: crate::ErrorKind::NotFound
     /// [`CompressionNotSupported`]: crate::ErrorKind::CompressionNotSupported
@@ -807,6 +944,23 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     }
 
     /// Set the compression method used when writing to the file.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use sqlarfs::{Connection, Compression};
+    /// # let mut connection = Connection::open_in_memory()?;
+    /// # let mut tx = connection.transaction()?;
+    /// # let archive = tx.archive_mut();
+    /// let mut file = archive.open("file")?;
+    ///
+    /// file.set_compression(Compression::None);
+    /// assert_eq!(file.compression(), Compression::None);
+    ///
+    /// file.set_compression(Compression::FAST);
+    /// assert_eq!(file.compression(), Compression::FAST);
+    /// # sqlarfs::Result::Ok(())
+    /// ```
     pub fn set_compression(&mut self, method: Compression) {
         self.compression = method;
     }
@@ -839,6 +993,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// # let mut tx = connection.transaction()?;
     /// # let archive = tx.archive_mut();
     /// let mut file = archive.open("path/to/file")?;
+    ///
     /// file.set_umask(FileMode::OTHER_R | FileMode::OTHER_W);
     /// assert_eq!(file.umask(), FileMode::OTHER_R | FileMode::OTHER_W);
     /// # sqlarfs::Result::Ok(())

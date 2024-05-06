@@ -112,7 +112,8 @@ impl ListOptions {
 
     /// Sort by file size.
     ///
-    /// If this is specified, then the list will only contain regular files, skipping directories.
+    /// If this is specified, then the list will only contain regular files, skipping directories
+    /// and symbolic links.
     ///
     /// This is mutually exclusive with [`ListOptions::by_depth`], [`ListOptions::by_mtime`] and
     /// [`ListOptions::file_type`].

@@ -3,6 +3,7 @@
 mod matchers;
 
 use std::io;
+use std::path::Path;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -84,4 +85,42 @@ where
         },
         err,
     )
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SqlarTableRow {
+    pub name: String,
+    pub mode: Option<u32>,
+    pub mtime: Option<u64>,
+    pub sz: Option<i64>,
+    pub data: Option<Vec<u8>>,
+}
+
+pub fn dump_table(db: &Path) -> sqlarfs::Result<Vec<SqlarTableRow>> {
+    rusqlite::Connection::open_with_flags(
+        db,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(sqlarfs::Error::from)?
+    .prepare("SELECT name, mode, mtime, sz, data FROM sqlar;")?
+    .query_map([], |row| {
+        let name = row.get(0)?;
+        let mode = row.get(1)?;
+        let mtime = row.get(2)?;
+        let sz = row.get(3)?;
+
+        Ok(SqlarTableRow {
+            name,
+            mode,
+            mtime,
+            sz,
+            data: if sz == Some(-1) {
+                row.get::<_, String>(4)?.as_bytes().to_vec().into()
+            } else {
+                row.get(4)?
+            },
+        })
+    })?
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(sqlarfs::Error::from)
 }

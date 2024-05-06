@@ -8,8 +8,14 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::process;
 
+use common::dump_table;
+use common::have_same_contents;
+use common::have_same_mtime;
+use common::have_same_permissions;
+use common::have_same_symlink_target;
 use serial_test::serial;
 use sqlarfs::Connection;
+use sqlarfs::FileMode;
 use xpct::{consist_of, expect};
 
 fn sqlar_command(db: &Path, args: &[&str]) -> sqlarfs::Result<()> {
@@ -30,44 +36,6 @@ fn sqlar_command(db: &Path, args: &[&str]) -> sqlarfs::Result<()> {
     Ok(())
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct SqlarTableRow {
-    name: String,
-    mode: Option<u32>,
-    mtime: Option<u64>,
-    sz: Option<i64>,
-    data: Option<Vec<u8>>,
-}
-
-fn dump_table(db: &Path) -> sqlarfs::Result<Vec<SqlarTableRow>> {
-    rusqlite::Connection::open_with_flags(
-        db,
-        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    )
-    .map_err(sqlarfs::Error::from)?
-    .prepare("SELECT name, mode, mtime, sz, data FROM sqlar;")?
-    .query_map([], |row| {
-        let name = row.get(0)?;
-        let mode = row.get(1)?;
-        let mtime = row.get(2)?;
-        let sz = row.get(3)?;
-
-        Ok(SqlarTableRow {
-            name,
-            mode,
-            mtime,
-            sz,
-            data: if sz == Some(-1) {
-                row.get::<_, String>(4)?.as_bytes().to_vec().into()
-            } else {
-                row.get(4)?
-            },
-        })
-    })?
-    .collect::<Result<Vec<_>, _>>()
-    .map_err(sqlarfs::Error::from)
-}
-
 //
 // These tests need to change the process's working directory to ensure the paths in the SQLite
 // archive are all relative paths. To prevent race conditions, that means they must be run
@@ -78,8 +46,8 @@ fn dump_table(db: &Path) -> sqlarfs::Result<Vec<SqlarTableRow>> {
 #[serial(change_directory)]
 fn archive_empty_regular_file() -> sqlarfs::Result<()> {
     let db_dir = tempfile::tempdir()?;
-    let reference_db = db_dir.path().join("reference.db");
-    let crate_db = db_dir.path().join("crate.db");
+    let reference_db = db_dir.path().join("reference.sqlar");
+    let crate_db = db_dir.path().join("crate.sqlar");
 
     let temp_dir = tempfile::tempdir()?;
     fs::File::create(temp_dir.path().join("file"))?;
@@ -102,8 +70,8 @@ fn archive_empty_regular_file() -> sqlarfs::Result<()> {
 #[serial(change_directory)]
 fn archive_regular_file_with_data() -> sqlarfs::Result<()> {
     let db_dir = tempfile::tempdir()?;
-    let reference_db = db_dir.path().join("reference.db");
-    let crate_db = db_dir.path().join("crate.db");
+    let reference_db = db_dir.path().join("reference.sqlar");
+    let crate_db = db_dir.path().join("crate.sqlar");
 
     let temp_dir = tempfile::tempdir()?;
     let mut file = fs::File::create(temp_dir.path().join("file"))?;
@@ -132,8 +100,8 @@ fn archive_symlink() -> sqlarfs::Result<()> {
     use std::os::unix::fs::symlink;
 
     let db_dir = tempfile::tempdir()?;
-    let reference_db = db_dir.path().join("reference.db");
-    let crate_db = db_dir.path().join("crate.db");
+    let reference_db = db_dir.path().join("reference.sqlar");
+    let crate_db = db_dir.path().join("crate.sqlar");
 
     let temp_dir = tempfile::tempdir()?;
     let symlink_target = tempfile::NamedTempFile::new()?;
@@ -157,8 +125,8 @@ fn archive_symlink() -> sqlarfs::Result<()> {
 #[serial(change_directory)]
 fn archive_empty_directory() -> sqlarfs::Result<()> {
     let db_dir = tempfile::tempdir()?;
-    let reference_db = db_dir.path().join("reference.db");
-    let crate_db = db_dir.path().join("crate.db");
+    let reference_db = db_dir.path().join("reference.sqlar");
+    let crate_db = db_dir.path().join("crate.sqlar");
 
     let temp_dir = tempfile::tempdir()?;
     fs::create_dir_all(temp_dir.path().join("source/dir"))?;
@@ -181,8 +149,8 @@ fn archive_empty_directory() -> sqlarfs::Result<()> {
 #[serial(change_directory)]
 fn archive_directory_with_children() -> sqlarfs::Result<()> {
     let db_dir = tempfile::tempdir()?;
-    let reference_db = db_dir.path().join("reference.db");
-    let crate_db = db_dir.path().join("crate.db");
+    let reference_db = db_dir.path().join("reference.sqlar");
+    let crate_db = db_dir.path().join("crate.sqlar");
 
     let temp_dir = tempfile::tempdir()?;
     fs::create_dir_all(temp_dir.path().join("source/dir"))?;
@@ -207,8 +175,8 @@ fn archive_directory_with_children() -> sqlarfs::Result<()> {
 #[serial(change_directory)]
 fn archive_regular_file_with_readonly_permissions() -> sqlarfs::Result<()> {
     let db_dir = tempfile::tempdir()?;
-    let reference_db = db_dir.path().join("reference.db");
-    let crate_db = db_dir.path().join("crate.db");
+    let reference_db = db_dir.path().join("reference.sqlar");
+    let crate_db = db_dir.path().join("crate.sqlar");
 
     let temp_dir = tempfile::tempdir()?;
     let file = fs::File::create(temp_dir.path().join("file"))?;
@@ -227,6 +195,190 @@ fn archive_regular_file_with_readonly_permissions() -> sqlarfs::Result<()> {
     })?;
 
     expect!(dump_table(&crate_db)?).to(consist_of(dump_table(&reference_db)?));
+
+    Ok(())
+}
+
+#[test]
+#[serial(change_directory)]
+fn extract_empty_regular_file() -> sqlarfs::Result<()> {
+    let db_dir = tempfile::tempdir()?;
+    let db = db_dir.path().join("test.sqlar");
+
+    let crate_dest_dir = tempfile::tempdir()?;
+    let reference_dest_dir = tempfile::tempdir()?;
+
+    Connection::open(&db)?.exec(|archive| {
+        archive.open("file")?.create_file()?;
+
+        archive.extract("file", &crate_dest_dir.path().join("file"))
+    })?;
+
+    env::set_current_dir(reference_dest_dir.path())?;
+    sqlar_command(&db, &["--extract", "file"])?;
+
+    expect!(crate_dest_dir.path().join("file"))
+        .to(have_same_contents(reference_dest_dir.path().join("file")));
+    expect!(crate_dest_dir.path().join("file")).to(have_same_permissions(
+        reference_dest_dir.path().join("file"),
+    ));
+    expect!(crate_dest_dir.path().join("file"))
+        .to(have_same_mtime(reference_dest_dir.path().join("file")));
+
+    Ok(())
+}
+
+#[test]
+#[serial(change_directory)]
+fn extract_regular_file_with_data() -> sqlarfs::Result<()> {
+    let db_dir = tempfile::tempdir()?;
+    let db = db_dir.path().join("test.sqlar");
+
+    let crate_dest_dir = tempfile::tempdir()?;
+    let reference_dest_dir = tempfile::tempdir()?;
+
+    Connection::open(&db)?.exec(|archive| {
+        let mut file = archive.open("file")?;
+        file.create_file()?;
+        file.write_str("file contents")?;
+
+        archive.extract("file", &crate_dest_dir.path().join("file"))
+    })?;
+
+    env::set_current_dir(reference_dest_dir.path())?;
+    sqlar_command(&db, &["--extract", "file"])?;
+
+    expect!(crate_dest_dir.path().join("file"))
+        .to(have_same_contents(reference_dest_dir.path().join("file")));
+    expect!(crate_dest_dir.path().join("file")).to(have_same_permissions(
+        reference_dest_dir.path().join("file"),
+    ));
+    expect!(crate_dest_dir.path().join("file"))
+        .to(have_same_mtime(reference_dest_dir.path().join("file")));
+
+    Ok(())
+}
+
+// TODO: This test fails because the `sqlite3` CLI returns an out-of-memory error (with exit code
+// 0) when trying to extract a symlink. It's unclear why, but it can be trivially reproduced.
+#[test]
+#[serial(change_directory)]
+#[cfg(unix)]
+#[ignore]
+fn extract_symlink() -> sqlarfs::Result<()> {
+    let db_dir = tempfile::tempdir()?;
+    let db = db_dir.path().join("test.sqlar");
+
+    let crate_dest_dir = tempfile::tempdir()?;
+    let reference_dest_dir = tempfile::tempdir()?;
+
+    let symlink_target = tempfile::NamedTempFile::new()?;
+
+    Connection::open(&db)?.exec(|archive| {
+        archive
+            .open("symlink")?
+            .create_symlink(symlink_target.path())?;
+
+        archive.extract("symlink", &crate_dest_dir.path().join("symlink"))
+    })?;
+
+    env::set_current_dir(reference_dest_dir.path())?;
+    sqlar_command(&db, &["--extract", "symlink"])?;
+
+    dbg!(reference_dest_dir.path().join("symlink").exists());
+
+    expect!(crate_dest_dir.path().join("symlink")).to(have_same_symlink_target(
+        reference_dest_dir.path().join("symlink"),
+    ));
+    expect!(crate_dest_dir.path().join("symlink")).to(have_same_permissions(
+        reference_dest_dir.path().join("symlink"),
+    ));
+    expect!(crate_dest_dir.path().join("symlink"))
+        .to(have_same_mtime(reference_dest_dir.path().join("symlink")));
+
+    Ok(())
+}
+
+#[test]
+#[serial(change_directory)]
+fn extract_empty_directory() -> sqlarfs::Result<()> {
+    let db_dir = tempfile::tempdir()?;
+    let db = db_dir.path().join("test.sqlar");
+
+    let crate_dest_dir = tempfile::tempdir()?;
+    let reference_dest_dir = tempfile::tempdir()?;
+
+    Connection::open(&db)?.exec(|archive| {
+        archive.open("dir")?.create_dir()?;
+
+        archive.extract("dir", &crate_dest_dir.path().join("dir"))
+    })?;
+
+    env::set_current_dir(reference_dest_dir.path())?;
+    sqlar_command(&db, &["--extract", "dir"])?;
+
+    expect!(crate_dest_dir.path().join("dir"))
+        .to(have_same_permissions(reference_dest_dir.path().join("dir")));
+    expect!(crate_dest_dir.path().join("dir"))
+        .to(have_same_mtime(reference_dest_dir.path().join("dir")));
+
+    Ok(())
+}
+
+#[test]
+#[serial(change_directory)]
+fn extract_directory_with_children() -> sqlarfs::Result<()> {
+    let db_dir = tempfile::tempdir()?;
+    let db = db_dir.path().join("test.sqlar");
+
+    let crate_dest_dir = tempfile::tempdir()?;
+    let reference_dest_dir = tempfile::tempdir()?;
+
+    Connection::open(&db)?.exec(|archive| {
+        archive.open("dir")?.create_dir()?;
+        archive.open("dir/file1")?.create_file()?;
+        archive.open("dir/subdir")?.create_dir()?;
+        archive.open("dir/subdir/file2")?.create_file()?;
+
+        archive.extract("dir", &crate_dest_dir.path().join("dir"))
+    })?;
+
+    env::set_current_dir(reference_dest_dir.path())?;
+    sqlar_command(&db, &["--extract", "dir"])?;
+
+    expect!(crate_dest_dir.path().join("dir"))
+        .to(have_same_permissions(reference_dest_dir.path().join("dir")));
+    expect!(crate_dest_dir.path().join("dir"))
+        .to(have_same_mtime(reference_dest_dir.path().join("dir")));
+
+    Ok(())
+}
+
+#[test]
+#[serial(change_directory)]
+fn extract_regular_file_with_readonly_permissions() -> sqlarfs::Result<()> {
+    let db_dir = tempfile::tempdir()?;
+    let db = db_dir.path().join("test.sqlar");
+
+    let crate_dest_dir = tempfile::tempdir()?;
+    let reference_dest_dir = tempfile::tempdir()?;
+
+    Connection::open(&db)?.exec(|archive| {
+        let mut file = archive.open("file")?;
+        file.create_file()?;
+        file.set_mode(Some(
+            FileMode::OWNER_R | FileMode::GROUP_R | FileMode::OTHER_R,
+        ))?;
+
+        archive.extract("file", &crate_dest_dir.path().join("file"))
+    })?;
+
+    env::set_current_dir(reference_dest_dir.path())?;
+    sqlar_command(&db, &["--extract", "file"])?;
+
+    expect!(crate_dest_dir.path().join("file")).to(have_same_permissions(
+        reference_dest_dir.path().join("file"),
+    ));
 
     Ok(())
 }

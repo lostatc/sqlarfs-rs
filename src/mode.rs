@@ -68,7 +68,7 @@ impl WriteMode for WindowsModeAdapter {
     fn write_mode(&self, path: &Path, mode: FileMode) -> crate::Result<()> {
         let mut permissions = fs::metadata(path)?.permissions();
         permissions.set_readonly(
-            !mode.contains(FileMode::OWNER_W | FileMode::GROUP_W | FileMode::OTHER_W),
+            !mode.intersects(FileMode::OWNER_W | FileMode::GROUP_W | FileMode::OTHER_W),
         );
 
         fs::set_permissions(path, permissions)?;

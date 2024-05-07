@@ -3,23 +3,14 @@
 use std::process::ExitCode;
 
 use clap::Parser;
-use sqlarfs::Error;
-use sqlarfs_cli::Cli;
-
-fn run() -> eyre::Result<()> {
-    let _cli = Cli::parse();
-
-    // TODO: Run the command.
-
-    Ok(())
-}
+use sqlarfs_cli::{Cli, UserError};
 
 fn main() -> eyre::Result<ExitCode> {
     color_eyre::install()?;
 
-    if let Err(err) = run() {
+    if let Err(err) = Cli::parse().dispatch() {
         // User-facing errors should not show a stack trace.
-        if let Some(user_err) = err.downcast_ref::<Error>() {
+        if let Some(user_err) = err.downcast_ref::<UserError>() {
             eprintln!("{}", user_err);
             return Ok(ExitCode::FAILURE);
         }

@@ -79,6 +79,19 @@ pub struct Archive {
     pub _no_preserve: bool,
 }
 
+#[derive(Args, Debug, Clone)]
+pub struct Extract {
+    /// The path of the file or directory in the archive to extract.
+    pub source: PathBuf,
+
+    /// The path in the filesystem to extract the file to.
+    pub dest: PathBuf,
+
+    /// The path of the SQLite archive.
+    #[arg(long)]
+    pub db: PathBuf,
+}
+
 #[derive(Subcommand, Debug, Clone)]
 pub enum Commands {
     /// Create a new SQLite archive from the given directory.
@@ -88,4 +101,8 @@ pub enum Commands {
     /// Copy a file or directory into an existing archive.
     #[command(visible_alias = "ar")]
     Archive(Archive),
+
+    /// Extract a file or directory from an archive.
+    #[command(visible_alias = "ex")]
+    Extract(Extract),
 }

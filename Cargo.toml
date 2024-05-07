@@ -1,32 +1,4 @@
-[package]
-name = "sqlarfs"
-version = "0.1.0"
-edition = "2021"
-# If you update this, update the GitHub Actions workflow as well.
-rust-version = "1.75.0"
+[workspace]
 
-[dependencies]
-anyhow = "1.0.81"
-bitflags = "2.5.0"
-flate2 = { version = "1.0.28", optional = true }
-ouroboros = "0.18.3"
-rusqlite = { version = "0.31.0", features = ["bundled", "blob"] }
-same-file = "1.0.6"
-
-[dev-dependencies]
-nix = { version = "0.28.0", features = ["fs"] }
-rand = { version = "0.8.5", features = ["small_rng"] }
-serial_test = "3.1.1"
-tempfile = "3.10.1"
-xpct = { version = "0.5.1", features = ["diff"] }
-
-[features]
-default = ["deflate"]
-deflate = ["dep:flate2"]
-# This feature is only used in tests and is not public API.
-reference-conformance-tests = []
-
-[lints.rust]
-unsafe_code = "forbid"
-missing_debug_implementations = "warn"
-missing_docs = "warn"
+members = ["sqlarfs", "sqlarfs-cli"]
+resolver = "2"

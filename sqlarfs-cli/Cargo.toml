@@ -1,0 +1,19 @@
+[package]
+name = "sqlarfs-cli"
+version = "0.1.0"
+edition = "2021"
+# If you update this, update the GitHub Actions workflow as well.
+rust-version = "1.75.0"
+
+[dependencies]
+clap = { version = "4.5.4", features = ["derive"] }
+color-eyre = "0.6.3"
+eyre = "0.6.12"
+sqlarfs = { version = "0.1.0", path = "../sqlarfs" }
+
+[[bin]]
+name = "sqlar"
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"

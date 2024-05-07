@@ -146,6 +146,8 @@ impl<'conn> Archive<'conn> {
 
     /// Copy the directory tree in the archive at `from` into the filesystem at `to`.
     ///
+    /// If `from` is an empty path, this will extract the entire archive.
+    ///
     /// # Errors
     ///
     /// - [`NotFound`]: There is no file or directory in the archive at `from`.

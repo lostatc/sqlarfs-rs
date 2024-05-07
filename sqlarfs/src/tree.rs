@@ -311,14 +311,19 @@ impl<'conn> Archive<'conn> {
     where
         T: WriteMode,
     {
-        let metadata = self.open(src_root)?.metadata()?;
-
-        self.extract_file(src_root, dest_root, &metadata, mode_adapter)?;
-
         // We need to collect this into a vector because iterating over the entries will borrow the
         // `Archive`, and we need to borrow it mutably to copy the file contents.
-        let list_opts = ListOptions::new().descendants_of(src_root).by_depth();
-        let entries = self.list_with(&list_opts)?.collect::<Result<Vec<_>, _>>()?;
+        let entries = if src_root == Path::new("") {
+            let list_opts = ListOptions::new().by_depth();
+            self.list_with(&list_opts)?.collect::<Result<Vec<_>, _>>()?
+        } else {
+            let metadata = self.open(src_root)?.metadata()?;
+
+            self.extract_file(src_root, dest_root, &metadata, mode_adapter)?;
+
+            let list_opts = ListOptions::new().descendants_of(src_root).by_depth();
+            self.list_with(&list_opts)?.collect::<Result<Vec<_>, _>>()?
+        };
 
         for entry in entries {
             let dest_path = rebase_path(&entry.path, dest_root, src_root);

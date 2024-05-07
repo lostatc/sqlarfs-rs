@@ -15,44 +15,7 @@ pub struct Create {
     pub source: PathBuf,
 
     /// The path of the SQLite archive to create.
-    pub archive: PathBuf,
-
-    /// Follow symbolic links.
-    #[arg(long, default_value = "false", overrides_with = "_no_follow")]
-    pub follow: bool,
-
-    /// Don't follow symbolic links.
-    #[arg(long = "no-follow")]
-    pub _no_follow: bool,
-
-    /// Copy the given directory recursively.
-    #[arg(long, default_value = "true", overrides_with = "_no_recursive")]
-    pub recursive: bool,
-
-    /// Don't copy the given directory recursively.
-    #[arg(long = "no-recursive")]
-    pub _no_recursive: bool,
-
-    /// Preserve file metadata.
-    #[arg(long, default_value = "true", overrides_with = "_no_preserve")]
-    pub preserve: bool,
-
-    /// Don't preserve file metadata.
-    #[arg(long = "no-preserve")]
-    pub _no_preserve: bool,
-}
-
-#[derive(Args, Debug, Clone)]
-pub struct Archive {
-    /// The file or directory in the filesystem to archive.
-    pub source: PathBuf,
-
-    /// The destination of the file in the archive.
-    pub dest: PathBuf,
-
-    /// The path of the SQLite archive.
-    #[arg(long)]
-    pub db: PathBuf,
+    pub archive: Option<PathBuf>,
 
     /// Follow symbolic links.
     #[arg(long, default_value = "false", overrides_with = "_no_follow")]
@@ -81,15 +44,53 @@ pub struct Archive {
 
 #[derive(Args, Debug, Clone)]
 pub struct Extract {
-    /// The path of the file or directory in the archive to extract.
-    pub source: PathBuf,
+    /// The path of the SQLite archive.
+    pub archive: PathBuf,
 
-    /// The path in the filesystem to extract the file to.
+    /// The path in the filesystem to extract the files to.
+    #[arg(default_value = ".")]
     pub dest: PathBuf,
 
-    /// The path of the SQLite archive.
+    /// The path of a specific file or directory in the archive to extract.
     #[arg(long)]
-    pub db: PathBuf,
+    pub source: Option<PathBuf>,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct Archive {
+    /// The file or directory in the filesystem to archive.
+    pub source: PathBuf,
+
+    /// The destination of the file in the archive.
+    pub dest: Option<PathBuf>,
+
+    /// The path of the SQLite archive.
+    #[arg(long, short)]
+    pub archive: PathBuf,
+
+    /// Follow symbolic links.
+    #[arg(long, default_value = "false", overrides_with = "_no_follow")]
+    pub follow: bool,
+
+    /// Don't follow symbolic links.
+    #[arg(long = "no-follow")]
+    pub _no_follow: bool,
+
+    /// Copy the given directory recursively.
+    #[arg(long, default_value = "true", overrides_with = "_no_recursive")]
+    pub recursive: bool,
+
+    /// Don't copy the given directory recursively.
+    #[arg(long = "no-recursive")]
+    pub _no_recursive: bool,
+
+    /// Preserve file metadata.
+    #[arg(long, default_value = "true", overrides_with = "_no_preserve")]
+    pub preserve: bool,
+
+    /// Don't preserve file metadata.
+    #[arg(long = "no-preserve")]
+    pub _no_preserve: bool,
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -98,11 +99,11 @@ pub enum Commands {
     #[command(visible_alias = "c")]
     Create(Create),
 
-    /// Copy a file or directory into an existing archive.
-    #[command(visible_alias = "ar")]
-    Archive(Archive),
-
     /// Extract a file or directory from an archive.
     #[command(visible_alias = "ex")]
     Extract(Extract),
+
+    /// Copy a file or directory into an existing archive.
+    #[command(visible_alias = "ar")]
+    Archive(Archive),
 }

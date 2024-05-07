@@ -1,9 +1,11 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use sqlarfs::{ArchiveOptions, Connection};
+use sqlarfs::{ArchiveOptions, Connection, OpenOptions};
 
-use super::cli::{Cli, Commands, Create};
+use super::cli::{Cli, Commands, Create, Extract};
 use super::error::user_err;
+
+const SQLAR_EXTENSION: &str = "sqlar";
 
 impl Create {
     pub fn run(&self) -> eyre::Result<()> {
@@ -16,7 +18,13 @@ impl Create {
             Ok,
         )?;
 
-        let mut conn = Connection::open(&self.archive)?;
+        let archive_filename = self.archive.to_owned().unwrap_or_else(|| {
+            let mut filename = source_filename.to_owned();
+            filename.set_extension(SQLAR_EXTENSION);
+            filename
+        });
+
+        let mut conn = Connection::open(archive_filename)?;
 
         let opts = ArchiveOptions::new()
             .follow_symlinks(self.follow)
@@ -30,12 +38,27 @@ impl Create {
     }
 }
 
+impl Extract {
+    pub fn run(&self) -> eyre::Result<()> {
+        let mut conn = OpenOptions::new().create(false).open(&self.archive)?;
+
+        conn.exec(|archive| {
+            archive.extract(
+                &self.source.to_owned().unwrap_or_else(|| PathBuf::from("")),
+                &self.dest,
+            )
+        })?;
+
+        Ok(())
+    }
+}
+
 impl Cli {
     pub fn dispatch(&self) -> eyre::Result<()> {
         match &self.command {
             Commands::Create(create) => create.run(),
+            Commands::Extract(extract) => extract.run(),
             Commands::Archive(_) => todo!(),
-            Commands::Extract(_) => todo!(),
         }
     }
 }

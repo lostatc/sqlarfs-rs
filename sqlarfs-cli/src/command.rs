@@ -28,8 +28,8 @@ impl Create {
 
         let opts = ArchiveOptions::new()
             .follow_symlinks(self.follow)
-            .recursive(self.recursive)
-            .preserve_metadata(self.preserve)
+            .recursive(!self.no_recursive)
+            .preserve_metadata(!self.no_preserve)
             .children(false);
 
         conn.exec(|archive| archive.archive_with(&self.source, source_filename, &opts))?;

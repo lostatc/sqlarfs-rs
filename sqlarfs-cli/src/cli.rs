@@ -22,24 +22,24 @@ pub struct Create {
     pub follow: bool,
 
     /// Don't follow symbolic links.
-    #[arg(long = "no-follow")]
+    #[arg(long = "no-follow", default_value = "true")]
     pub _no_follow: bool,
 
     /// Copy the given directory recursively.
-    #[arg(long, default_value = "true", overrides_with = "_no_recursive")]
-    pub recursive: bool,
+    #[arg(long = "recursive", default_value = "true")]
+    _recursive: bool,
 
     /// Don't copy the given directory recursively.
-    #[arg(long = "no-recursive")]
-    pub _no_recursive: bool,
+    #[arg(long, default_value = "false", overrides_with = "_recursive")]
+    pub no_recursive: bool,
 
     /// Preserve file metadata.
-    #[arg(long, default_value = "true", overrides_with = "_no_preserve")]
-    pub preserve: bool,
+    #[arg(long = "preserve", default_value = "true")]
+    _preserve: bool,
 
     /// Don't preserve file metadata.
-    #[arg(long = "no-preserve")]
-    pub _no_preserve: bool,
+    #[arg(long, default_value = "false", overrides_with = "_preserve")]
+    pub no_preserve: bool,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -73,24 +73,24 @@ pub struct Archive {
     pub follow: bool,
 
     /// Don't follow symbolic links.
-    #[arg(long = "no-follow")]
+    #[arg(long = "no-follow", default_value = "true")]
     pub _no_follow: bool,
 
     /// Copy the given directory recursively.
-    #[arg(long, default_value = "true", overrides_with = "_no_recursive")]
-    pub recursive: bool,
+    #[arg(long = "recursive", default_value = "true")]
+    _recursive: bool,
 
     /// Don't copy the given directory recursively.
-    #[arg(long = "no-recursive")]
-    pub _no_recursive: bool,
+    #[arg(long, default_value = "false", overrides_with = "_recursive")]
+    pub no_recursive: bool,
 
     /// Preserve file metadata.
-    #[arg(long, default_value = "true", overrides_with = "_no_preserve")]
-    pub preserve: bool,
+    #[arg(long = "preserve", default_value = "true")]
+    _preserve: bool,
 
     /// Don't preserve file metadata.
-    #[arg(long = "no-preserve")]
-    pub _no_preserve: bool,
+    #[arg(long, default_value = "false", overrides_with = "_preserve")]
+    pub no_preserve: bool,
 }
 
 #[derive(Subcommand, Debug, Clone)]

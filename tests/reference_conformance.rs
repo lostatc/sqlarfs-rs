@@ -259,8 +259,9 @@ fn extract_regular_file_with_data() -> sqlarfs::Result<()> {
     Ok(())
 }
 
-// TODO: This test fails because the `sqlite3` CLI returns an out-of-memory error (with exit code
-// 0) when trying to extract a symlink. It's unclear why, but it can be trivially reproduced.
+// TODO: We need to ignore this test until the following bug fixes in SQLite are released:
+// - https://www.sqlite.org/src/info/4d90c3f179a3d735
+// - https://www.sqlite.org/src/info/2bf8c3f99ad8b74f
 #[test]
 #[serial(change_directory)]
 #[cfg(unix)]

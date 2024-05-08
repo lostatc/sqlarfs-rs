@@ -326,7 +326,7 @@ fn archiving_fails_when_source_is_root_and_children_is_false() -> sqlarfs::Resul
 }
 
 #[test]
-fn archive_directory_children_to_target() -> sqlarfs::Result<()> {
+fn archive_directory_children_to_dir() -> sqlarfs::Result<()> {
     let temp_dir = tempfile::tempdir()?;
     fs::OpenOptions::new()
         .write(true)

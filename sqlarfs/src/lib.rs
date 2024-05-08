@@ -69,4 +69,4 @@ pub use metadata::{FileMetadata, FileMode, FileType};
 pub use open::OpenOptions;
 pub use stream::{Compression, FileReader};
 pub use transaction::{Connection, Transaction, TransactionBehavior};
-pub use tree::ArchiveOptions;
+pub use tree::{ArchiveOptions, ExtractOptions};

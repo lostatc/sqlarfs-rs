@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::FileMode;
+use crate::{ExtractOptions, FileMode};
 
 use super::file::File;
 use super::list::{ListEntries, ListOptions};
@@ -110,7 +110,7 @@ impl<'conn> Archive<'conn> {
         self.archive_with(from, to, &Default::default())
     }
 
-    /// Copy the filesystem directory tree at `from` into the archive at `to`.
+    /// Copy the directory tree at in the filesystem at `from` into the archive at `to`.
     ///
     /// The file at `from` may be either a directory or a regular file.
     ///
@@ -146,21 +146,40 @@ impl<'conn> Archive<'conn> {
 
     /// Copy the directory tree in the archive at `from` into the filesystem at `to`.
     ///
-    /// If `from` is an empty path, this will extract the entire archive.
+    /// This is the same as [`Archive::extract_with`], but using the default options.
+    pub fn extract<P: AsRef<Path>, Q: AsRef<Path>>(&mut self, from: P, to: Q) -> crate::Result<()> {
+        self.extract_with(from, to, &Default::default())
+    }
+
+    /// Copy the directory tree in the archive at `from` into the filesystem at `to`.
+    ///
+    /// The file at `from` may be either a directory or a regular file.
     ///
     /// # Errors
     ///
     /// - [`NotFound`]: There is no file or directory in the archive at `from`.
     /// - [`NotFound`]: The parent directory of `to` does not exist.
+    /// - [`NotFound`]: [`ExtractOptions::children`] was `true` and `to` does not exist.
+    /// - [`NotADirectory`]: [`ExtractOptions::children`] was `true` and the file at `to` is not a
+    /// directory.
+    /// - [`NotADirectory`]: [`ExtractOptions::children`] was `true` and the file at `from` is not
+    /// a directory.
     /// - [`AlreadyExists`]: One of the files in `from` would overwrite an existing file in the
     /// filesystem.
     ///
     /// [`NotFound`]: crate::ErrorKind::NotFound
+    /// [`NotADirectory`]: crate::ErrorKind::NotADirectory
     /// [`AlreadyExists`]: crate::ErrorKind::AlreadyExists
-    pub fn extract<P: AsRef<Path>, Q: AsRef<Path>>(&mut self, from: P, to: Q) -> crate::Result<()> {
+    pub fn extract_with<P: AsRef<Path>, Q: AsRef<Path>>(
+        &mut self,
+        from: P,
+        to: Q,
+        opts: &ExtractOptions,
+    ) -> crate::Result<()> {
         self.extract_tree(
             from.as_ref(),
             to.as_ref(),
+            opts,
             #[cfg(unix)]
             &super::mode::UnixModeAdapter,
             #[cfg(windows)]

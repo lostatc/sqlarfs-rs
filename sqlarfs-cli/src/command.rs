@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use sqlarfs::{ArchiveOptions, Connection, OpenOptions};
+use sqlarfs::{ArchiveOptions, Connection, ExtractOptions, OpenOptions};
 
 use super::cli::{Cli, Commands, Create, Extract};
 use super::error::user_err;
@@ -43,9 +43,10 @@ impl Extract {
         let mut conn = OpenOptions::new().create(false).open(&self.archive)?;
 
         conn.exec(|archive| {
-            archive.extract(
+            archive.extract_with(
                 &self.source.to_owned().unwrap_or_else(|| PathBuf::from("")),
                 &self.dest,
+                &ExtractOptions::new().children(true),
             )
         })?;
 

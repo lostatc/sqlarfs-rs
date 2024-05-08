@@ -2,7 +2,7 @@ use std::fs;
 use std::time::{Duration, SystemTime};
 
 use common::{connection, have_error_kind, truncate_mtime};
-use sqlarfs::{ErrorKind, FileMode};
+use sqlarfs::{ErrorKind, ExtractOptions, FileMode};
 use xpct::{be_false, be_ok, be_true, equal, expect};
 
 mod common;
@@ -429,6 +429,136 @@ fn extracting_preserves_file_mtime() -> sqlarfs::Result<()> {
 
         let actual_mtime = dest_path.metadata()?.modified()?;
         expect!(actual_mtime).to(equal(truncate_mtime(expected_mtime)));
+
+        Ok(())
+    })
+}
+
+//
+// `ExtractOptions::children`
+//
+
+#[test]
+fn extracting_fails_when_source_is_root_and_children_is_false() -> sqlarfs::Result<()> {
+    let temp_dir = tempfile::tempdir()?;
+
+    connection()?.exec(|archive| {
+        expect!(archive.extract_with(
+            "",
+            temp_dir.path().join("dest"),
+            &ExtractOptions::new().children(false)
+        ))
+        .to(have_error_kind(ErrorKind::InvalidArgs));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn extract_directory_children_to_dir() -> sqlarfs::Result<()> {
+    let dest_dir = tempfile::tempdir()?;
+
+    connection()?.exec(|archive| {
+        archive.open("dir")?.create_dir()?;
+        archive.open("dir/file1")?.create_file()?;
+        archive.open("dir/file2")?.create_file()?;
+
+        let opts = ExtractOptions::new().children(true);
+        expect!(archive.extract_with("dir", &dest_dir, &opts)).to(be_ok());
+
+        expect!(dest_dir.path().join("file1").metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.is_file())
+            .to(be_true());
+        expect!(dest_dir.path().join("file2").metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.is_file())
+            .to(be_true());
+
+        Ok(())
+    })
+}
+
+#[test]
+fn extract_files_from_archive_root() -> sqlarfs::Result<()> {
+    let dest_dir = tempfile::tempdir()?;
+
+    connection()?.exec(|archive| {
+        archive.open("file1")?.create_file()?;
+        archive.open("file2")?.create_file()?;
+
+        let opts = ExtractOptions::new().children(true);
+        expect!(archive.extract_with("", &dest_dir, &opts)).to(be_ok());
+
+        expect!(dest_dir.path().join("file1").metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.is_file())
+            .to(be_true());
+        expect!(dest_dir.path().join("file2").metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.is_file())
+            .to(be_true());
+
+        Ok(())
+    })
+}
+
+#[test]
+fn extracting_directory_children_when_target_doest_not_exist_errors() -> sqlarfs::Result<()> {
+    let temp_dir = tempfile::tempdir()?;
+    let dest_dir = temp_dir.path().join("dest");
+
+    connection()?.exec(|archive| {
+        archive.open("dir")?.create_dir()?;
+        archive.open("dir/file")?.create_file()?;
+
+        let opts = ExtractOptions::new().children(true);
+        expect!(archive.extract_with("dir", &dest_dir, &opts))
+            .to(have_error_kind(ErrorKind::NotFound));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn extracting_directory_children_when_target_is_file_errors() -> sqlarfs::Result<()> {
+    let temp_file = tempfile::NamedTempFile::new()?;
+
+    connection()?.exec(|archive| {
+        archive.open("dir")?.create_dir()?;
+        archive.open("dir/file")?.create_file()?;
+
+        let opts = ExtractOptions::new().children(true);
+        expect!(archive.extract_with("dir", temp_file.path(), &opts))
+            .to(have_error_kind(ErrorKind::NotADirectory));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn extract_directory_children_when_source_does_not_exist_errors() -> sqlarfs::Result<()> {
+    let dest_dir = tempfile::tempdir()?;
+
+    connection()?.exec(|archive| {
+        let opts = ExtractOptions::new().children(true);
+        expect!(archive.extract_with("nonexistent", &dest_dir, &opts))
+            .to(have_error_kind(ErrorKind::NotFound));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn extract_directory_children_when_source_is_file_errors() -> sqlarfs::Result<()> {
+    let dest_dir = tempfile::tempdir()?;
+
+    connection()?.exec(|archive| {
+        archive.open("file")?.create_file()?;
+
+        let opts = ExtractOptions::new().children(true);
+        expect!(archive.extract_with("file", &dest_dir, &opts))
+            .to(have_error_kind(ErrorKind::NotADirectory));
 
         Ok(())
     })

@@ -9,7 +9,7 @@ use super::list::ListOptions;
 use super::metadata::FileType;
 use super::mode::{ReadMode, WriteMode};
 
-/// Options for archiving a filesystem directory tree to an [`Archive`].
+/// Options for archiving files in the filesystem to an [`Archive`].
 ///
 /// This is used with [`Archive::archive_with`].
 ///
@@ -79,6 +79,43 @@ impl ArchiveOptions {
     /// The default is `true`.
     pub fn preserve_metadata(mut self, preserve: bool) -> Self {
         self.preserve_metadata = preserve;
+        self
+    }
+}
+
+/// Options for extracting files in an [`Archive`] into the filesystem.
+///
+/// This is used with [`Extract::extract_with`].
+///
+/// [`Archive`]: crate::Archive
+/// [`Archive::archive_with`]: crate::Archive::archive_with
+#[derive(Debug, Clone)]
+pub struct ExtractOptions {
+    children: bool,
+}
+
+impl Default for ExtractOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ExtractOptions {
+    /// Create a new [`ExtractOptions`] with default settings.
+    pub fn new() -> Self {
+        Self { children: false }
+    }
+
+    /// Extract the children of the source directory instead of the source directory itself.
+    ///
+    /// This puts the children of the source directory into the given destination directory.
+    ///
+    /// As a special case, you can use an empty path as the source directory to extract all files
+    /// in the root of the archive.
+    ///
+    /// The default is `false`.
+    pub fn children(mut self, children: bool) -> Self {
+        self.children = children;
         self
     }
 }
@@ -237,19 +274,18 @@ impl<'conn> Archive<'conn> {
                     .create_new(true)
                     .write(true)
                     .open(dest_path)
-                    .map_err(|err| match err.kind() {
-                        io::ErrorKind::AlreadyExists => {
+                    .map_err(|err| {
+                        // Windows will throw an `io::ErrorKind::PermissionDenied` if the file
+                        // already exists and is a directory.
+                        if err.kind() == io::ErrorKind::AlreadyExists
+                            || (cfg!(windows) && err.kind() == io::ErrorKind::PermissionDenied)
+                        {
                             crate::Error::new(crate::ErrorKind::AlreadyExists, err)
-                        }
-                        // Windows will throw this error if the file already exists and is a
-                        // directory.
-                        io::ErrorKind::PermissionDenied if cfg!(windows) => {
-                            crate::Error::new(crate::ErrorKind::AlreadyExists, err)
-                        }
-                        io::ErrorKind::NotFound => {
+                        } else if err.kind() == io::ErrorKind::NotFound {
                             crate::Error::new(crate::ErrorKind::NotFound, err)
+                        } else {
+                            err.into()
                         }
-                        _ => err.into(),
                     })?;
 
                 let mut archive_file = self.open(src_path)?;
@@ -306,20 +342,55 @@ impl<'conn> Archive<'conn> {
         &mut self,
         src_root: &Path,
         dest_root: &Path,
+        opts: &ExtractOptions,
         mode_adapter: &T,
     ) -> crate::Result<()>
     where
         T: WriteMode,
     {
+        if src_root == Path::new("") && !opts.children {
+            return Err(crate::Error::msg(
+                crate::ErrorKind::InvalidArgs,
+                "Cannot use an empty path as the source directory unless archiving the children of the source directory."
+            ));
+        }
+
         // We need to collect this into a vector because iterating over the entries will borrow the
         // `Archive`, and we need to borrow it mutably to copy the file contents.
-        let entries = if src_root == Path::new("") {
-            let list_opts = ListOptions::new().by_depth();
-            self.list_with(&list_opts)?.collect::<Result<Vec<_>, _>>()?
+        let entries = if opts.children {
+            if src_root == Path::new("") {
+                let list_opts = ListOptions::new().by_depth();
+                self.list_with(&list_opts)?.collect::<Result<Vec<_>, _>>()?
+            } else if self.open(src_root)?.metadata()?.kind() != FileType::Dir {
+                return Err(crate::Error::msg(
+                    crate::ErrorKind::NotADirectory,
+                    "The given source path is not a directory.",
+                ));
+            // TODO: Reading the file metadata at this point presents a race condition, because the
+            // file could change out from under us between now and when we start extracting files
+            // into it. However, this might be the best we can reasonably do.
+            //
+            // Ideally, once `io_error_more` is stable, we match on the
+            // `io::ErrorKind::NotADirectory` returned when we try to extract a file into this
+            // directory.
+            //
+            // However, as of time of writing, that error kind is not thrown on Windows; the
+            // Windows API doesn't seem to distinguish between these cases:
+            //
+            // 1. The parent of the dest path doesn't exist.
+            // 2. The parent of the dest path exists but is not a directory.
+            } else if !read_metadata(dest_root)?.is_dir() {
+                return Err(crate::Error::msg(
+                    crate::ErrorKind::NotADirectory,
+                    "The given destination path is not a directory.",
+                ));
+            } else {
+                let list_opts = ListOptions::new().descendants_of(src_root).by_depth();
+                self.list_with(&list_opts)?.collect::<Result<Vec<_>, _>>()?
+            }
         } else {
-            let metadata = self.open(src_root)?.metadata()?;
-
-            self.extract_file(src_root, dest_root, &metadata, mode_adapter)?;
+            let src_metadata = self.open(src_root)?.metadata()?;
+            self.extract_file(src_root, dest_root, &src_metadata, mode_adapter)?;
 
             let list_opts = ListOptions::new().descendants_of(src_root).by_depth();
             self.list_with(&list_opts)?.collect::<Result<Vec<_>, _>>()?

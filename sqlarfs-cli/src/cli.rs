@@ -21,11 +21,11 @@ pub struct Create {
     #[arg(long, default_value = "false", overrides_with = "_no_follow")]
     pub follow: bool,
 
-    /// Don't follow symbolic links.
+    /// Don't follow symbolic links (default).
     #[arg(long = "no-follow", default_value = "true")]
     pub _no_follow: bool,
 
-    /// Copy the given directory recursively.
+    /// Copy the given directory recursively (default).
     #[arg(long = "recursive", default_value = "true")]
     _recursive: bool,
 
@@ -33,7 +33,7 @@ pub struct Create {
     #[arg(long, default_value = "false", overrides_with = "_recursive")]
     pub no_recursive: bool,
 
-    /// Preserve file metadata.
+    /// Preserve file metadata (default).
     #[arg(long = "preserve", default_value = "true")]
     _preserve: bool,
 
@@ -55,7 +55,7 @@ pub struct Extract {
     #[arg(long)]
     pub source: Option<PathBuf>,
 
-    /// Extract given directory recursively.
+    /// Extract given directory recursively (default).
     #[arg(long = "recursive", default_value = "true")]
     _recursive: bool,
 
@@ -80,11 +80,11 @@ pub struct Archive {
     #[arg(long, default_value = "false", overrides_with = "_no_follow")]
     pub follow: bool,
 
-    /// Don't follow symbolic links.
+    /// Don't follow symbolic links (default).
     #[arg(long = "no-follow", default_value = "true")]
     pub _no_follow: bool,
 
-    /// Copy the given directory recursively.
+    /// Copy the given directory recursively (default).
     #[arg(long = "recursive", default_value = "true")]
     _recursive: bool,
 
@@ -92,7 +92,7 @@ pub struct Archive {
     #[arg(long, default_value = "false", overrides_with = "_recursive")]
     pub no_recursive: bool,
 
-    /// Preserve file metadata.
+    /// Preserve file metadata (default).
     #[arg(long = "preserve", default_value = "true")]
     _preserve: bool,
 

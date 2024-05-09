@@ -8,18 +8,16 @@ use serial_test::serial;
 use sqlarfs_cli::{Cli, Commands, Create};
 use xpct::{be_err, be_existing_file, expect, match_pattern, pattern};
 
-use common::command;
+use common::{command, root_path};
 
 #[test]
 fn errors_when_source_path_is_root() -> eyre::Result<()> {
     let temp_dir = tempfile::tempdir()?;
     let archive_path = temp_dir.path().join("test.sqlar");
 
-    let root_path = if cfg!(windows) { r"C:\" } else { "/" };
-
     expect!(command(&[
         "create",
-        root_path,
+        &root_path().to_string_lossy(),
         &archive_path.to_string_lossy()
     ]))
     .to(be_err());

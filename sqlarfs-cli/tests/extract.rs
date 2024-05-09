@@ -7,7 +7,7 @@ use serial_test::serial;
 use sqlarfs::Connection;
 use xpct::{be_directory, be_err, be_existing_file, be_regular_file, expect};
 
-use common::command;
+use common::{command, root_path};
 
 #[test]
 #[serial(change_directory)]
@@ -113,7 +113,7 @@ fn extract_errors_when_source_does_not_have_a_filename() -> eyre::Result<()> {
     expect!(command(&[
         "extract",
         "--source",
-        "/",
+        &root_path().to_string_lossy(),
         &archive_path.to_string_lossy()
     ]))
     .to(be_err());

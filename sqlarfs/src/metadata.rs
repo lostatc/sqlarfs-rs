@@ -122,6 +122,21 @@ impl FileMetadata {
             Self::Symlink { .. } => Some(mode_from_umask(FileType::Symlink, FileMode::empty())),
         }
     }
+
+    /// Returns whether the file is a regular file.
+    pub fn is_file(&self) -> bool {
+        matches!(self, Self::File { .. })
+    }
+
+    /// Returns whether the file is a directory.
+    pub fn is_dir(&self) -> bool {
+        matches!(self, Self::Dir { .. })
+    }
+
+    /// Returns whether the file is a symbolic link.
+    pub fn is_symlink(&self) -> bool {
+        matches!(self, Self::Symlink { .. })
+    }
 }
 
 pub const TYPE_MASK: u32 = 0o170000;

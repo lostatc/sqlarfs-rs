@@ -376,10 +376,7 @@ impl<'conn> Archive<'conn> {
             ));
         }
 
-        if opts.children
-            && !src_path_is_empty
-            && self.open(src_root)?.metadata()?.kind() != FileType::Dir
-        {
+        if opts.children && !src_path_is_empty && !self.open(src_root)?.metadata()?.is_dir() {
             return Err(crate::Error::msg(
                 crate::ErrorKind::NotADirectory,
                 "The given source path is not a directory.",

@@ -308,7 +308,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
         }
 
         match self.metadata() {
-            Ok(metadata) if metadata.kind() != FileType::Dir => {
+            Ok(metadata) if !metadata.is_dir() => {
                 return Err(crate::Error::msg(
                     crate::ErrorKind::AlreadyExists,
                     "This file already exists, but is not a directory.",

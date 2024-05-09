@@ -121,6 +121,8 @@ impl<'conn> Archive<'conn> {
     /// - [`NotFound`]: [`ArchiveOptions::children`] was `true` and `to` does not exist.
     /// - [`NotADirectory`]: [`ArchiveOptions::children`] was `true` and the file at `to` exists
     /// but is not a directory.
+    /// - [`NotADirectory`]: [`ArchiveOptions::children`] was `true` and the file at `from` is not
+    /// a directory.
     /// - [`AlreadyExists`]: One of the files in `from` would overwrite an existing file in the
     /// archive.
     ///

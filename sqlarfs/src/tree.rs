@@ -242,7 +242,12 @@ impl<'conn> Archive<'conn> {
 
         let src_is_dir = read_metadata(src_root)?.is_dir();
 
-        let paths = if opts.children && src_is_dir {
+        let paths = if opts.children && !src_is_dir {
+            return Err(crate::Error::msg(
+                crate::ErrorKind::NotADirectory,
+                "The given source path is not a directory.",
+            ));
+        } else if opts.children {
             fs::read_dir(src_root)?
                 .map(|entry| entry.map(|entry| entry.path()))
                 .collect::<Result<Vec<_>, _>>()?

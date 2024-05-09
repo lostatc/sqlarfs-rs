@@ -422,21 +422,14 @@ fn archiving_directory_children_when_target_doest_not_exist_errors() -> sqlarfs:
 }
 
 #[test]
-fn archive_directory_children_when_source_is_file() -> sqlarfs::Result<()> {
+fn archive_directory_children_when_source_is_file_errors() -> sqlarfs::Result<()> {
     let temp_file = tempfile::NamedTempFile::new()?;
 
     connection()?.exec(|archive| {
         let opts = ArchiveOptions::new().children(true);
 
-        expect!(archive.archive_with(temp_file.path(), "file", &opts)).to(be_ok());
-
-        let file = archive.open("file")?;
-
-        expect!(file.exists()).to(be_ok()).to(be_true());
-        expect!(file.metadata())
-            .to(be_ok())
-            .into::<FileType>()
-            .to(equal(FileType::File));
+        expect!(archive.archive_with(temp_file.path(), "file", &opts))
+            .to(have_error_kind(ErrorKind::NotADirectory));
 
         Ok(())
     })

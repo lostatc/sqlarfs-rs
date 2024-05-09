@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use sqlarfs::{ArchiveOptions, Connection, ExtractOptions, OpenOptions};
 
@@ -7,16 +7,14 @@ use super::error::user_err;
 
 const SQLAR_EXTENSION: &str = "sqlar";
 
+fn file_name(path: &Path) -> Option<&Path> {
+    path.file_name().map(Path::new).or_else(|| path.parent())
+}
+
 impl Create {
     pub fn run(&self) -> eyre::Result<()> {
-        let source_filename = self.source.file_name().map(Path::new).map_or_else(
-            || {
-                self.source
-                    .parent()
-                    .ok_or(user_err!("The source path must have a filename."))
-            },
-            Ok,
-        )?;
+        let source_filename =
+            file_name(&self.source).ok_or(user_err!("The source path must have a filename."))?;
 
         let archive_filename = self.archive.to_owned().unwrap_or_else(|| {
             let mut filename = source_filename.to_owned();
@@ -42,12 +40,19 @@ impl Extract {
     pub fn run(&self) -> eyre::Result<()> {
         let mut conn = OpenOptions::new().create(false).open(&self.archive)?;
 
-        conn.exec(|archive| {
-            archive.extract_with(
-                &self.source.to_owned().unwrap_or_else(|| PathBuf::from("")),
-                &self.dest,
-                &ExtractOptions::new().children(true),
-            )
+        if let Some(source) = &self.source {
+            if source.file_name().is_none() {
+                return Err(user_err!("The source path must have a filename."));
+            }
+        }
+
+        conn.exec(|archive| match &self.source {
+            Some(source) => archive.extract_with(
+                source,
+                &self.dest.join(source.file_name().expect("The source directory does not have a filename, but we should have already checked for this. This is a bug.")),
+                &ExtractOptions::new().children(false),
+            ),
+            None => archive.extract_with("", &self.dest, &ExtractOptions::new().children(true)),
         })?;
 
         Ok(())

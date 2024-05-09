@@ -810,7 +810,10 @@ dependencies = [
  "clap",
  "color-eyre",
  "eyre",
+ "serial_test",
  "sqlarfs",
+ "tempfile",
+ "xpct",
 ]
 
 [[package]]

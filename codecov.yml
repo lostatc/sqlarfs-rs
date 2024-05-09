@@ -8,3 +8,4 @@ coverage:
         informational: true
 ignore:
   - "sqlarfs-cli/src/cli.rs"
+  - "sqlarfs-cli/src/bin/sqlar.rs"

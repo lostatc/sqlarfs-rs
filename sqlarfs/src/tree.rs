@@ -348,20 +348,10 @@ impl<'conn> Archive<'conn> {
     where
         T: WriteMode,
     {
-        if src_root == Path::new("") && !opts.children {
-            return Err(crate::Error::msg(
-                crate::ErrorKind::InvalidArgs,
-                "Cannot use an empty path as the source directory unless archiving the children of the source directory."
-            ));
-        }
+        let src_path_is_empty = src_root == Path::new("");
 
-        // We need to collect this into a vector because iterating over the entries will borrow the
-        // `Archive`, and we need to borrow it mutably to copy the file contents.
         let entries = if opts.children {
-            if src_root == Path::new("") {
-                let list_opts = ListOptions::new().by_depth();
-                self.list_with(&list_opts)?.collect::<Result<Vec<_>, _>>()?
-            } else if self.open(src_root)?.metadata()?.kind() != FileType::Dir {
+            if !src_path_is_empty && self.open(src_root)?.metadata()?.kind() != FileType::Dir {
                 return Err(crate::Error::msg(
                     crate::ErrorKind::NotADirectory,
                     "The given source path is not a directory.",
@@ -384,19 +374,29 @@ impl<'conn> Archive<'conn> {
                     crate::ErrorKind::NotADirectory,
                     "The given destination path is not a directory.",
                 ));
+            } else if src_path_is_empty {
+                let list_opts = ListOptions::new().by_depth();
+                self.list_with(&list_opts)?
             } else {
                 let list_opts = ListOptions::new().descendants_of(src_root).by_depth();
-                self.list_with(&list_opts)?.collect::<Result<Vec<_>, _>>()?
+                self.list_with(&list_opts)?
             }
+        } else if src_path_is_empty {
+            return Err(crate::Error::msg(
+                crate::ErrorKind::InvalidArgs,
+                "Cannot use an empty path as the source directory unless archiving the children of the source directory."
+            ));
         } else {
             let src_metadata = self.open(src_root)?.metadata()?;
             self.extract_file(src_root, dest_root, &src_metadata, mode_adapter)?;
 
             let list_opts = ListOptions::new().descendants_of(src_root).by_depth();
-            self.list_with(&list_opts)?.collect::<Result<Vec<_>, _>>()?
+            self.list_with(&list_opts)?
         };
 
-        for entry in entries {
+        // We need to collect the entries into a vector because iterating over the entries will
+        // borrow the `Archive`, and we need to borrow it mutably to copy the file contents.
+        for entry in entries.collect::<Result<Vec<_>, _>>()? {
             let dest_path = rebase_path(&entry.path, dest_root, src_root);
             self.extract_file(entry.path(), &dest_path, entry.metadata(), mode_adapter)?;
         }

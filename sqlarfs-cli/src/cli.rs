@@ -54,6 +54,14 @@ pub struct Extract {
     /// The path of a specific file or directory in the archive to extract.
     #[arg(long)]
     pub source: Option<PathBuf>,
+
+    /// Extract given directory recursively.
+    #[arg(long = "recursive", default_value = "true")]
+    _recursive: bool,
+
+    /// Don't extract the given directory recursively.
+    #[arg(long, default_value = "false", overrides_with = "_recursive")]
+    pub no_recursive: bool,
 }
 
 #[derive(Args, Debug, Clone)]

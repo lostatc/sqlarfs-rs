@@ -92,6 +92,7 @@ impl ArchiveOptions {
 #[derive(Debug, Clone)]
 pub struct ExtractOptions {
     children: bool,
+    recursive: bool,
 }
 
 impl Default for ExtractOptions {
@@ -103,7 +104,10 @@ impl Default for ExtractOptions {
 impl ExtractOptions {
     /// Create a new [`ExtractOptions`] with default settings.
     pub fn new() -> Self {
-        Self { children: false }
+        Self {
+            children: false,
+            recursive: true,
+        }
     }
 
     /// Extract the children of the source directory instead of the source directory itself.
@@ -116,6 +120,16 @@ impl ExtractOptions {
     /// The default is `false`.
     pub fn children(mut self, children: bool) -> Self {
         self.children = children;
+        self
+    }
+
+    /// Extract the source directory recursively.
+    ///
+    /// This has no effect if the source is a regular file.
+    ///
+    /// The default is `true`.
+    pub fn recursive(mut self, recursive: bool) -> Self {
+        self.recursive = recursive;
         self
     }
 }
@@ -355,53 +369,59 @@ impl<'conn> Archive<'conn> {
     {
         let src_path_is_empty = src_root == Path::new("");
 
-        let entries = if opts.children {
-            if !src_path_is_empty && self.open(src_root)?.metadata()?.kind() != FileType::Dir {
-                return Err(crate::Error::msg(
-                    crate::ErrorKind::NotADirectory,
-                    "The given source path is not a directory.",
-                ));
-            // TODO: Reading the file metadata at this point presents a race condition, because the
-            // file could change out from under us between now and when we start extracting files
-            // into it. However, this might be the best we can reasonably do.
-            //
-            // Ideally, once `io_error_more` is stable, we match on the
-            // `io::ErrorKind::NotADirectory` returned when we try to extract a file into this
-            // directory.
-            //
-            // However, as of time of writing, that error kind is not thrown on Windows; the
-            // Windows API doesn't seem to distinguish between these cases:
-            //
-            // 1. The parent of the dest path doesn't exist.
-            // 2. The parent of the dest path exists but is not a directory.
-            } else if !read_metadata(dest_root)?.is_dir() {
-                return Err(crate::Error::msg(
-                    crate::ErrorKind::NotADirectory,
-                    "The given destination path is not a directory.",
-                ));
-            } else if src_path_is_empty {
-                let list_opts = ListOptions::new().by_depth();
-                self.list_with(&list_opts)?
-            } else {
-                let list_opts = ListOptions::new().descendants_of(src_root).by_depth();
-                self.list_with(&list_opts)?
-            }
-        } else if src_path_is_empty {
+        if !opts.children && src_path_is_empty {
             return Err(crate::Error::msg(
                 crate::ErrorKind::InvalidArgs,
                 "Cannot use an empty path as the source directory unless archiving the children of the source directory."
             ));
-        } else {
+        }
+
+        if opts.children
+            && !src_path_is_empty
+            && self.open(src_root)?.metadata()?.kind() != FileType::Dir
+        {
+            return Err(crate::Error::msg(
+                crate::ErrorKind::NotADirectory,
+                "The given source path is not a directory.",
+            ));
+        }
+
+        // TODO: Reading the file metadata at this point presents a race condition, because the
+        // file could change out from under us between now and when we start extracting files
+        // into it. However, this might be the best we can reasonably do.
+        //
+        // Ideally, once `io_error_more` is stable, we match on the
+        // `io::ErrorKind::NotADirectory` returned when we try to extract a file into this
+        // directory.
+        //
+        // However, as of time of writing, that error kind is not thrown on Windows; the
+        // Windows API doesn't seem to distinguish between these cases:
+        //
+        // 1. The parent of the dest path doesn't exist.
+        // 2. The parent of the dest path exists but is not a directory.
+        if opts.children && !read_metadata(dest_root)?.is_dir() {
+            return Err(crate::Error::msg(
+                crate::ErrorKind::NotADirectory,
+                "The given destination path is not a directory.",
+            ));
+        }
+
+        if !opts.children {
             let src_metadata = self.open(src_root)?.metadata()?;
             self.extract_file(src_root, dest_root, &src_metadata, mode_adapter)?;
+        }
 
-            let list_opts = ListOptions::new().descendants_of(src_root).by_depth();
-            self.list_with(&list_opts)?
+        let list_opts = if opts.recursive {
+            ListOptions::new().descendants_of(src_root).by_depth()
+        } else {
+            ListOptions::new().children_of(src_root).by_depth()
         };
 
         // We need to collect the entries into a vector because iterating over the entries will
         // borrow the `Archive`, and we need to borrow it mutably to copy the file contents.
-        for entry in entries.collect::<Result<Vec<_>, _>>()? {
+        let entries = self.list_with(&list_opts)?.collect::<Result<Vec<_>, _>>()?;
+
+        for entry in entries {
             let dest_path = rebase_path(&entry.path, dest_root, src_root);
             self.extract_file(entry.path(), &dest_path, entry.metadata(), mode_adapter)?;
         }

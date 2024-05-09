@@ -50,9 +50,9 @@ impl Extract {
             Some(source) => archive.extract_with(
                 source,
                 &self.dest.join(source.file_name().expect("The source directory does not have a filename, but we should have already checked for this. This is a bug.")),
-                &ExtractOptions::new().children(false),
+                &ExtractOptions::new().children(false).recursive(!self.no_recursive),
             ),
-            None => archive.extract_with("", &self.dest, &ExtractOptions::new().children(true)),
+            None => archive.extract_with("", &self.dest, &ExtractOptions::new().children(true).recursive(!self.no_recursive)),
         })?;
 
         Ok(())

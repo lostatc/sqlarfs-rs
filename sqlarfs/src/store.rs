@@ -405,16 +405,19 @@ impl<'conn> Store<'conn> {
             JOIN
                 path_segments AS p ON s.name = p.name
             WHERE
-                iif(?1 IS NULL, true, s.name GLOB ?1 || '/?*')
+                iif(?1 IS NULL OR ?1 = '', true, s.name GLOB ?1 || '/?*')
                 AND iif(?3 IS NULL, true, (s.mode & ?2) = ?3)
                 AND iif(?4 IS NULL, true, (s.mode & ?2) = ?4)
-                AND iif(?5 IS NULL, true, s.name GLOB ?5 || '/?*' AND NOT s.name GLOB ?5 || '/?*/*')
+                AND CASE
+                    WHEN ?5 IS NULL THEN true
+                    WHEN ?5 = '' THEN NOT s.name GLOB '*/*'
+                    ELSE s.name GLOB ?5 || '/?*' AND NOT s.name GLOB ?5 || '/?*/*'
+                END
             ORDER BY
                 {order_column} {direction}
         "
         ))?;
 
-        dbg!(&opts.ancestor);
         let params: Vec<Box<dyn rusqlite::ToSql>> = vec![
             Box::new(
                 opts.ancestor

@@ -439,7 +439,7 @@ fn extracting_preserves_file_mtime() -> sqlarfs::Result<()> {
 //
 
 #[test]
-fn extracting_fails_when_source_is_root_and_children_is_false() -> sqlarfs::Result<()> {
+fn extracting_fails_when_source_is_root_and_children_is_false_errors() -> sqlarfs::Result<()> {
     let temp_dir = tempfile::tempdir()?;
 
     connection()?.exec(|archive| {
@@ -485,7 +485,8 @@ fn extract_files_from_archive_root() -> sqlarfs::Result<()> {
 
     connection()?.exec(|archive| {
         archive.open("file1")?.create_file()?;
-        archive.open("file2")?.create_file()?;
+        archive.open("dir")?.create_dir()?;
+        archive.open("dir/file2")?.create_file()?;
 
         let opts = ExtractOptions::new().children(true);
         expect!(archive.extract_with("", &dest_dir, &opts)).to(be_ok());
@@ -494,7 +495,11 @@ fn extract_files_from_archive_root() -> sqlarfs::Result<()> {
             .to(be_ok())
             .map(|metadata| metadata.is_file())
             .to(be_true());
-        expect!(dest_dir.path().join("file2").metadata())
+        expect!(dest_dir.path().join("dir").metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.is_dir())
+            .to(be_true());
+        expect!(dest_dir.path().join("dir/file2").metadata())
             .to(be_ok())
             .map(|metadata| metadata.is_file())
             .to(be_true());
@@ -559,6 +564,122 @@ fn extract_directory_children_when_source_is_file_errors() -> sqlarfs::Result<()
         let opts = ExtractOptions::new().children(true);
         expect!(archive.extract_with("file", &dest_dir, &opts))
             .to(have_error_kind(ErrorKind::NotADirectory));
+
+        Ok(())
+    })
+}
+
+//
+// `ExtractOptions::recursive`
+//
+
+#[test]
+fn extract_directory_with_children_non_recursively() -> sqlarfs::Result<()> {
+    let temp_dir = tempfile::tempdir()?;
+    let dest_path = temp_dir.path().join("dest");
+
+    connection()?.exec(|archive| {
+        archive.open("dir")?.create_dir()?;
+        archive.open("dir/file1")?.create_file()?;
+        archive.open("dir/dir2")?.create_dir()?;
+        archive.open("dir/dir2/file2")?.create_file()?;
+
+        let opts = ExtractOptions::new().recursive(false);
+        expect!(archive.extract_with("dir", &dest_path, &opts)).to(be_ok());
+
+        expect!(dest_path.metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.is_dir())
+            .to(be_true());
+        expect!(dest_path.join("file1").metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.is_file())
+            .to(be_true());
+        expect!(dest_path.join("dir2").metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.is_dir())
+            .to(be_true());
+        expect!(dest_path.join("dir2/file2").try_exists())
+            .to(be_ok())
+            .to(be_false());
+
+        Ok(())
+    })
+}
+
+#[test]
+fn extract_regualar_file_non_recursively() -> sqlarfs::Result<()> {
+    let temp_dir = tempfile::tempdir()?;
+    let dest_path = temp_dir.path().join("dest");
+
+    connection()?.exec(|archive| {
+        archive.open("file")?.create_file()?;
+
+        let opts = ExtractOptions::new().recursive(false);
+        expect!(archive.extract_with("file", &dest_path, &opts)).to(be_ok());
+
+        expect!(dest_path.metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.is_file())
+            .to(be_true());
+
+        Ok(())
+    })
+}
+
+#[test]
+fn extract_directory_children_to_dir_non_recursively() -> sqlarfs::Result<()> {
+    let dest_dir = tempfile::tempdir()?;
+
+    connection()?.exec(|archive| {
+        archive.open("file1")?.create_file()?;
+        archive.open("dir")?.create_dir()?;
+        archive.open("dir/file2")?.create_file()?;
+        archive.open("dir/dir2")?.create_dir()?;
+        archive.open("dir/dir2/file3")?.create_dir()?;
+
+        let opts = ExtractOptions::new().children(true).recursive(false);
+        expect!(archive.extract_with("dir", &dest_dir, &opts)).to(be_ok());
+
+        expect!(dest_dir.path().join("file2").metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.is_file())
+            .to(be_true());
+        expect!(dest_dir.path().join("dir2").metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.is_dir())
+            .to(be_true());
+        expect!(dest_dir.path().join("dir2/file3").try_exists())
+            .to(be_ok())
+            .to(be_false());
+
+        Ok(())
+    })
+}
+
+#[test]
+fn extract_files_from_archive_root_non_recursively() -> sqlarfs::Result<()> {
+    let dest_dir = tempfile::tempdir()?;
+
+    connection()?.exec(|archive| {
+        archive.open("file1")?.create_file()?;
+        archive.open("dir")?.create_dir()?;
+        archive.open("dir/file2")?.create_file()?;
+
+        let opts = ExtractOptions::new().children(true).recursive(false);
+        expect!(archive.extract_with("", &dest_dir, &opts)).to(be_ok());
+
+        expect!(dest_dir.path().join("file1").metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.is_file())
+            .to(be_true());
+        expect!(dest_dir.path().join("dir").metadata())
+            .to(be_ok())
+            .map(|metadata| metadata.is_dir())
+            .to(be_true());
+        expect!(dest_dir.path().join("dir/file2").try_exists())
+            .to(be_ok())
+            .to(be_false());
 
         Ok(())
     })

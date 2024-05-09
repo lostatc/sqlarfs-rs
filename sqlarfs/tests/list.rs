@@ -186,7 +186,7 @@ fn list_with_default_opts() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn list_with_filter_immediate_children() -> sqlarfs::Result<()> {
+fn list_with_filter_immediate_children_of_dir() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         archive.open("dir1")?.create_dir()?;
         archive.open("dir1/file1")?.create_file()?;
@@ -219,7 +219,41 @@ fn list_with_filter_immediate_children() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn list_with_filter_descendants() -> sqlarfs::Result<()> {
+fn list_with_filter_immediate_children_of_regular_file() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        archive.open("file")?.create_file()?;
+
+        let paths = archive
+            .list_with(&ListOptions::new().children_of("file"))?
+            .map(|entry| Ok(entry?.into_path()))
+            .collect::<sqlarfs::Result<Vec<_>>>()?;
+
+        expect!(paths).to(be_empty());
+
+        Ok(())
+    })
+}
+
+#[test]
+fn list_with_filter_immediate_children_of_archive_root() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        archive.open("file1")?.create_file()?;
+        archive.open("dir")?.create_dir()?;
+        archive.open("dir/file2")?.create_file()?;
+
+        let paths = archive
+            .list_with(&ListOptions::new().children_of(""))?
+            .map(|entry| Ok(entry?.into_path()))
+            .collect::<sqlarfs::Result<Vec<_>>>()?;
+
+        expect!(paths).to(consist_of(&[PathBuf::from("file1"), PathBuf::from("dir")]));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn list_with_filter_descendants_of_dir() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         archive.open("a")?.create_dir()?;
         archive.open("one")?.create_dir()?;
@@ -271,6 +305,28 @@ fn list_with_filter_descendants_of_regular_file() -> sqlarfs::Result<()> {
             .collect::<sqlarfs::Result<Vec<_>>>()?;
 
         expect!(paths).to(be_empty());
+
+        Ok(())
+    })
+}
+
+#[test]
+fn list_with_filter_descendants_of_archive_root() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        archive.open("file1")?.create_file()?;
+        archive.open("dir")?.create_dir()?;
+        archive.open("dir/file2")?.create_file()?;
+
+        let paths = archive
+            .list_with(&ListOptions::new().descendants_of(""))?
+            .map(|entry| Ok(entry?.into_path()))
+            .collect::<sqlarfs::Result<Vec<_>>>()?;
+
+        expect!(paths).to(consist_of(&[
+            PathBuf::from("file1"),
+            PathBuf::from("dir"),
+            PathBuf::from("dir/file2"),
+        ]));
 
         Ok(())
     })

@@ -58,6 +58,8 @@ impl ListOptions {
     ///
     /// This returns all descendants, not just immediate children.
     ///
+    /// Passing an empty path will list all files in the archive.
+    ///
     /// This does not include the `directory` itself in the list of descendants.
     ///
     /// If `directory` is a regular file, the returned list will be empty.
@@ -75,6 +77,8 @@ impl ListOptions {
     }
 
     /// Only return files that are immediate children of the given `directory`.
+    ///
+    /// Passing an empty path will list all files in the root of the archive.
     ///
     /// This does not include the `directory` itself in the list of descendants.
     ///

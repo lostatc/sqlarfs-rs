@@ -3,11 +3,62 @@ mod common;
 use std::env;
 use std::path::Path;
 
+use clap::Parser;
 use serial_test::serial;
 use sqlarfs::Connection;
-use xpct::{be_directory, be_err, be_existing_file, be_regular_file, expect};
+use sqlarfs_cli::{Cli, Commands, Extract};
+use xpct::{
+    be_directory, be_err, be_existing_file, be_regular_file, expect, match_pattern, pattern,
+};
 
 use common::{command, root_path};
+
+#[test]
+fn recursive_flag_can_be_overridden() -> eyre::Result<()> {
+    let cli = Cli::parse_from(["sqlar", "extract", "nonexistent.sqlar"]);
+    expect!(cli.command).to(match_pattern(pattern!(Commands::Extract(Extract {
+        no_recursive: false,
+        ..
+    }))));
+
+    let cli = Cli::parse_from(["sqlar", "extract", "--recursive", "nonexistent.sqlar"]);
+    expect!(cli.command).to(match_pattern(pattern!(Commands::Extract(Extract {
+        no_recursive: false,
+        ..
+    }))));
+
+    let cli = Cli::parse_from(["sqlar", "extract", "--no-recursive", "nonexistent.sqlar"]);
+    expect!(cli.command).to(match_pattern(pattern!(Commands::Extract(Extract {
+        no_recursive: true,
+        ..
+    }))));
+
+    let cli = Cli::parse_from([
+        "sqlar",
+        "extract",
+        "--recursive",
+        "--no-recursive",
+        "nonexistent.sqlar",
+    ]);
+    expect!(cli.command).to(match_pattern(pattern!(Commands::Extract(Extract {
+        no_recursive: true,
+        ..
+    }))));
+
+    let cli = Cli::parse_from([
+        "sqlar",
+        "extract",
+        "--no-recursive",
+        "--recursive",
+        "nonexistent.sqlar",
+    ]);
+    expect!(cli.command).to(match_pattern(pattern!(Commands::Extract(Extract {
+        no_recursive: false,
+        ..
+    }))));
+
+    Ok(())
+}
 
 #[test]
 #[serial(change_directory)]

@@ -153,6 +153,19 @@ fn specifying_mutually_exclusive_file_type_options_errors() -> sqlarfs::Result<(
 }
 
 #[test]
+fn specifying_mutually_exclusive_descendants_options_errors() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        let opts = ListOptions::new().descendants_of("a").children_of("a");
+        expect!(archive.list_with(&opts)).to(have_error_kind(ErrorKind::InvalidArgs));
+
+        let opts = ListOptions::new().children_of("a").descendants_of("a");
+        expect!(archive.list_with(&opts)).to(have_error_kind(ErrorKind::InvalidArgs));
+
+        Ok(())
+    })
+}
+
+#[test]
 fn list_with_default_opts() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         archive.open("file1")?.create_file()?;
@@ -167,6 +180,39 @@ fn list_with_default_opts() -> sqlarfs::Result<()> {
                 PathBuf::from("file2"),
                 PathBuf::from("file3"),
             ]));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn list_with_filter_immediate_children() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        archive.open("dir1")?.create_dir()?;
+        archive.open("dir1/file1")?.create_file()?;
+        archive.open("dir1/dir2")?.create_dir()?;
+        archive.open("dir1/dir2/file2")?.create_file()?;
+        archive.open("file3")?.create_file()?;
+
+        let paths = archive
+            .list_with(&ListOptions::new().children_of("dir1"))?
+            .map(|entry| Ok(entry?.into_path()))
+            .collect::<sqlarfs::Result<Vec<_>>>()?;
+
+        expect!(&paths).to_not(why(
+            contain_element(PathBuf::from("dir1/dir2/file2")),
+            "This is a descendant of `dir1` but not an immediate child.",
+        ));
+
+        expect!(&paths).to_not(why(
+            contain_element(PathBuf::from("file3")),
+            "This is not a descendant of `dir1`.",
+        ));
+
+        expect!(paths).to(consist_of(&[
+            PathBuf::from("dir1/file1"),
+            PathBuf::from("dir1/dir2"),
+        ]));
 
         Ok(())
     })

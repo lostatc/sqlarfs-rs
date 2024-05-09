@@ -405,20 +405,21 @@ impl<'conn> Store<'conn> {
             JOIN
                 path_segments AS p ON s.name = p.name
             WHERE
-                iif(?1 = '', true, s.name GLOB ?1 || '/?*')
+                iif(?1 IS NULL, true, s.name GLOB ?1 || '/?*')
                 AND iif(?3 IS NULL, true, (s.mode & ?2) = ?3)
                 AND iif(?4 IS NULL, true, (s.mode & ?2) = ?4)
+                AND iif(?5 IS NULL, true, s.name GLOB ?5 || '/?*' AND NOT s.name GLOB ?5 || '/?*/*')
             ORDER BY
                 {order_column} {direction}
         "
         ))?;
 
+        dbg!(&opts.ancestor);
         let params: Vec<Box<dyn rusqlite::ToSql>> = vec![
             Box::new(
                 opts.ancestor
                     .as_ref()
-                    .map(|ancestor| ancestor.to_string_lossy().into_owned())
-                    .unwrap_or_default(),
+                    .map(|ancestor| ancestor.to_string_lossy().into_owned()),
             ),
             Box::new(TYPE_MASK),
             Box::new(if let Some(ListSort::Size) = opts.sort {
@@ -432,6 +433,11 @@ impl<'conn> Store<'conn> {
                 Some(FileType::Symlink) => Some(SYMLINK_MODE),
                 None => None,
             }),
+            Box::new(
+                opts.parent
+                    .as_ref()
+                    .map(|parent| parent.to_string_lossy().into_owned()),
+            ),
         ];
 
         let map_func: ListMapFunc = Box::new(|row| {

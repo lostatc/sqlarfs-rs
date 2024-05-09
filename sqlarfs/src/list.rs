@@ -29,6 +29,7 @@ pub struct ListOptions {
     pub(super) direction: Option<SortDirection>,
     pub(super) sort: Option<ListSort>,
     pub(super) ancestor: Option<PathBuf>,
+    pub(super) parent: Option<PathBuf>,
     pub(super) file_type: Option<FileType>,
     pub(super) is_invalid: bool,
 }
@@ -47,6 +48,7 @@ impl ListOptions {
             direction: None,
             sort: None,
             ancestor: None,
+            parent: None,
             file_type: None,
             is_invalid: false,
         }
@@ -59,8 +61,33 @@ impl ListOptions {
     /// This does not include the `directory` itself in the list of descendants.
     ///
     /// If `directory` is a regular file, the returned list will be empty.
+    ///
+    /// This is mutually exclusive with [`ListOptions::children_of`].
     pub fn descendants_of<P: AsRef<Path>>(mut self, directory: P) -> Self {
+        if self.parent.is_some() {
+            self.is_invalid = true;
+            return self;
+        }
+
         self.ancestor = Some(directory.as_ref().to_path_buf());
+
+        self
+    }
+
+    /// Only return files that are immediate children of the given `directory`.
+    ///
+    /// This does not include the `directory` itself in the list of descendants.
+    ///
+    /// If `directory` is a regular file, the returned list will be empty.
+    ///
+    /// This is mutually exclusive with [`ListOptions::descendants_of`].
+    pub fn children_of<P: AsRef<Path>>(mut self, directory: P) -> Self {
+        if self.ancestor.is_some() {
+            self.is_invalid = true;
+            return self;
+        }
+
+        self.parent = Some(directory.as_ref().to_path_buf());
 
         self
     }

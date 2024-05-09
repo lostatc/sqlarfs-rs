@@ -581,8 +581,6 @@ fn extract_directory_with_children_non_recursively() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         archive.open("dir")?.create_dir()?;
         archive.open("dir/file1")?.create_file()?;
-        archive.open("dir/dir2")?.create_dir()?;
-        archive.open("dir/dir2/file2")?.create_file()?;
 
         let opts = ExtractOptions::new().recursive(false);
         expect!(archive.extract_with("dir", &dest_path, &opts)).to(be_ok());
@@ -591,15 +589,7 @@ fn extract_directory_with_children_non_recursively() -> sqlarfs::Result<()> {
             .to(be_ok())
             .map(|metadata| metadata.is_dir())
             .to(be_true());
-        expect!(dest_path.join("file1").metadata())
-            .to(be_ok())
-            .map(|metadata| metadata.is_file())
-            .to(be_true());
-        expect!(dest_path.join("dir2").metadata())
-            .to(be_ok())
-            .map(|metadata| metadata.is_dir())
-            .to(be_true());
-        expect!(dest_path.join("dir2/file2").try_exists())
+        expect!(dest_path.join("file1").try_exists())
             .to(be_ok())
             .to(be_false());
 

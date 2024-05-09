@@ -411,6 +411,10 @@ impl<'conn> Archive<'conn> {
             self.extract_file(src_root, dest_root, &src_metadata, mode_adapter)?;
         }
 
+        if !opts.children && !opts.recursive {
+            return Ok(());
+        }
+
         let list_opts = if opts.recursive {
             ListOptions::new().descendants_of(src_root).by_depth()
         } else {

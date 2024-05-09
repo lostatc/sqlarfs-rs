@@ -3,7 +3,9 @@ use std::time::{Duration, SystemTime};
 
 use common::{connection, have_error_kind, truncate_mtime};
 use sqlarfs::{ErrorKind, ExtractOptions, FileMode};
-use xpct::{be_false, be_ok, be_true, equal, expect};
+use xpct::{
+    be_directory, be_existing_file, be_false, be_ok, be_regular_file, be_true, equal, expect,
+};
 
 mod common;
 
@@ -255,11 +257,7 @@ fn extract_regular_file() -> sqlarfs::Result<()> {
 
         expect!(archive.extract("file", &dest_path)).to(be_ok());
 
-        expect!(dest_path.exists()).to(be_true());
-        expect!(dest_path.metadata())
-            .to(be_ok())
-            .map(|metadata| metadata.is_file())
-            .to(be_true());
+        expect!(dest_path).to(be_regular_file());
 
         Ok(())
     })
@@ -268,6 +266,8 @@ fn extract_regular_file() -> sqlarfs::Result<()> {
 #[test]
 #[cfg(unix)]
 fn extract_symlink() -> sqlarfs::Result<()> {
+    use xpct::be_symlink;
+
     let temp_dir = tempfile::tempdir()?;
     let symlink_target = tempfile::NamedTempFile::new()?;
     let dest_path = temp_dir.path().join("dest");
@@ -279,11 +279,7 @@ fn extract_symlink() -> sqlarfs::Result<()> {
 
         expect!(archive.extract("symlink", &dest_path)).to(be_ok());
 
-        expect!(dest_path.exists()).to(be_true());
-        expect!(dest_path.symlink_metadata())
-            .to(be_ok())
-            .map(|metadata| metadata.file_type().is_symlink())
-            .to(be_true());
+        expect!(&dest_path).to(be_symlink());
         expect!(fs::read_link(dest_path))
             .to(be_ok())
             .to(equal(symlink_target.path()));
@@ -344,10 +340,7 @@ fn extract_empty_directory() -> sqlarfs::Result<()> {
         expect!(archive.extract("dir", &dest_path)).to(be_ok());
 
         expect!(dest_path.exists()).to(be_true());
-        expect!(dest_path.metadata())
-            .to(be_ok())
-            .map(|metadata| metadata.is_dir())
-            .to(be_true());
+        expect!(dest_path).to(be_directory());
 
         Ok(())
     })
@@ -365,23 +358,9 @@ fn extract_directory_with_children() -> sqlarfs::Result<()> {
 
         expect!(archive.extract("dir", &dest_dir)).to(be_ok());
 
-        expect!(dest_dir.exists()).to(be_true());
-        expect!(dest_dir.metadata())
-            .to(be_ok())
-            .map(|metadata| metadata.is_dir())
-            .to(be_true());
-
-        expect!(dest_dir.join("child-file").exists()).to(be_true());
-        expect!(dest_dir.join("child-file").metadata())
-            .to(be_ok())
-            .map(|metadata| metadata.is_file())
-            .to(be_true());
-
-        expect!(dest_dir.join("child-dir").exists()).to(be_true());
-        expect!(dest_dir.join("child-dir").metadata())
-            .to(be_ok())
-            .map(|metadata| metadata.is_dir())
-            .to(be_true());
+        expect!(&dest_dir).to(be_directory());
+        expect!(dest_dir.join("child-file")).to(be_regular_file());
+        expect!(dest_dir.join("child-dir")).to(be_directory());
 
         Ok(())
     })
@@ -466,14 +445,8 @@ fn extract_directory_children_to_dir() -> sqlarfs::Result<()> {
         let opts = ExtractOptions::new().children(true);
         expect!(archive.extract_with("dir", &dest_dir, &opts)).to(be_ok());
 
-        expect!(dest_dir.path().join("file1").metadata())
-            .to(be_ok())
-            .map(|metadata| metadata.is_file())
-            .to(be_true());
-        expect!(dest_dir.path().join("file2").metadata())
-            .to(be_ok())
-            .map(|metadata| metadata.is_file())
-            .to(be_true());
+        expect!(dest_dir.path().join("file1")).to(be_regular_file());
+        expect!(dest_dir.path().join("file2")).to(be_regular_file());
 
         Ok(())
     })
@@ -491,18 +464,9 @@ fn extract_files_from_archive_root() -> sqlarfs::Result<()> {
         let opts = ExtractOptions::new().children(true);
         expect!(archive.extract_with("", &dest_dir, &opts)).to(be_ok());
 
-        expect!(dest_dir.path().join("file1").metadata())
-            .to(be_ok())
-            .map(|metadata| metadata.is_file())
-            .to(be_true());
-        expect!(dest_dir.path().join("dir").metadata())
-            .to(be_ok())
-            .map(|metadata| metadata.is_dir())
-            .to(be_true());
-        expect!(dest_dir.path().join("dir/file2").metadata())
-            .to(be_ok())
-            .map(|metadata| metadata.is_file())
-            .to(be_true());
+        expect!(dest_dir.path().join("file1")).to(be_regular_file());
+        expect!(dest_dir.path().join("dir")).to(be_directory());
+        expect!(dest_dir.path().join("dir/file2")).to(be_regular_file());
 
         Ok(())
     })
@@ -585,13 +549,8 @@ fn extract_directory_with_children_non_recursively() -> sqlarfs::Result<()> {
         let opts = ExtractOptions::new().recursive(false);
         expect!(archive.extract_with("dir", &dest_path, &opts)).to(be_ok());
 
-        expect!(dest_path.metadata())
-            .to(be_ok())
-            .map(|metadata| metadata.is_dir())
-            .to(be_true());
-        expect!(dest_path.join("file1").try_exists())
-            .to(be_ok())
-            .to(be_false());
+        expect!(&dest_path).to(be_directory());
+        expect!(dest_path.join("file1")).to_not(be_existing_file());
 
         Ok(())
     })
@@ -608,10 +567,7 @@ fn extract_regualar_file_non_recursively() -> sqlarfs::Result<()> {
         let opts = ExtractOptions::new().recursive(false);
         expect!(archive.extract_with("file", &dest_path, &opts)).to(be_ok());
 
-        expect!(dest_path.metadata())
-            .to(be_ok())
-            .map(|metadata| metadata.is_file())
-            .to(be_true());
+        expect!(dest_path).to(be_regular_file());
 
         Ok(())
     })
@@ -626,22 +582,14 @@ fn extract_directory_children_to_dir_non_recursively() -> sqlarfs::Result<()> {
         archive.open("dir")?.create_dir()?;
         archive.open("dir/file2")?.create_file()?;
         archive.open("dir/dir2")?.create_dir()?;
-        archive.open("dir/dir2/file3")?.create_dir()?;
+        archive.open("dir/dir2/file3")?.create_file()?;
 
         let opts = ExtractOptions::new().children(true).recursive(false);
         expect!(archive.extract_with("dir", &dest_dir, &opts)).to(be_ok());
 
-        expect!(dest_dir.path().join("file2").metadata())
-            .to(be_ok())
-            .map(|metadata| metadata.is_file())
-            .to(be_true());
-        expect!(dest_dir.path().join("dir2").metadata())
-            .to(be_ok())
-            .map(|metadata| metadata.is_dir())
-            .to(be_true());
-        expect!(dest_dir.path().join("dir2/file3").try_exists())
-            .to(be_ok())
-            .to(be_false());
+        expect!(dest_dir.path().join("file2")).to(be_regular_file());
+        expect!(dest_dir.path().join("dir2")).to(be_directory());
+        expect!(dest_dir.path().join("dir2/file3")).to_not(be_existing_file());
 
         Ok(())
     })
@@ -659,17 +607,9 @@ fn extract_files_from_archive_root_non_recursively() -> sqlarfs::Result<()> {
         let opts = ExtractOptions::new().children(true).recursive(false);
         expect!(archive.extract_with("", &dest_dir, &opts)).to(be_ok());
 
-        expect!(dest_dir.path().join("file1").metadata())
-            .to(be_ok())
-            .map(|metadata| metadata.is_file())
-            .to(be_true());
-        expect!(dest_dir.path().join("dir").metadata())
-            .to(be_ok())
-            .map(|metadata| metadata.is_dir())
-            .to(be_true());
-        expect!(dest_dir.path().join("dir/file2").try_exists())
-            .to(be_ok())
-            .to(be_false());
+        expect!(dest_dir.path().join("file1")).to(be_regular_file());
+        expect!(dest_dir.path().join("dir")).to(be_directory());
+        expect!(dest_dir.path().join("dir/file2")).to_not(be_existing_file());
 
         Ok(())
     })

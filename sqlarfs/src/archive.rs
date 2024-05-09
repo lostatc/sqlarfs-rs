@@ -119,8 +119,8 @@ impl<'conn> Archive<'conn> {
     /// - [`NotFound`]: There is no file or directory at `from`.
     /// - [`NotFound`]: The parent directory of `to` does not exist.
     /// - [`NotFound`]: [`ArchiveOptions::children`] was `true` and `to` does not exist.
-    /// - [`NotADirectory`]: [`ArchiveOptions::children`] was `true` and the file at `to` already
-    /// exists and is not a directory.
+    /// - [`NotADirectory`]: [`ArchiveOptions::children`] was `true` and the file at `to` exists
+    /// but is not a directory.
     /// - [`AlreadyExists`]: One of the files in `from` would overwrite an existing file in the
     /// archive.
     ///
@@ -160,8 +160,8 @@ impl<'conn> Archive<'conn> {
     /// - [`NotFound`]: There is no file or directory in the archive at `from`.
     /// - [`NotFound`]: The parent directory of `to` does not exist.
     /// - [`NotFound`]: [`ExtractOptions::children`] was `true` and `to` does not exist.
-    /// - [`NotADirectory`]: [`ExtractOptions::children`] was `true` and the file at `to` is not a
-    /// directory.
+    /// - [`NotADirectory`]: [`ExtractOptions::children`] was `true` and the file at `to` exists
+    /// but is not a directory.
     /// - [`NotADirectory`]: [`ExtractOptions::children`] was `true` and the file at `from` is not
     /// a directory.
     /// - [`AlreadyExists`]: One of the files in `from` would overwrite an existing file in the

@@ -85,7 +85,7 @@ impl ArchiveOptions {
 
 /// Options for extracting files in an [`Archive`] into the filesystem.
 ///
-/// This is used with [`Extract::extract_with`].
+/// This is used with [`Archive::extract_with`].
 ///
 /// [`Archive`]: crate::Archive
 /// [`Archive::archive_with`]: crate::Archive::archive_with

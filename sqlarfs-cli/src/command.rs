@@ -3,7 +3,6 @@ use std::path::Path;
 use sqlarfs::{ArchiveOptions, Connection, ExtractOptions, OpenOptions};
 
 use super::cli::{Cli, Commands, Create, Extract};
-use super::error::user_err;
 
 const SQLAR_EXTENSION: &str = "sqlar";
 
@@ -13,8 +12,10 @@ fn file_name(path: &Path) -> Option<&Path> {
 
 impl Create {
     pub fn run(&self) -> eyre::Result<()> {
-        let source_filename =
-            file_name(&self.source).ok_or(user_err!("The source path must have a filename."))?;
+        let source_filename = file_name(&self.source).ok_or(sqlarfs::Error::msg(
+            sqlarfs::ErrorKind::InvalidArgs,
+            "The source path must have a filename.",
+        ))?;
 
         let archive_filename = self.archive.to_owned().unwrap_or_else(|| {
             let mut filename = source_filename.to_owned();
@@ -42,7 +43,11 @@ impl Extract {
 
         if let Some(source) = &self.source {
             if source.file_name().is_none() {
-                return Err(user_err!("The source path must have a filename."));
+                return Err(sqlarfs::Error::msg(
+                    sqlarfs::ErrorKind::InvalidArgs,
+                    "The source path must have a filename.",
+                )
+                .into());
             }
         }
 

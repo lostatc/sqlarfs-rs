@@ -302,7 +302,7 @@ impl<'conn> Store<'conn> {
                 },
             )
             .optional()?
-            .ok_or(crate::ErrorKind::NotFound.into())
+            .ok_or(crate::Error::msg(crate::ErrorKind::NotFound, format!("The given file was not found in the archive: {}", path)))
     }
 
     pub fn set_mode(&self, path: &str, mode: Option<FileMode>) -> crate::Result<()> {

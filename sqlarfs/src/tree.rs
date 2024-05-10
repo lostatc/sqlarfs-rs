@@ -254,7 +254,15 @@ impl<'conn> Archive<'conn> {
             ));
         }
 
-        let src_is_dir = read_metadata(src_root)?.is_dir();
+        // Wrap the error to provide a more helpful error message.
+        let metadata = read_metadata(src_root).map_err(|err| {
+            err.context(format!(
+                "Could not find the given source file: {}",
+                src_root.to_string_lossy()
+            ))
+        })?;
+
+        let src_is_dir = metadata.is_dir();
 
         let paths = if opts.children && !src_is_dir {
             return Err(crate::Error::msg(
@@ -396,11 +404,20 @@ impl<'conn> Archive<'conn> {
         //
         // 1. The parent of the dest path doesn't exist.
         // 2. The parent of the dest path exists but is not a directory.
-        if opts.children && !read_metadata(dest_root)?.is_dir() {
-            return Err(crate::Error::msg(
-                crate::ErrorKind::NotADirectory,
-                "The given destination path is not a directory.",
-            ));
+        if opts.children {
+            let metadata = read_metadata(dest_root).map_err(|err| {
+                err.context(format!(
+                    "Could not find the given destination directory: {}",
+                    dest_root.to_string_lossy()
+                ))
+            })?;
+
+            if !metadata.is_dir() {
+                return Err(crate::Error::msg(
+                    crate::ErrorKind::NotADirectory,
+                    "The given destination path is not a directory.",
+                ));
+            }
         }
 
         if !opts.children {

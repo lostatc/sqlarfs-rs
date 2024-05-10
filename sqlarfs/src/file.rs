@@ -222,13 +222,15 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     pub fn create_file(&mut self) -> crate::Result<()> {
         self.validate_can_be_created()?;
 
-        self.store.create_file(
-            &self.path,
-            FileType::File,
-            mode_from_umask(FileType::File, self.umask),
-            Some(SystemTime::now()),
-            None,
-        )
+        self.store
+            .create_file(
+                &self.path,
+                FileType::File,
+                mode_from_umask(FileType::File, self.umask),
+                Some(SystemTime::now()),
+                None,
+            )
+            .map_err(|err| err.context("Failed creating regular file in the archive."))
     }
 
     /// Create a directory if it doesn't already exist.
@@ -254,13 +256,15 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     pub fn create_dir(&mut self) -> crate::Result<()> {
         self.validate_can_be_created()?;
 
-        self.store.create_file(
-            &self.path,
-            FileType::Dir,
-            mode_from_umask(FileType::Dir, self.umask),
-            Some(SystemTime::now()),
-            None,
-        )
+        self.store
+            .create_file(
+                &self.path,
+                FileType::Dir,
+                mode_from_umask(FileType::Dir, self.umask),
+                Some(SystemTime::now()),
+                None,
+            )
+            .map_err(|err| err.context("Failed creating directory in the archive."))
     }
 
     /// Create a directory and all its missing parent directories.
@@ -345,7 +349,9 @@ impl<'conn, 'ar> File<'conn, 'ar> {
                 match result {
                     Ok(_) => {}
                     Err(err) if err.kind() == &crate::ErrorKind::AlreadyExists => {}
-                    Err(err) => return Err(err),
+                    Err(err) => {
+                        return Err(err.context("Failed creating directory in the archive."))
+                    }
                 }
             }
 
@@ -417,13 +423,15 @@ impl<'conn, 'ar> File<'conn, 'ar> {
             }
         };
 
-        self.store.create_file(
-            &self.path,
-            FileType::Symlink,
-            mode_from_umask(FileType::Symlink, self.umask),
-            Some(SystemTime::now()),
-            Some(normalized_target.as_str()),
-        )
+        self.store
+            .create_file(
+                &self.path,
+                FileType::Symlink,
+                mode_from_umask(FileType::Symlink, self.umask),
+                Some(SystemTime::now()),
+                Some(normalized_target.as_str()),
+            )
+            .map_err(|err| err.context("Failed creating symbolic link in the archive."))
     }
 
     /// Delete the file from the archive.
@@ -456,7 +464,9 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// [`NotFound`]: crate::ErrorKind::NotFound
     pub fn delete(&mut self) -> crate::Result<()> {
-        self.store.delete_file(&self.path)
+        self.store
+            .delete_file(&self.path)
+            .map_err(|err| err.context("Failed deleting file."))
     }
 
     /// The file metadata.
@@ -467,7 +477,9 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// [`NotFound`]: crate::ErrorKind::NotFound
     pub fn metadata(&self) -> crate::Result<FileMetadata> {
-        self.store.read_metadata(&self.path)
+        self.store
+            .read_metadata(&self.path)
+            .map_err(|err| err.context("Could not read file metadata."))
     }
 
     /// Set the file mode.
@@ -499,7 +511,9 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// [`NotFound`]: crate::ErrorKind::NotFound
     pub fn set_mode(&mut self, mode: Option<FileMode>) -> crate::Result<()> {
-        self.store.set_mode(&self.path, mode)
+        self.store
+            .set_mode(&self.path, mode)
+            .map_err(|err| err.context("Failed setting file mode."))
     }
 
     /// Set the time the file was last modified.
@@ -535,7 +549,9 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// [`NotFound`]: crate::ErrorKind::NotFound
     pub fn set_mtime(&mut self, mtime: Option<SystemTime>) -> crate::Result<()> {
-        self.store.set_mtime(&self.path, mtime)
+        self.store
+            .set_mtime(&self.path, mtime)
+            .map_err(|err| err.context("Failed setting file mtime."))
     }
 
     /// Whether the file is empty.
@@ -629,12 +645,14 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     pub fn truncate(&mut self) -> crate::Result<()> {
         self.validate_is_writable()?;
 
-        self.store.exec(|store| {
-            store.allocate_blob(&self.path, 0)?;
-            store.set_size(&self.path, 0)?;
+        self.store
+            .exec(|store| {
+                store.allocate_blob(&self.path, 0)?;
+                store.set_size(&self.path, 0)?;
 
-            Ok(())
-        })
+                Ok(())
+            })
+            .map_err(|err| err.context("Failed truncating file."))
     }
 
     //

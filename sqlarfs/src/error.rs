@@ -64,6 +64,17 @@ impl Error {
         }
     }
 
+    /// Wrap this error with additional context.
+    pub fn context<M>(self, message: M) -> Self
+    where
+        M: fmt::Display + fmt::Debug + Send + Sync + 'static,
+    {
+        Self {
+            kind: self.kind,
+            source: self.source.map(|source| source.context(message)),
+        }
+    }
+
     /// The [`ErrorKind`] of this error.
     pub fn kind(&self) -> &ErrorKind {
         &self.kind

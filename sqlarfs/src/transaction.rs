@@ -60,7 +60,7 @@ impl Connection {
     /// Open a SQLite connection to an in-memory database.
     pub fn open_in_memory() -> crate::Result<Self> {
         let mut conn = Self::new(rusqlite::Connection::open_in_memory()?);
-        conn.exec(|archive| archive.init())?;
+        conn.exec(|archive| archive.init(true))?;
         Ok(conn)
     }
 

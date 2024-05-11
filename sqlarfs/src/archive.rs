@@ -40,8 +40,8 @@ impl<'conn> Archive<'conn> {
         self.store.into_tx()
     }
 
-    pub(super) fn init(&mut self) -> crate::Result<()> {
-        self.store.create_table()
+    pub(super) fn init(&mut self, fail_if_exists: bool) -> crate::Result<()> {
+        self.store.create_table(fail_if_exists)
     }
 
     /// Create a handle to the file at the given `path`.

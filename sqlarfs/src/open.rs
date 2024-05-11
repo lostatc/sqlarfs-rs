@@ -12,6 +12,7 @@ use super::transaction::Connection;
 pub struct OpenOptions {
     create: bool,
     init: bool,
+    init_new: bool,
     read_only: bool,
 }
 
@@ -27,6 +28,7 @@ impl OpenOptions {
         Self {
             create: true,
             init: true,
+            init_new: false,
             read_only: false,
         }
     }
@@ -46,6 +48,8 @@ impl OpenOptions {
     /// specific schema. That table needs to exist in order to use this database as a SQLite
     /// archive.
     ///
+    /// This is mutually exclusive with [`OpenOptions::init_new`].
+    ///
     /// The default is `true`.
     pub fn init(&mut self, init: bool) -> &mut Self {
         self.init = init;
@@ -53,29 +57,47 @@ impl OpenOptions {
         self
     }
 
+    /// Set whether to create the `sqlar` table in the database and fail if it already exists.
+    ///
+    /// This sets [`OpenOptions::init`] to `false`. If it's overridden and set to `true`, then
+    /// [`OpenOptions::open`] will return an error.
+    ///
+    /// See [`OpenOptions::init`] for more information.
+    ///
+    /// The default is `false`.
+    pub fn init_new(&mut self, init_new: bool) -> &mut Self {
+        self.init_new = init_new;
+        self.init = false;
+
+        self
+    }
+
     /// Set whether the database should be read-only.
     ///
-    /// This sets both [`OpenOptions::create`] and [`OpenOptions::init`] to `false`. If either is
-    /// overridden and set to `true`, then [`OpenOptions::open`] will return an error.
+    /// This sets [`OpenOptions::create`], [`OpenOptions::init`], and [`OpenOptions::init_new`] to
+    /// `false`. If any are overridden and set to `true`, then [`OpenOptions::open`] will return an
+    /// error.
     ///
     /// The default is `false`.
     pub fn read_only(&mut self, read_only: bool) -> &mut Self {
         self.read_only = read_only;
         self.create = false;
         self.init = false;
+        self.init_new = false;
 
         self
     }
 
     /// Open a new database [`Connection`] at the given `path`.
-    ///
-    /// # Errors
-    ///
-    /// - [`CannotOpen`]: The database does not exist and [`OpenOptions::create`] was `false`.
-    ///
-    /// [`CannotOpen`]: crate::ErrorKind::CannotOpen
     pub fn open<P: AsRef<Path>>(&mut self, path: P) -> crate::Result<Connection> {
         use rusqlite::OpenFlags;
+
+        if self.init && self.init_new {
+            return Err(crate::Error::msg(
+                crate::ErrorKind::InvalidArgs,
+                "`OpenOptions::init` and `OpenOptions::init_new` are mutually exclusive.",
+            ));
+        }
 
         // SQLITE_OPEN_NO_MUTEX is the default in rusqlite. Its docs explain why.
         let mut flags = OpenFlags::SQLITE_OPEN_NO_MUTEX;
@@ -90,23 +112,10 @@ impl OpenOptions {
             flags |= OpenFlags::SQLITE_OPEN_CREATE;
         }
 
-        let mut conn = match rusqlite::Connection::open_with_flags(path, flags) {
-            Ok(conn) => Connection::new(conn),
-            Err(err) => match err.sqlite_error_code() {
-                Some(rusqlite::ErrorCode::ApiMisuse) => {
-                    return Err(crate::Error::new(crate::ErrorKind::InvalidArgs, err))
-                }
-                _ => return Err(err.into()),
-            },
-        };
+        let mut conn = Connection::new(rusqlite::Connection::open_with_flags(path, flags)?);
 
-        if self.init {
-            conn.exec(|archive| match archive.init() {
-                Err(err) if err.kind() == &crate::ErrorKind::ReadOnly => {
-                    Err(crate::Error::new(crate::ErrorKind::InvalidArgs, err))
-                }
-                result => result,
-            })?;
+        if self.init | self.init_new {
+            conn.exec(|archive| archive.init(self.init_new))?;
         }
 
         Ok(conn)

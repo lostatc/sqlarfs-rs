@@ -110,17 +110,29 @@ impl<'conn> Store<'conn> {
         Ok(result)
     }
 
-    pub fn create_table(&self) -> crate::Result<()> {
+    pub fn create_table(&self, fail_if_exists: bool) -> crate::Result<()> {
         self.tx().execute(
-            "
-            CREATE TABLE IF NOT EXISTS sqlar(
-                name TEXT PRIMARY KEY,
-                mode INT,
-                mtime INT,
-                sz INT,
-                data BLOB
-            );
-            ",
+            if fail_if_exists {
+                "
+                CREATE TABLE sqlar(
+                    name TEXT PRIMARY KEY,
+                    mode INT,
+                    mtime INT,
+                    sz INT,
+                    data BLOB
+                );
+                "
+            } else {
+                "
+                CREATE TABLE IF NOT EXISTS sqlar(
+                    name TEXT PRIMARY KEY,
+                    mode INT,
+                    mtime INT,
+                    sz INT,
+                    data BLOB
+                );
+                "
+            },
             (),
         )?;
 

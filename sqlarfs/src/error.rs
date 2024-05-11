@@ -138,8 +138,6 @@ impl From<Error> for io::Error {
             ErrorKind::CompressionNotSupported => io::ErrorKind::InvalidInput,
             ErrorKind::FileTooBig => io::ErrorKind::Other,
             ErrorKind::ReadOnly => io::ErrorKind::Other,
-            ErrorKind::CannotOpen => io::ErrorKind::Other,
-            ErrorKind::NotADatabase => io::ErrorKind::Other,
             ErrorKind::Sqlite { .. } => io::ErrorKind::Other,
             ErrorKind::Io { kind } => *kind,
         };
@@ -160,14 +158,6 @@ impl From<rusqlite::Error> for Error {
                 code: rusqlite::ErrorCode::TooBig,
                 ..
             }) => ErrorKind::FileTooBig,
-            Some(rusqlite::ffi::Error {
-                code: rusqlite::ErrorCode::CannotOpen,
-                ..
-            }) => ErrorKind::CannotOpen,
-            Some(rusqlite::ffi::Error {
-                code: rusqlite::ErrorCode::NotADatabase,
-                ..
-            }) => ErrorKind::NotADatabase,
             code => ErrorKind::Sqlite {
                 code: code.map(|code| SqliteErrorCode {
                     extended_code: code.extended_code,
@@ -217,12 +207,6 @@ pub enum ErrorKind {
     /// Attempted to write to a read-only database.
     ReadOnly,
 
-    /// Could not open the database file.
-    CannotOpen,
-
-    /// The given file is not a SQLite database.
-    NotADatabase,
-
     /// There was an error from the underlying SQLite database.
     Sqlite {
         /// The underlying SQLite error code, if there is one.
@@ -251,8 +235,6 @@ impl fmt::Display for ErrorKind {
             ErrorKind::CompressionNotSupported => "Attempted to read a compressed file, but the `deflate` Cargo feature was disabled.",
             ErrorKind::FileTooBig => "Attempted to write more data to the SQLite archive than its maximum blob size will allow.",
             ErrorKind::ReadOnly => "Attempted to write to a read-only database.",
-            ErrorKind::CannotOpen => "Could not open the database file.",
-            ErrorKind::NotADatabase => "The given file is not a SQLite database.",
             ErrorKind::Sqlite { .. } => "There was an error from the underlying SQLite database.",
             ErrorKind::Io { .. } => "An I/O error occurred.",
         })

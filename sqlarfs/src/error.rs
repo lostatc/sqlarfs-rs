@@ -1,6 +1,8 @@
 use std::fmt;
 use std::io;
+use std::path::PathBuf;
 use std::result;
+use thiserror::Error;
 
 /// An opaque type representing a SQLite error code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,78 +33,61 @@ impl SqliteErrorCode {
 ///
 /// This type can be converted [`From`] an [`std::io::Error`]. If the value the [`std::io::Error`]
 /// wraps can be downcast into a [`sqlarfs::Error`], it will be. Otherwise, it will be converted
-/// into a new [`sqlarfs::Error`] with the [`sqlarfs::ErrorKind::Io`] kind.
+/// into a new [`sqlarfs::Error::Io`].
 ///
 /// [`sqlarfs::Error`]: crate::Error
 /// [`sqlarfs::ErrorKind::Io`]: crate::ErrorKind::Io
-#[derive(Debug)]
-pub struct Error {
-    kind: ErrorKind,
-    source: Option<anyhow::Error>,
-}
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Error {
+    // As a rule, we don't document this error kind as a possible error return in the API docs
+    // because a) there may be several possible cases where it could be returned and b) it
+    // generally represents an error on the part of the user and isn't useful to catch. We may
+    // still document the circumstances that could lean to this error, but not that this specific
+    // error kind would be returned.
+    #[error("Some arguments were invalid: {reason}")]
+    InvalidArgs { reason: String },
 
-impl Error {
-    /// Create a new [`Error`] wrapping the given `source` error.
-    pub fn new<E>(kind: ErrorKind, source: E) -> Self
-    where
-        E: std::error::Error + Send + Sync + 'static,
-    {
-        Self {
-            kind,
-            source: Some(source.into()),
-        }
-    }
+    #[error("This file already exists: {path}")]
+    FileAlreadyExists { path: PathBuf },
 
-    /// Create a new [`Error`] from the given `message`.
-    pub fn msg<M>(kind: ErrorKind, message: M) -> Self
-    where
-        M: fmt::Display + fmt::Debug + Send + Sync + 'static,
-    {
-        Self {
-            kind,
-            source: Some(anyhow::Error::msg(message)),
-        }
-    }
+    #[error("This file was not found: {path}")]
+    FileNotFound { path: PathBuf },
 
-    /// Wrap this error with additional context.
-    pub fn context<M>(self, message: M) -> Self
-    where
-        M: fmt::Display + fmt::Debug + Send + Sync + 'static,
-    {
-        Self {
-            kind: self.kind,
-            source: self.source.map(|source| source.context(message)),
-        }
-    }
+    #[error("This file has no parent directory: {path}")]
+    NoParentDirectory { path: PathBuf },
 
-    /// The [`ErrorKind`] of this error.
-    pub fn kind(&self) -> &ErrorKind {
-        &self.kind
-    }
+    #[error("This file is a directory or a symbolic link, when we were expecting a regular file: {path}")]
+    NotARegularFile { path: PathBuf },
 
-    /// Consume this error and return its [`ErrorKind`].
-    pub fn into_kind(self) -> ErrorKind {
-        self.kind
-    }
-}
+    #[error("A file is not a directory, when we were expecting one: {path}")]
+    NotADirectory { path: PathBuf },
 
-impl fmt::Display for Error {
-    #[cfg_attr(coverage_nightly, coverage(off))]
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.kind.fmt(f)
-    }
-}
+    #[error("A loop of symbolic links was encountered while traversing the filesystem.")]
+    FilesystemLoop,
 
-impl std::error::Error for Error {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.source.as_ref().map(|err| err.as_ref())
-    }
-}
+    #[error("Attempted to read a compressed file, but sqlarfs was compiled without compression support.")]
+    CompressionNotSupported,
 
-impl From<ErrorKind> for Error {
-    fn from(kind: ErrorKind) -> Self {
-        Self { kind, source: None }
-    }
+    #[error(
+        "Attempted to write more data to the SQLite archive than its maximum blob size will allow."
+    )]
+    FileTooBig,
+
+    #[error("Attempted to write to a read-only database.")]
+    ReadOnly,
+
+    #[error("There was an error from the underlying SQLite database: {code:?}")]
+    Sqlite {
+        /// The underlying SQLite error code, if there is one.
+        code: Option<SqliteErrorCode>,
+    },
+
+    #[error("An I/O error occurred: {kind}")]
+    Io {
+        /// The [`std::io::ErrorKind`] of the I/O error.
+        kind: io::ErrorKind,
+    },
 }
 
 impl From<io::Error> for Error {
@@ -111,11 +96,9 @@ impl From<io::Error> for Error {
         match error.into_inner() {
             Some(payload) => match payload.downcast::<Error>() {
                 Ok(crate_error) => *crate_error,
-                Err(other_error) => {
-                    Error::new(ErrorKind::Io { kind }, io::Error::new(kind, other_error))
-                }
+                Err(other_error) => Error::Io { kind },
             },
-            None => Error::new(ErrorKind::Io { kind }, io::Error::from(kind)),
+            None => Error::Io { kind },
         }
     }
 }
@@ -126,20 +109,21 @@ impl From<Error> for io::Error {
         // Don't use a default match arm here. We want to be explicit about how we're mapping
         // `ErrorKind` variants to `io::ErrorKind` variants and make sure we remember to update
         // this when we add new ones.
-        let kind = match err.kind() {
-            ErrorKind::AlreadyExists => io::ErrorKind::AlreadyExists,
-            ErrorKind::NotFound => io::ErrorKind::NotFound,
-            ErrorKind::InvalidArgs => io::ErrorKind::InvalidInput,
-            ErrorKind::NotARegularFile => io::ErrorKind::Other,
+        let kind = match err {
+            Error::InvalidArgs { .. } => io::ErrorKind::InvalidInput,
+            Error::FileAlreadyExists { .. } => io::ErrorKind::AlreadyExists,
+            Error::FileNotFound { .. } => io::ErrorKind::NotFound,
+            Error::NoParentDirectory { .. } => io::ErrorKind::NotFound,
+            Error::NotARegularFile { .. } => io::ErrorKind::Other,
             // When it's stable, we can use `std::io::ErrorKind::NotADirectory`.
-            ErrorKind::NotADirectory => io::ErrorKind::Other,
+            Error::NotADirectory { .. } => io::ErrorKind::Other,
             // When it's stable, we can use `std::io::ErrorKind::FilesystemLoop`.
-            ErrorKind::FilesystemLoop => io::ErrorKind::Other,
-            ErrorKind::CompressionNotSupported => io::ErrorKind::InvalidInput,
-            ErrorKind::FileTooBig => io::ErrorKind::Other,
-            ErrorKind::ReadOnly => io::ErrorKind::Other,
-            ErrorKind::Sqlite { .. } => io::ErrorKind::Other,
-            ErrorKind::Io { kind } => *kind,
+            Error::FilesystemLoop => io::ErrorKind::Other,
+            Error::CompressionNotSupported => io::ErrorKind::Other,
+            Error::FileTooBig => io::ErrorKind::Other,
+            Error::ReadOnly => io::ErrorKind::Other,
+            Error::Sqlite { .. } => io::ErrorKind::Other,
+            Error::Io { kind } => kind,
         };
 
         io::Error::new(kind, err)
@@ -149,95 +133,21 @@ impl From<Error> for io::Error {
 impl From<rusqlite::Error> for Error {
     #[cfg_attr(coverage_nightly, coverage(off))]
     fn from(err: rusqlite::Error) -> Self {
-        let code = match err.sqlite_error() {
+        match err.sqlite_error() {
             Some(rusqlite::ffi::Error {
                 code: rusqlite::ErrorCode::ReadOnly,
                 ..
-            }) => ErrorKind::ReadOnly,
+            }) => Error::ReadOnly,
             Some(rusqlite::ffi::Error {
                 code: rusqlite::ErrorCode::TooBig,
                 ..
-            }) => ErrorKind::FileTooBig,
-            code => ErrorKind::Sqlite {
+            }) => Error::FileTooBig,
+            code => Error::Sqlite {
                 code: code.map(|code| SqliteErrorCode {
                     extended_code: code.extended_code,
                 }),
             },
-        };
-
-        Self::new(code, err)
-    }
-}
-
-/// A category of [`Error`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum ErrorKind {
-    // If you update one of these doc comments, you may also want to update the
-    // [`std::fmt::Display`] impl.
-    /// A resource already exists.
-    AlreadyExists,
-
-    /// A resource was not found.
-    NotFound,
-
-    // As a rule, we don't document this error kind as a possible error return in the API docs
-    // because a) there may be several possible cases where it could be returned and b) it
-    // generally represents an error on the part of the user and isn't useful to catch. We may
-    // still document the circumstances that could lean to this error, but not that this specific
-    // error kind would be returned.
-    /// Some arguments were invalid.
-    InvalidArgs,
-
-    /// A file was unexpectedly a directory or a symbolic link.
-    NotARegularFile,
-
-    /// A file was unexpectedly not a directory.
-    NotADirectory,
-
-    /// A loop of symbolic links was encountered while traversing the filesystem.
-    FilesystemLoop,
-
-    /// Attempted to read a compressed file, but the `deflate` Cargo feature was disabled.
-    CompressionNotSupported,
-
-    /// Attempted to write more data to the SQLite archive than its maximum blob size will allow.
-    FileTooBig,
-
-    /// Attempted to write to a read-only database.
-    ReadOnly,
-
-    /// There was an error from the underlying SQLite database.
-    Sqlite {
-        /// The underlying SQLite error code, if there is one.
-        code: Option<SqliteErrorCode>,
-    },
-
-    /// An I/O error occurred.
-    Io {
-        /// The [`std::io::ErrorKind`] of the I/O error.
-        kind: io::ErrorKind,
-    },
-}
-
-impl fmt::Display for ErrorKind {
-    #[cfg_attr(coverage_nightly, coverage(off))]
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            // If you update one of these descriptions, you may also want to update the doc comment
-            // on the `ErrorKind` variant.
-            ErrorKind::AlreadyExists => "A resource already exists.",
-            ErrorKind::NotFound => "A resource was not found.",
-            ErrorKind::InvalidArgs => "Some arguments were invalid.",
-            ErrorKind::NotARegularFile => "A file was unexpectedly a directory or a symbolic link.",
-            ErrorKind::NotADirectory => "A file was unexpectedly not a directory.",
-            ErrorKind::FilesystemLoop => "A loop of symbolic links was encountered while traversing the filesystem.",
-            ErrorKind::CompressionNotSupported => "Attempted to read a compressed file, but the `deflate` Cargo feature was disabled.",
-            ErrorKind::FileTooBig => "Attempted to write more data to the SQLite archive than its maximum blob size will allow.",
-            ErrorKind::ReadOnly => "Attempted to write to a read-only database.",
-            ErrorKind::Sqlite { .. } => "There was an error from the underlying SQLite database.",
-            ErrorKind::Io { .. } => "An I/O error occurred.",
-        })
+        }
     }
 }
 
@@ -246,55 +156,15 @@ pub type Result<T> = result::Result<T, Error>;
 
 #[cfg(test)]
 mod tests {
-    use std::error::Error as StdError;
-
-    use anyhow::anyhow;
-    use xpct::{be_ok, be_some, equal, expect};
+    use xpct::{be_ok, be_some, equal, expect, match_pattern, pattern};
 
     use super::*;
 
     #[test]
-    fn get_error_kind() {
-        let err = Error::new(
-            ErrorKind::Io {
-                kind: io::ErrorKind::Other,
-            },
-            io::Error::new(io::ErrorKind::Other, "inner error"),
-        );
-
-        expect!(err.kind()).to(equal(&ErrorKind::Io {
-            kind: io::ErrorKind::Other,
-        }));
-        expect!(err.into_kind()).to(equal(ErrorKind::Io {
-            kind: io::ErrorKind::Other,
-        }));
-    }
-
-    #[test]
-    fn get_wrapped_source_error() {
-        let err = Error::new(
-            ErrorKind::Io {
-                kind: io::ErrorKind::Other,
-            },
-            io::Error::new(io::ErrorKind::Other, "inner error"),
-        );
-
-        expect!(err.source())
-            .to(be_some())
-            .map(|source| source.downcast_ref::<io::Error>())
-            .to(be_some())
-            .map(|err| err.kind())
-            .to(equal(io::ErrorKind::Other));
-    }
-
-    #[test]
     fn convert_sqlarfs_io_err_into_std_io_error() {
-        let err = Error::new(
-            ErrorKind::Io {
-                kind: io::ErrorKind::NotFound,
-            },
-            io::Error::new(io::ErrorKind::NotFound, "inner error"),
-        );
+        let err = Error::Io {
+            kind: io::ErrorKind::NotFound,
+        };
 
         let io_err: io::Error = err.into();
 
@@ -304,15 +174,18 @@ mod tests {
             .to(be_some())
             .map(|err| err.downcast::<Error>())
             .to(be_ok())
-            .map(|err| err.into_kind())
-            .to(equal(ErrorKind::Io {
+            .to(equal(Box::new(Error::Io {
                 kind: io::ErrorKind::NotFound,
-            }));
+            })));
     }
 
     #[test]
     fn convert_into_io_error_with_kind() {
-        let err: Error = ErrorKind::NotFound.into();
+        let err: Error = Error::FileNotFound {
+            path: PathBuf::new(),
+        }
+        .into();
+
         let io_err: io::Error = err.into();
 
         expect!(io_err.kind()).to(equal(io::ErrorKind::NotFound));
@@ -323,29 +196,21 @@ mod tests {
         let io_err: io::Error = io::ErrorKind::NotFound.into();
         let err: Error = io_err.into();
 
-        expect!(err.kind()).to(equal(&ErrorKind::Io {
+        expect!(err).to(equal(Error::Io {
             kind: io::ErrorKind::NotFound,
         }));
     }
 
     #[test]
     fn convert_from_io_error_wrapping_a_sqlarfs_error() {
-        let original_err: Error = ErrorKind::InvalidArgs.into();
+        let original_err: Error = Error::InvalidArgs {
+            reason: String::new(),
+        }
+        .into();
         let io_err: io::Error = original_err.into();
         let unwrapped_error: Error = io_err.into();
 
-        expect!(unwrapped_error.kind()).to(equal(&ErrorKind::InvalidArgs));
-    }
-
-    #[test]
-    fn convert_from_io_error_wrapping_some_other_error() {
-        let original_err = anyhow!("some error");
-        let io_err = io::Error::new(io::ErrorKind::PermissionDenied, original_err);
-        let unwrapped_error: Error = io_err.into();
-
-        expect!(unwrapped_error.kind()).to(equal(&ErrorKind::Io {
-            kind: io::ErrorKind::PermissionDenied,
-        }));
+        expect!(unwrapped_error).to(match_pattern(pattern!(Error::InvalidArgs { .. })));
     }
 
     #[test]
@@ -360,6 +225,6 @@ mod tests {
 
         let err: Error = rusqlite_err.into();
 
-        expect!(err.kind()).to(equal(&ErrorKind::ReadOnly));
+        expect!(err).to(equal(Error::ReadOnly));
     }
 }

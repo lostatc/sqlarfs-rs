@@ -6,7 +6,7 @@ edition = "2021"
 rust-version = "1.75.0"
 
 [dependencies]
-anyhow = "1.0.81"
+thiserror = "1.0.60"
 bitflags = "2.5.0"
 flate2 = { version = "1.0.28", optional = true }
 ouroboros = "0.18.3"

@@ -5,6 +5,7 @@ use std::fs;
 
 use clap::Parser;
 use serial_test::serial;
+use sqlarfs::Connection;
 use sqlarfs_cli::{Cli, Commands, Create};
 use xpct::{be_err, be_existing_file, expect, match_pattern, pattern};
 
@@ -182,6 +183,24 @@ fn creates_archive_file_at_path() -> eyre::Result<()> {
     ])?;
 
     expect!(archive_file.path()).to(be_existing_file());
+
+    Ok(())
+}
+
+#[test]
+fn creating_db_that_already_exists_errors() -> eyre::Result<()> {
+    let temp_dir = tempfile::tempdir()?;
+    let db_path = temp_dir.path().join("test.sqlar");
+    let source_file = tempfile::NamedTempFile::new()?;
+
+    Connection::open(&db_path)?;
+
+    expect!(command(&[
+        "create",
+        &source_file.path().to_string_lossy(),
+        &db_path.to_string_lossy()
+    ]))
+    .to(be_err());
 
     Ok(())
 }

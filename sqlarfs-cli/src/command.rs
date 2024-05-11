@@ -23,7 +23,12 @@ impl Create {
             filename
         });
 
-        let mut conn = Connection::open(archive_filename)?;
+        let mut conn = Connection::builder()
+            .init_new(true)
+            .open(archive_filename)
+            .map_err(|err| {
+                err.context("Failed creating new database. Does a database already exist?")
+            })?;
 
         let opts = ArchiveOptions::new()
             .follow_symlinks(self.follow)

@@ -65,14 +65,15 @@ impl<'conn, 'ar> File<'conn, 'ar> {
         umask: FileMode,
     ) -> crate::Result<Self> {
         if path == Path::new("") {
-            return Err(crate::Error::msg(
-                crate::ErrorKind::InvalidArgs,
-                "The given path is empty.",
-            ));
+            return Err(crate::Error::InvalidArgs {
+                reason: format!("This path is empty: {}", path.to_string_lossy()),
+            });
         }
 
         if path.is_absolute() {
-            return Err(crate::Error::msg(crate::ErrorKind::InvalidArgs, "The given path is an absolute path, but SQLite archives only support relative paths."));
+            return Err(crate::Error::InvalidArgs {
+                reason: format!("This path is an absolute path, but SQLite archives only support relative paths: {}", path.to_string_lossy())
+            });
         }
 
         let normalized_path = match path.as_os_str().to_str() {
@@ -83,10 +84,9 @@ impl<'conn, 'ar> File<'conn, 'ar> {
                 .trim_end_matches(std::path::MAIN_SEPARATOR)
                 .to_owned(),
             None => {
-                return Err(crate::Error::msg(
-                    crate::ErrorKind::InvalidArgs,
-                    "The given path is not valid Unicode.",
-                ))
+                return Err(crate::Error::InvalidArgs {
+                    reason: format!("This path is not valid Unicode: {}", path.to_string_lossy()),
+                })
             }
         };
 
@@ -112,30 +112,22 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     }
 
     fn validate_is_writable(&self) -> crate::Result<()> {
-        match self.store.read_metadata(&self.path)?.kind() {
-            FileType::File => Ok(()),
-            FileType::Dir => Err(crate::Error::msg(
-                crate::ErrorKind::NotARegularFile,
-                "Cannot write to a directory.",
-            )),
-            FileType::Symlink => Err(crate::Error::msg(
-                crate::ErrorKind::NotARegularFile,
-                "Cannot write to a symbolic link.",
-            )),
+        if self.store.read_metadata(&self.path)?.is_file() {
+            Ok(())
+        } else {
+            Err(crate::Error::NotARegularFile {
+                path: PathBuf::from(self.path),
+            })
         }
     }
 
     fn validate_is_readable(&self) -> crate::Result<()> {
-        match self.store.read_metadata(&self.path)?.kind() {
-            FileType::File => Ok(()),
-            FileType::Dir => Err(crate::Error::msg(
-                crate::ErrorKind::NotARegularFile,
-                "Cannot read from a directory.",
-            )),
-            FileType::Symlink => Err(crate::Error::msg(
-                crate::ErrorKind::NotARegularFile,
-                "Cannot read from a symbolic link.",
-            )),
+        if self.store.read_metadata(&self.path)?.is_file() {
+            Ok(())
+        } else {
+            Err(crate::Error::NotARegularFile {
+                path: PathBuf::from(self.path),
+            })
         }
     }
 
@@ -154,17 +146,20 @@ impl<'conn, 'ar> File<'conn, 'ar> {
         };
 
         match self.store.read_metadata(parent_str) {
-            Ok(metadata) => match metadata.kind() {
-                FileType::Dir => Ok(()),
-                _ => Err(crate::Error::msg(
-                    crate::ErrorKind::NotADirectory,
-                    "Cannot create a file whose parent is not a directory.",
-                )),
-            },
-            Err(err) if err.kind() == &crate::ErrorKind::NotFound => Err(crate::Error::msg(
-                crate::ErrorKind::NotFound,
-                "Cannot create a file whose parent does not exist.",
-            )),
+            Ok(metadata) => {
+                if metadata.is_dir() {
+                    Ok(())
+                } else {
+                    Err(crate::Error::NoParentDirectory {
+                        path: self.path.into(),
+                    })
+                }
+            }
+            Err(err) if matches!(err, crate::Error::FileNotFound { .. }) => {
+                Err(crate::Error::NoParentDirectory {
+                    path: self.path.into(),
+                })
+            }
             Err(err) => Err(err),
         }
     }
@@ -188,13 +183,13 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// Unless you have an exclusive lock on the database, the file may be deleted between when you
     /// call this method and when you act on its result! If you need the file to exist, consider
-    /// creating the file and handling the potential [`ErrorKind::AlreadyExists`].
+    /// creating the file and handling the potential [`Error::FileAlreadyExists`].
     ///
-    /// [`ErrorKind::AlreadyExists`]: crate::ErrorKind::AlreadyExists
+    /// [`Error::FileAlreadyExists`]: crate::Error::FileAlreadyExists
     pub fn exists(&self) -> crate::Result<bool> {
         match self.metadata() {
             Ok(_) => Ok(true),
-            Err(err) if err.kind() == &crate::ErrorKind::NotFound => Ok(false),
+            Err(err) if matches!(err, crate::Error::FileNotFound { .. }) => Ok(false),
             Err(err) => Err(err),
         }
     }
@@ -212,25 +207,21 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// # Errors
     ///
-    /// - [`AlreadyExists`]: This file already exists in the archive.
-    /// - [`NotFound`]: This file's parent directory does not exist.
-    /// - [`NotADirectory`]: The file's parent is not a directory.
+    /// - [`FileAlreadyExists`]: This file already exists in the archive.
+    /// - [`NoParentDirectory`]: This file's parent directory does not exist or is not a directory.
     ///
-    /// [`AlreadyExists`]: crate::ErrorKind::AlreadyExists
-    /// [`NotFound`]: crate::ErrorKind::NotFound
-    /// [`NotADirectory`]: crate::ErrorKind::NotADirectory
+    /// [`FileAlreadyExists`]: crate::Error::FileAlreadyExists
+    /// [`NoParentDirectory`]: crate::Error::NoParentDirectory
     pub fn create_file(&mut self) -> crate::Result<()> {
         self.validate_can_be_created()?;
 
-        self.store
-            .create_file(
-                &self.path,
-                FileType::File,
-                mode_from_umask(FileType::File, self.umask),
-                Some(SystemTime::now()),
-                None,
-            )
-            .map_err(|err| err.context("Failed creating regular file in the archive."))
+        self.store.create_file(
+            &self.path,
+            FileType::File,
+            mode_from_umask(FileType::File, self.umask),
+            Some(SystemTime::now()),
+            None,
+        )
     }
 
     /// Create a directory if it doesn't already exist.
@@ -246,25 +237,21 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// # Errors
     ///
-    /// - [`AlreadyExists`]: This file already exists in the archive.
-    /// - [`NotFound`]: This file's parent directory does not exist.
-    /// - [`NotADirectory`]: The file's parent is not a directory.
+    /// - [`FileAlreadyExists`]: This file already exists in the archive.
+    /// - [`NoParentDirectory`]: This file's parent directory does not exist or is not a directory.
     ///
-    /// [`AlreadyExists`]: crate::ErrorKind::AlreadyExists
-    /// [`NotFound`]: crate::ErrorKind::NotFound
-    /// [`NotADirectory`]: crate::ErrorKind::NotADirectory
+    /// [`FileAlreadyExists`]: crate::Error::FileAlreadyExists
+    /// [`NoParentDirectory`]: crate::Error::NoParentDirectory
     pub fn create_dir(&mut self) -> crate::Result<()> {
         self.validate_can_be_created()?;
 
-        self.store
-            .create_file(
-                &self.path,
-                FileType::Dir,
-                mode_from_umask(FileType::Dir, self.umask),
-                Some(SystemTime::now()),
-                None,
-            )
-            .map_err(|err| err.context("Failed creating directory in the archive."))
+        self.store.create_file(
+            &self.path,
+            FileType::Dir,
+            mode_from_umask(FileType::Dir, self.umask),
+            Some(SystemTime::now()),
+            None,
+        )
     }
 
     /// Create a directory and all its missing parent directories.
@@ -282,8 +269,8 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// # Errors
     ///
-    /// - [`AlreadyExists`]: This file already exists in the archive and is not a directory.
-    /// - [`NotADirectory`]: The file's parent is not a directory.
+    /// - [`FileAlreadyExists`]: This file already exists in the archive and is not a directory.
+    /// - [`NoParentDirectory`]: The file's parent is not a directory.
     ///
     /// # Examples
     ///
@@ -302,24 +289,23 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// # sqlarfs::Result::Ok(())
     /// ```
     ///
-    /// [`AlreadyExists`]: crate::ErrorKind::AlreadyExists
-    /// [`NotADirectory`]: crate::ErrorKind::NotADirectory
+    /// [`FileAlreadyExists`]: crate::Error::FileAlreadyExists
+    /// [`NoParentDirectory`]: crate::Error::NoParentDirectory
     pub fn create_dir_all(&mut self) -> crate::Result<()> {
         match self.validate_can_be_created() {
             Ok(_) => {}
-            Err(err) if err.kind() == &crate::ErrorKind::NotFound => {}
+            Err(err) if matches!(err, crate::ErrorKind::NotFound) => {}
             Err(err) => return Err(err),
         }
 
         match self.metadata() {
             Ok(metadata) if !metadata.is_dir() => {
-                return Err(crate::Error::msg(
-                    crate::ErrorKind::AlreadyExists,
-                    "This file already exists, but is not a directory.",
-                ))
+                return Err(crate::Error::FileAlreadyExists {
+                    path: self.path.into(),
+                });
             }
             Ok(_) => {}
-            Err(err) if err.kind() == &crate::ErrorKind::NotFound => {}
+            Err(err) if matches!(err, crate::Error::FileNotFound { .. }) => {}
             Err(err) => return Err(err),
         }
 
@@ -348,10 +334,8 @@ impl<'conn, 'ar> File<'conn, 'ar> {
 
                 match result {
                     Ok(_) => {}
-                    Err(err) if err.kind() == &crate::ErrorKind::AlreadyExists => {}
-                    Err(err) => {
-                        return Err(err.context("Failed creating directory in the archive."))
-                    }
+                    Err(err) if matches!(err, crate::Error::FileAlreadyExists { .. }) => {}
+                    Err(err) => return Err(err),
                 }
             }
 
@@ -372,9 +356,8 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// # Errors
     ///
-    /// - [`AlreadyExists`]: This file already exists in the archive.
-    /// - [`NotFound`]: This file's parent directory does not exist.
-    /// - [`NotADirectory`]: The file's parent is not a directory.
+    /// - [`FileAlreadyExists`]: This file already exists in the archive.
+    /// - [`NoParentDirectory`]: This file's parent directory does not exist or is not a directory.
     ///
     /// # Examples
     ///
@@ -396,19 +379,17 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// # sqlarfs::Result::Ok(())
     /// ```
     ///
-    /// [`AlreadyExists`]: crate::ErrorKind::AlreadyExists
-    /// [`NotFound`]: crate::ErrorKind::NotFound
-    /// [`NotADirectory`]: crate::ErrorKind::NotADirectory
+    /// [`FileAlreadyExists`]: crate::Error::FileAlreadyExists
+    /// [`NoParentDirectory`]: crate::Error::NoParentDirectory
     pub fn create_symlink<P: AsRef<Path>>(&mut self, target: P) -> crate::Result<()> {
         let target_path = target.as_ref();
 
         self.validate_can_be_created()?;
 
         if target_path == Path::new("") {
-            return Err(crate::Error::msg(
-                crate::ErrorKind::InvalidArgs,
-                "The given link target path is empty.",
-            ));
+            return Err(crate::Error::InvalidArgs {
+                reason: String::from("The given link target path is empty."),
+            });
         }
 
         let normalized_target = match target_path.as_os_str().to_str() {
@@ -416,22 +397,19 @@ impl<'conn, 'ar> File<'conn, 'ar> {
                 .trim_end_matches(std::path::MAIN_SEPARATOR)
                 .to_owned(),
             None => {
-                return Err(crate::Error::msg(
-                    crate::ErrorKind::InvalidArgs,
-                    "The given link target path is not valid Unicode.",
-                ))
+                return Err(crate::Error::InvalidArgs {
+                    reason: String::from("The given link target path is not valid Unicode."),
+                });
             }
         };
 
-        self.store
-            .create_file(
-                &self.path,
-                FileType::Symlink,
-                mode_from_umask(FileType::Symlink, self.umask),
-                Some(SystemTime::now()),
-                Some(normalized_target.as_str()),
-            )
-            .map_err(|err| err.context("Failed creating symbolic link in the archive."))
+        self.store.create_file(
+            &self.path,
+            FileType::Symlink,
+            mode_from_umask(FileType::Symlink, self.umask),
+            Some(SystemTime::now()),
+            Some(normalized_target.as_str()),
+        )
     }
 
     /// Delete the file from the archive.
@@ -443,7 +421,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// # Errors
     ///
-    /// - [`NotFound`]: This file does not exist.
+    /// - [`FileNotFound`]: This file does not exist.
     ///
     /// # Examples
     ///
@@ -462,24 +440,20 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// # sqlarfs::Result::Ok(())
     /// ```
     ///
-    /// [`NotFound`]: crate::ErrorKind::NotFound
+    /// [`FileNotFound`]: crate::Error::FileNotFound
     pub fn delete(&mut self) -> crate::Result<()> {
-        self.store
-            .delete_file(&self.path)
-            .map_err(|err| err.context("Failed deleting file."))
+        self.store.delete_file(&self.path)
     }
 
     /// The file metadata.
     ///
     /// # Errors
     ///
-    /// - [`NotFound`]: This file does not exist.
+    /// - [`FileNotFound`]: This file does not exist.
     ///
-    /// [`NotFound`]: crate::ErrorKind::NotFound
+    /// [`FileNotFound`]: crate::Error::FileNotFound
     pub fn metadata(&self) -> crate::Result<FileMetadata> {
-        self.store
-            .read_metadata(&self.path)
-            .map_err(|err| err.context("Could not read file metadata."))
+        self.store.read_metadata(&self.path)
     }
 
     /// Set the file mode.
@@ -490,7 +464,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// # Errors
     ///
-    /// - [`NotFound`]: This file does not exist.
+    /// - [`FileNotFound`]: This file does not exist.
     ///
     /// # Examples
     ///
@@ -509,11 +483,9 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// # sqlarfs::Result::Ok(())
     /// ```
     ///
-    /// [`NotFound`]: crate::ErrorKind::NotFound
+    /// [`FileNotFound`]: crate::Error::FileNotFound
     pub fn set_mode(&mut self, mode: Option<FileMode>) -> crate::Result<()> {
-        self.store
-            .set_mode(&self.path, mode)
-            .map_err(|err| err.context("Failed setting file mode."))
+        self.store.set_mode(&self.path, mode)
     }
 
     /// Set the time the file was last modified.
@@ -525,7 +497,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// # Errors
     ///
-    /// - [`NotFound`]: This file does not exist.
+    /// - [`FileNotFound`]: This file does not exist.
     ///
     /// # Examples
     ///
@@ -547,22 +519,20 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// # sqlarfs::Result::Ok(())
     /// ```
     ///
-    /// [`NotFound`]: crate::ErrorKind::NotFound
+    /// [`FileNotFound`]: crate::Error::FileNotFound
     pub fn set_mtime(&mut self, mtime: Option<SystemTime>) -> crate::Result<()> {
-        self.store
-            .set_mtime(&self.path, mtime)
-            .map_err(|err| err.context("Failed setting file mtime."))
+        self.store.set_mtime(&self.path, mtime)
     }
 
     /// Whether the file is empty.
     ///
     /// # Errors
     ///
-    /// - [`NotFound`]: This file does not exist.
+    /// - [`FileNotFound`]: This file does not exist.
     /// - [`NotARegularFile`]: The file is a directory or a symbolic link.
     ///
-    /// [`NotFound`]: crate::ErrorKind::NotFound
-    /// [`NotARegularFile`]: crate::ErrorKind::NotARegularFile
+    /// [`FileNotFound`]: crate::Error::FileNotFound
+    /// [`NotARegularFile`]: crate::Error::NotARegularFile
     pub fn is_empty(&self) -> crate::Result<bool> {
         self.validate_is_readable()?;
 
@@ -579,7 +549,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// # Errors
     ///
-    /// - [`NotFound`]: This file does not exist.
+    /// - [`FileNotFound`]: This file does not exist.
     /// - [`NotARegularFile`]: The file is a directory or a symbolic link.
     ///
     /// # Examples
@@ -606,8 +576,8 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// # sqlarfs::Result::Ok(())
     /// ```
     ///
-    /// [`NotFound`]: crate::ErrorKind::NotFound
-    /// [`NotARegularFile`]: crate::ErrorKind::NotARegularFile
+    /// [`FileNotFound`]: crate::Error::FileNotFound
+    /// [`NotARegularFile`]: crate::Error::NotARegularFile
     pub fn is_compressed(&self) -> crate::Result<bool> {
         self.validate_is_readable()?;
 
@@ -618,7 +588,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// # Errors
     ///
-    /// - [`NotFound`]: This file does not exist.
+    /// - [`FileNotFound`]: This file does not exist.
     /// - [`NotARegularFile`]: The file is a directory or a symbolic link.
     ///
     /// # Examples
@@ -640,19 +610,17 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// # sqlarfs::Result::Ok(())
     /// ```
     ///
-    /// [`NotFound`]: crate::ErrorKind::NotFound
-    /// [`NotARegularFile`]: crate::ErrorKind::NotARegularFile
+    /// [`FileNotFound`]: crate::Error::FileNotFound
+    /// [`NotARegularFile`]: crate::Error::NotARegularFile
     pub fn truncate(&mut self) -> crate::Result<()> {
         self.validate_is_writable()?;
 
-        self.store
-            .exec(|store| {
-                store.allocate_blob(&self.path, 0)?;
-                store.set_size(&self.path, 0)?;
+        self.store.exec(|store| {
+            store.allocate_blob(&self.path, 0)?;
+            store.set_size(&self.path, 0)?;
 
-                Ok(())
-            })
-            .map_err(|err| err.context("Failed truncating file."))
+            Ok(())
+        })
     }
 
     //
@@ -669,7 +637,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// # Errors
     ///
-    /// - [`NotFound`]: This file does not exist.
+    /// - [`FileNotFound`]: This file does not exist.
     /// - [`CompressionNotSupported`]: This file is compressed, but the `deflate` Cargo feature is
     /// disabled.
     /// - [`NotARegularFile`]: The file is a directory or a symbolic link.
@@ -693,9 +661,9 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     /// # sqlarfs::Result::Ok(())
     /// ```
     ///
-    /// [`NotFound`]: crate::ErrorKind::NotFound
-    /// [`CompressionNotSupported`]: crate::ErrorKind::CompressionNotSupported
-    /// [`NotARegularFile`]: crate::ErrorKind::NotARegularFile
+    /// [`FileNotFound`]: crate::Error::FileNotFound
+    /// [`CompressionNotSupported`]: crate::Error::CompressionNotSupported
+    /// [`NotARegularFile`]: crate::Error::NotARegularFile
     pub fn reader(&mut self) -> crate::Result<FileReader> {
         self.validate_is_readable()?;
 
@@ -766,13 +734,10 @@ impl<'conn, 'ar> File<'conn, 'ar> {
 
                     let compression_level = flate2::Compression::new(level);
 
-                    let allocation_size =
-                        match size_hint {
-                            Some(len) => Some(len.try_into().map_err(|err| {
-                                crate::Error::new(crate::ErrorKind::FileTooBig, err)
-                            })?),
-                            None => None,
-                        };
+                    let allocation_size = match size_hint {
+                        Some(len) => Some(len.try_into().map_err(|err| crate::Error::FileTooBig)?),
+                        None => None,
+                    };
 
                     let mut uncompressed_buf = if let Some(capacity) = allocation_size {
                         Vec::with_capacity(capacity)
@@ -866,11 +831,11 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// # Errors
     ///
-    /// - [`NotFound`]: This file does not exist.
+    /// - [`FileNotFound`]: This file does not exist.
     /// - [`NotARegularFile`]: The file is a directory or a symbolic link.
     ///
-    /// [`NotFound`]: crate::ErrorKind::NotFound
-    /// [`NotARegularFile`]: crate::ErrorKind::NotARegularFile
+    /// [`FileNotFound`]: crate::Error::FileNotFound
+    /// [`NotARegularFile`]: crate::Error::NotARegularFile
     pub fn write_from<R>(&mut self, reader: &mut R) -> crate::Result<()>
     where
         R: ?Sized + Read,
@@ -884,11 +849,11 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// # Errors
     ///
-    /// - [`NotFound`]: This file does not exist.
+    /// - [`FileNotFound`]: This file does not exist.
     /// - [`NotARegularFile`]: The file is a directory or a symbolic link.
     ///
-    /// [`NotFound`]: crate::ErrorKind::NotFound
-    /// [`NotARegularFile`]: crate::ErrorKind::NotARegularFile
+    /// [`FileNotFound`]: crate::Error::FileNotFound
+    /// [`NotARegularFile`]: crate::Error::NotARegularFile
     pub fn write_bytes(&mut self, bytes: &[u8]) -> crate::Result<()> {
         self.validate_is_writable()?;
 
@@ -928,11 +893,11 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// # Errors
     ///
-    /// - [`NotFound`]: This file does not exist.
+    /// - [`FileNotFound`]: This file does not exist.
     /// - [`NotARegularFile`]: The file is a directory or a symbolic link.
     ///
-    /// [`NotFound`]: crate::ErrorKind::NotFound
-    /// [`NotARegularFile`]: crate::ErrorKind::NotARegularFile
+    /// [`FileNotFound`]: crate::Error::FileNotFound
+    /// [`NotARegularFile`]: crate::Error::NotARegularFile
     pub fn write_str<S: AsRef<str>>(&mut self, s: S) -> crate::Result<()> {
         self.write_bytes(s.as_ref().as_bytes())
     }
@@ -945,11 +910,11 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// # Errors
     ///
-    /// - [`NotFound`]: This file does not exist.
+    /// - [`FileNotFound`]: This file does not exist.
     /// - [`NotARegularFile`]: The file is a directory or a symbolic link.
     ///
-    /// [`NotFound`]: crate::ErrorKind::NotFound
-    /// [`NotARegularFile`]: crate::ErrorKind::NotARegularFile
+    /// [`FileNotFound`]: crate::Error::FileNotFound
+    /// [`NotARegularFile`]: crate::Error::NotARegularFile
     pub fn write_file(&mut self, file: &mut fs::File) -> crate::Result<()> {
         // We know the size of the file, which enables some optimizations.
         let metadata = file.metadata()?;

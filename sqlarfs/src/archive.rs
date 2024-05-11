@@ -94,10 +94,11 @@ impl<'conn> Archive<'conn> {
     /// ```
     pub fn list_with(&mut self, opts: &ListOptions) -> crate::Result<ListEntries> {
         if opts.is_invalid {
-            return Err(crate::Error::msg(
-                crate::ErrorKind::InvalidArgs,
-                "Mutually exclusive options where used together in `ListOptions`.",
-            ));
+            return Err(crate::Error::InvalidArgs {
+                reason: String::from(
+                    "Mutually exclusive options where used together in `ListOptions`.",
+                ),
+            });
         }
 
         self.store.list_files(opts)

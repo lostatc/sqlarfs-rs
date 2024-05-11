@@ -160,7 +160,9 @@ impl<'conn> Store<'conn> {
             .map(|mtime| -> crate::Result<_> {
                 Ok(mtime
                     .duration_since(time::UNIX_EPOCH)
-                    .map_err(|err| crate::Error::new(crate::ErrorKind::InvalidArgs, err))?
+                    .map_err(|err| crate::Error::InvalidArgs {
+                        reason: err.to_string(),
+                    })?
                     .as_secs())
             })
             .transpose()?;
@@ -199,7 +201,7 @@ impl<'conn> Store<'conn> {
             Err(err)
                 if err.sqlite_error_code() == Some(rusqlite::ErrorCode::ConstraintViolation) =>
             {
-                Err(crate::Error::new(crate::ErrorKind::AlreadyExists, err))
+                Err(crate::Error::FileAlreadyExists { path: path.into() })
             }
             Err(err) => Err(err.into()),
         }
@@ -314,7 +316,7 @@ impl<'conn> Store<'conn> {
                 },
             )
             .optional()?
-            .ok_or(crate::Error::msg(crate::ErrorKind::NotFound, format!("The given file was not found in the archive: {}", path)))
+            .ok_or(crate::Error::FileNotFound { path: path.into() })
     }
 
     pub fn set_mode(&self, path: &str, mode: Option<FileMode>) -> crate::Result<()> {
@@ -336,7 +338,9 @@ impl<'conn> Store<'conn> {
             .map(|mtime| -> crate::Result<_> {
                 Ok(mtime
                     .duration_since(time::UNIX_EPOCH)
-                    .map_err(|err| crate::Error::new(crate::ErrorKind::InvalidArgs, err))?
+                    .map_err(|err| crate::Error::InvalidArgs {
+                        reason: err.to_string(),
+                    })?
                     .as_secs())
             })
             .transpose()?;

@@ -246,9 +246,17 @@ impl<'conn> Archive<'conn> {
     where
         T: ReadMode,
     {
-        if dest_root == Path::new("") && !opts.children {
+        let dest_is_empty = dest_root == Path::new("");
+
+        if dest_is_empty && !opts.children {
             return Err(crate::Error::InvalidArgs {
                 reason: String::from("Cannot use an empty path as the destination directory unless archiving the children of the source directory.")
+            });
+        }
+
+        if opts.children && !dest_is_empty && !self.open(dest_root)?.metadata()?.is_dir() {
+            return Err(crate::Error::NotADirectory {
+                path: dest_root.to_owned(),
             });
         }
 

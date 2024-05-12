@@ -449,7 +449,9 @@ fn archive_directory_children_when_source_is_file_errors() -> sqlarfs::Result<()
     connection()?.exec(|archive| {
         let opts = ArchiveOptions::new().children(true);
 
-        expect!(archive.archive_with(temp_file.path(), "file", &opts))
+        archive.open("dir")?.create_dir()?;
+
+        expect!(archive.archive_with(temp_file.path(), "dir", &opts))
             .to(be_err())
             .to(equal(Error::NotADirectory {
                 path: temp_file.path().into(),

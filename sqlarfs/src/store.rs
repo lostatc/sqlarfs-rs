@@ -111,9 +111,10 @@ impl<'conn> Store<'conn> {
     }
 
     pub fn create_table(&self, fail_if_exists: bool) -> crate::Result<()> {
-        self.tx().execute(
-            if fail_if_exists {
-                "
+        self.tx()
+            .execute(
+                if fail_if_exists {
+                    "
                 CREATE TABLE sqlar(
                     name TEXT PRIMARY KEY,
                     mode INT,
@@ -122,8 +123,8 @@ impl<'conn> Store<'conn> {
                     data BLOB
                 );
                 "
-            } else {
-                "
+                } else {
+                    "
                 CREATE TABLE IF NOT EXISTS sqlar(
                     name TEXT PRIMARY KEY,
                     mode INT,
@@ -132,9 +133,16 @@ impl<'conn> Store<'conn> {
                     data BLOB
                 );
                 "
-            },
-            (),
-        )?;
+                },
+                (),
+            )
+            .map_err(|err| {
+                if fail_if_exists && matches!(err, rusqlite::Error::SqlInputError { .. }) {
+                    crate::Error::SqlarAlreadyExists
+                } else {
+                    err.into()
+                }
+            })?;
 
         Ok(())
     }

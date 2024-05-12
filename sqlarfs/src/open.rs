@@ -88,10 +88,7 @@ impl OpenOptions {
         self
     }
 
-    /// Open a new database [`Connection`] at the given `path`.
-    pub fn open<P: AsRef<Path>>(&mut self, path: P) -> crate::Result<Connection> {
-        use rusqlite::OpenFlags;
-
+    fn validate_options(&self) -> crate::Result<()> {
         if self.init && self.init_new {
             return Err(crate::Error::InvalidArgs {
                 reason: String::from(
@@ -99,6 +96,51 @@ impl OpenOptions {
                 ),
             });
         }
+
+        if self.read_only && self.create {
+            return Err(crate::Error::InvalidArgs {
+                reason: String::from(
+                    "`OpenOptions::read_only` and `OpenOptions::create` are mutually exclusive.",
+                ),
+            });
+        }
+
+        if self.read_only && self.init {
+            return Err(crate::Error::InvalidArgs {
+                reason: String::from(
+                    "`OpenOptions::read_only` and `OpenOptions::init` are mutually exclusive.",
+                ),
+            });
+        }
+
+        if self.read_only && self.init_new {
+            return Err(crate::Error::InvalidArgs {
+                reason: String::from(
+                    "`OpenOptions::read_only` and `OpenOptions::init_new` are mutually exclusive.",
+                ),
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Open a new database [`Connection`] at the given `path`.
+    ///
+    /// # Errors
+    ///
+    /// - [`CannotOpen`]: The database could not be opened for some reason, such as because it does
+    /// not exist.
+    /// - [`NotADatabase`]: The file at `path` is not a SQLite database.
+    /// - [`SqlarAlreadyExists`]: [`OpenOptions::init_new`] was `true`, but the `sqlar` table
+    /// already exists.
+    ///
+    /// [`CannotOpen`]: crate::Error::CannotOpen
+    /// [`NotADatabase`]: crate::Error::NotADatabase
+    /// [`SqlarAlreadyExists`]: crate::Error::SqlarAlreadyExists
+    pub fn open<P: AsRef<Path>>(&mut self, path: P) -> crate::Result<Connection> {
+        use rusqlite::OpenFlags;
+
+        self.validate_options()?;
 
         // SQLITE_OPEN_NO_MUTEX is the default in rusqlite. Its docs explain why.
         let mut flags = OpenFlags::SQLITE_OPEN_NO_MUTEX;
@@ -115,7 +157,7 @@ impl OpenOptions {
 
         let mut conn = Connection::new(rusqlite::Connection::open_with_flags(path, flags)?);
 
-        if self.init | self.init_new {
+        if self.init || self.init_new {
             conn.exec(|archive| archive.init(self.init_new))?;
         }
 

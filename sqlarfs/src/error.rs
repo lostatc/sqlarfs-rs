@@ -111,6 +111,18 @@ pub enum Error {
     #[error("Attempted to write to a read-only database.")]
     ReadOnly,
 
+    /// Could not open the database.
+    #[error("Could not open the database.")]
+    CannotOpen,
+
+    /// Attempted to open a file that is not a SQLite database.
+    #[error("Attempted to open a file that is not a SQLite database.")]
+    NotADatabase,
+
+    /// Attempted to create the `sqlar` table, but one already exists.
+    #[error("Attempted to create the `sqlar` table, but one already exists.")]
+    SqlarAlreadyExists,
+
     /// There was an error from the underlying SQLite database.
     #[error("There was an error from the underlying SQLite database: {code}")]
     Sqlite {
@@ -158,6 +170,9 @@ impl From<Error> for io::Error {
             Error::CompressionNotSupported => io::ErrorKind::Other,
             Error::FileTooBig => io::ErrorKind::Other,
             Error::ReadOnly => io::ErrorKind::Other,
+            Error::CannotOpen => io::ErrorKind::Other,
+            Error::NotADatabase => io::ErrorKind::Other,
+            Error::SqlarAlreadyExists => io::ErrorKind::AlreadyExists,
             Error::Sqlite { .. } => io::ErrorKind::Other,
             Error::Io { kind } => kind,
         };
@@ -178,6 +193,14 @@ impl From<rusqlite::Error> for Error {
                 code: rusqlite::ErrorCode::TooBig,
                 ..
             }) => Error::FileTooBig,
+            Some(rusqlite::ffi::Error {
+                code: rusqlite::ErrorCode::CannotOpen,
+                ..
+            }) => Error::CannotOpen,
+            Some(rusqlite::ffi::Error {
+                code: rusqlite::ErrorCode::NotADatabase,
+                ..
+            }) => Error::NotADatabase,
             code => Error::Sqlite {
                 code: SqliteErrorCode {
                     inner: code.cloned(),

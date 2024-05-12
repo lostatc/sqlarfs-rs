@@ -1,10 +1,11 @@
 use std::fs;
 use std::time::{Duration, SystemTime};
 
-use common::{connection, have_error_kind, truncate_mtime};
-use sqlarfs::{ErrorKind, ExtractOptions, FileMode};
+use common::{connection, truncate_mtime};
+use sqlarfs::{Error, ExtractOptions, FileMode};
 use xpct::{
-    be_directory, be_existing_file, be_false, be_ok, be_regular_file, be_true, equal, expect,
+    be_directory, be_err, be_existing_file, be_false, be_ok, be_regular_file, be_true, equal,
+    expect, match_pattern, pattern,
 };
 
 mod common;
@@ -15,7 +16,10 @@ fn extracting_when_source_path_does_not_exist_errors() -> sqlarfs::Result<()> {
 
     connection()?.exec(|archive| {
         expect!(archive.extract("nonexistent", temp_dir.path().join("dest")))
-            .to(have_error_kind(ErrorKind::NotFound));
+            .to(be_err())
+            .to(equal(Error::FileNotFound {
+                path: "nonexistent".into(),
+            }));
 
         Ok(())
     })
@@ -27,7 +31,10 @@ fn extracting_when_source_is_a_file_and_dest_has_no_parent_dir_errors() -> sqlar
         archive.open("file")?.create_file()?;
 
         expect!(archive.extract("file", "/nonexistent/dest"))
-            .to(have_error_kind(ErrorKind::NotFound));
+            .to(be_err())
+            .to(equal(Error::NoParentDirectory {
+                path: "/nonexistent/dest".into(),
+            }));
 
         Ok(())
     })
@@ -39,7 +46,10 @@ fn extracting_when_source_is_a_dir_and_dest_has_no_parent_dir_errors() -> sqlarf
         archive.open("dir")?.create_dir()?;
 
         expect!(archive.extract("dir", "/nonexistent/dest"))
-            .to(have_error_kind(ErrorKind::NotFound));
+            .to(be_err())
+            .to(equal(Error::NoParentDirectory {
+                path: "/nonexistent/dest".into(),
+            }));
 
         Ok(())
     })
@@ -56,7 +66,10 @@ fn extracting_when_source_is_a_symlink_and_dest_has_no_parent_dir_errors() -> sq
             .create_symlink(symlink_target.path())?;
 
         expect!(archive.extract("symlink", "/nonexistent/dest"))
-            .to(have_error_kind(ErrorKind::NotFound));
+            .to(be_err())
+            .to(equal(Error::NoParentDirectory {
+                path: "/nonexistent/dest".into(),
+            }));
 
         Ok(())
     })
@@ -71,7 +84,10 @@ fn extracting_when_source_is_a_file_and_dest_already_exists_and_is_a_file_errors
         archive.open("file")?.create_file()?;
 
         expect!(archive.extract("file", temp_file.path()))
-            .to(have_error_kind(ErrorKind::AlreadyExists));
+            .to(be_err())
+            .to(equal(Error::FileAlreadyExists {
+                path: temp_file.path().into(),
+            }));
 
         Ok(())
     })
@@ -86,7 +102,10 @@ fn extracting_when_source_is_a_file_and_dest_already_exists_and_is_a_dir_errors(
         archive.open("file")?.create_file()?;
 
         expect!(archive.extract("file", temp_dir.path()))
-            .to(have_error_kind(ErrorKind::AlreadyExists));
+            .to(be_err())
+            .to(equal(Error::FileAlreadyExists {
+                path: temp_dir.path().into(),
+            }));
 
         Ok(())
     })
@@ -106,7 +125,9 @@ fn extracting_when_source_is_a_file_and_dest_already_exists_and_is_a_symlink_err
     connection()?.exec(|archive| {
         archive.open("file")?.create_file()?;
 
-        expect!(archive.extract("file", &link_path)).to(have_error_kind(ErrorKind::AlreadyExists));
+        expect!(archive.extract("file", &link_path))
+            .to(be_err())
+            .to(equal(Error::FileAlreadyExists { path: link_path }));
 
         Ok(())
     })
@@ -121,7 +142,10 @@ fn extracting_when_source_is_a_dir_and_dest_already_exists_and_is_a_file_errors(
         archive.open("dir")?.create_dir()?;
 
         expect!(archive.extract("dir", temp_file.path()))
-            .to(have_error_kind(ErrorKind::AlreadyExists));
+            .to(be_err())
+            .to(equal(Error::FileAlreadyExists {
+                path: temp_file.path().into(),
+            }));
 
         Ok(())
     })
@@ -136,7 +160,10 @@ fn extracting_when_source_is_a_dir_and_dest_already_exists_and_is_a_dir_errors(
         archive.open("dir")?.create_dir()?;
 
         expect!(archive.extract("dir", temp_dir.path()))
-            .to(have_error_kind(ErrorKind::AlreadyExists));
+            .to(be_err())
+            .to(equal(Error::FileAlreadyExists {
+                path: temp_dir.path().into(),
+            }));
 
         Ok(())
     })
@@ -156,7 +183,9 @@ fn extracting_when_source_is_a_dir_and_dest_already_exists_and_is_a_symlink_erro
     connection()?.exec(|archive| {
         archive.open("dir")?.create_dir()?;
 
-        expect!(archive.extract("dir", &link_path)).to(have_error_kind(ErrorKind::AlreadyExists));
+        expect!(archive.extract("dir", &link_path))
+            .to(be_err())
+            .to(equal(Error::FileAlreadyExists { path: link_path }));
 
         Ok(())
     })
@@ -172,7 +201,10 @@ fn extracting_when_source_is_a_symlink_and_dest_already_exists_and_is_a_file_err
         archive.open("symlink")?.create_symlink("/nonexistent")?;
 
         expect!(archive.extract("symlink", temp_file.path()))
-            .to(have_error_kind(ErrorKind::AlreadyExists));
+            .to(be_err())
+            .to(equal(Error::FileAlreadyExists {
+                path: temp_file.path().into(),
+            }));
 
         Ok(())
     })
@@ -188,7 +220,10 @@ fn extracting_when_source_is_a_symlink_and_dest_already_exists_and_is_a_dir_erro
         archive.open("symlink")?.create_symlink("/nonexistent")?;
 
         expect!(archive.extract("symlink", temp_dir.path()))
-            .to(have_error_kind(ErrorKind::AlreadyExists));
+            .to(be_err())
+            .to(equal(Error::FileAlreadyExists {
+                path: temp_dir.path().into(),
+            }));
 
         Ok(())
     })
@@ -209,7 +244,8 @@ fn extracting_when_source_is_a_symlink_and_dest_already_exists_and_is_a_symlink_
         archive.open("symlink")?.create_symlink("/nonexistent")?;
 
         expect!(archive.extract("symlink", &link_path))
-            .to(have_error_kind(ErrorKind::AlreadyExists));
+            .to(be_err())
+            .to(equal(Error::FileAlreadyExists { path: link_path }));
 
         Ok(())
     })
@@ -222,7 +258,8 @@ fn extracting_when_source_path_is_absolute_errors() -> sqlarfs::Result<()> {
 
     connection()?.exec(|archive| {
         expect!(archive.extract(src_path, temp_dir.path().join("dest")))
-            .to(have_error_kind(ErrorKind::InvalidArgs));
+            .to(be_err())
+            .to(match_pattern(pattern!(Error::InvalidArgs { .. })));
 
         Ok(())
     })
@@ -241,7 +278,8 @@ fn extracting_when_source_path_is_not_valid_unicode_errors() -> sqlarfs::Result<
             OsStr::from_bytes(b"invalid-unicode-\xff"),
             temp_dir.path().join("dest")
         ))
-        .to(have_error_kind(ErrorKind::InvalidArgs));
+        .to(be_err())
+        .to(match_pattern(pattern!(Error::InvalidArgs { .. })));
 
         Ok(())
     })
@@ -323,7 +361,8 @@ fn extract_symlink_when_dest_already_exists() -> sqlarfs::Result<()> {
             .create_symlink(symlink_target.path())?;
 
         expect!(archive.extract("symlink", &dest_path))
-            .to(have_error_kind(ErrorKind::AlreadyExists));
+            .to(be_err())
+            .to(equal(Error::FileAlreadyExists { path: dest_path }));
 
         Ok(())
     })
@@ -427,7 +466,8 @@ fn extracting_fails_when_source_is_root_and_children_is_false_errors() -> sqlarf
             temp_dir.path().join("dest"),
             &ExtractOptions::new().children(false)
         ))
-        .to(have_error_kind(ErrorKind::InvalidArgs));
+        .to(be_err())
+        .to(match_pattern(pattern!(Error::InvalidArgs { .. })));
 
         Ok(())
     })
@@ -483,7 +523,8 @@ fn extracting_directory_children_when_target_doest_not_exist_errors() -> sqlarfs
 
         let opts = ExtractOptions::new().children(true);
         expect!(archive.extract_with("dir", &dest_dir, &opts))
-            .to(have_error_kind(ErrorKind::NotFound));
+            .to(be_err())
+            .to(equal(Error::FileNotFound { path: dest_dir }));
 
         Ok(())
     })
@@ -499,7 +540,10 @@ fn extracting_directory_children_when_target_is_file_errors() -> sqlarfs::Result
 
         let opts = ExtractOptions::new().children(true);
         expect!(archive.extract_with("dir", temp_file.path(), &opts))
-            .to(have_error_kind(ErrorKind::NotADirectory));
+            .to(be_err())
+            .to(equal(Error::NotADirectory {
+                path: temp_file.path().into(),
+            }));
 
         Ok(())
     })
@@ -512,7 +556,10 @@ fn extract_directory_children_when_source_does_not_exist_errors() -> sqlarfs::Re
     connection()?.exec(|archive| {
         let opts = ExtractOptions::new().children(true);
         expect!(archive.extract_with("nonexistent", &dest_dir, &opts))
-            .to(have_error_kind(ErrorKind::NotFound));
+            .to(be_err())
+            .to(equal(Error::FileNotFound {
+                path: "nonexistent".into(),
+            }));
 
         Ok(())
     })
@@ -527,7 +574,10 @@ fn extract_directory_children_when_source_is_file_errors() -> sqlarfs::Result<()
 
         let opts = ExtractOptions::new().children(true);
         expect!(archive.extract_with("file", &dest_dir, &opts))
-            .to(have_error_kind(ErrorKind::NotADirectory));
+            .to(be_err())
+            .to(equal(Error::NotADirectory {
+                path: "file".into(),
+            }));
 
         Ok(())
     })

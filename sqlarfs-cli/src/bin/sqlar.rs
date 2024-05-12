@@ -10,7 +10,7 @@ fn main() -> eyre::Result<ExitCode> {
 
     if let Err(err) = Cli::parse().dispatch() {
         if let Some(user_err) = err.downcast_ref::<sqlarfs::Error>() {
-            eprintln!("{}", user_err);
+            eprintln!("Error: {}", user_err);
             return Ok(ExitCode::FAILURE);
         }
 

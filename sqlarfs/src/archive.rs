@@ -117,19 +117,20 @@ impl<'conn> Archive<'conn> {
     ///
     /// # Errors
     ///
-    /// - [`NotFound`]: There is no file or directory at `from`.
-    /// - [`NotFound`]: The parent directory of `to` does not exist.
-    /// - [`NotFound`]: [`ArchiveOptions::children`] was `true` and `to` does not exist.
-    /// - [`NotADirectory`]: [`ArchiveOptions::children`] was `true` and the file at `to` exists
-    /// but is not a directory.
+    /// - [`FileNotFound`]: There is no file or directory at `from`.
+    /// - [`FileNotFound`]: [`ArchiveOptions::children`] was `true` and `to` does not exist.
+    /// - [`NoParentDirectory`]: The parent directory of `to` does not exist.
     /// - [`NotADirectory`]: [`ArchiveOptions::children`] was `true` and the file at `from` is not
     /// a directory.
-    /// - [`AlreadyExists`]: One of the files in `from` would overwrite an existing file in the
+    /// - [`NotADirectory`]: [`ArchiveOptions::children`] was `true` and the file at `to` exists
+    /// but is not a directory.
+    /// - [`FileAlreadyExists`]: One of the files in `from` would overwrite an existing file in the
     /// archive.
     ///
-    /// [`NotFound`]: crate::ErrorKind::NotFound
-    /// [`NotADirectory`]: crate::ErrorKind::NotADirectory
-    /// [`AlreadyExists`]: crate::ErrorKind::AlreadyExists
+    /// [`FileNotFound`]: crate::Error::FileNotFound
+    /// [`NoParentDirectory`]: crate::Error::NoParentDirectory
+    /// [`NotADirectory`]: crate::Error::NotADirectory
+    /// [`FileAlreadyExists`]: crate::Error::FileAlreadyExists
     pub fn archive_with<P: AsRef<Path>, Q: AsRef<Path>>(
         &mut self,
         from: P,
@@ -160,19 +161,20 @@ impl<'conn> Archive<'conn> {
     ///
     /// # Errors
     ///
-    /// - [`NotFound`]: There is no file or directory in the archive at `from`.
-    /// - [`NotFound`]: The parent directory of `to` does not exist.
-    /// - [`NotFound`]: [`ExtractOptions::children`] was `true` and `to` does not exist.
-    /// - [`NotADirectory`]: [`ExtractOptions::children`] was `true` and the file at `to` exists
-    /// but is not a directory.
+    /// - [`FileNotFound`]: There is no file or directory in the archive at `from`.
+    /// - [`FileNotFound`]: [`ExtractOptions::children`] was `true` and `to` does not exist.
+    /// - [`NoParentDirectory`]: The parent directory of `to` does not exist.
     /// - [`NotADirectory`]: [`ExtractOptions::children`] was `true` and the file at `from` is not
     /// a directory.
-    /// - [`AlreadyExists`]: One of the files in `from` would overwrite an existing file in the
+    /// - [`NotADirectory`]: [`ExtractOptions::children`] was `true` and the file at `to` exists
+    /// but is not a directory.
+    /// - [`FileAlreadyExists`]: One of the files in `from` would overwrite an existing file in the
     /// filesystem.
     ///
-    /// [`NotFound`]: crate::ErrorKind::NotFound
-    /// [`NotADirectory`]: crate::ErrorKind::NotADirectory
-    /// [`AlreadyExists`]: crate::ErrorKind::AlreadyExists
+    /// [`FileNotFound`]: crate::Error::FileNotFound
+    /// [`NoParentDirectory`]: crate::Error::NoParentDirectory
+    /// [`NotADirectory`]: crate::Error::NotADirectory
+    /// [`FileAlreadyExists`]: crate::Error::FileAlreadyExists
     pub fn extract_with<P: AsRef<Path>, Q: AsRef<Path>>(
         &mut self,
         from: P,

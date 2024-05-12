@@ -137,7 +137,9 @@ impl ExtractOptions {
 fn read_metadata(path: &Path) -> crate::Result<fs::Metadata> {
     match fs::symlink_metadata(path) {
         Ok(metadata) => Ok(metadata),
-        Err(err) if err.kind() == io::ErrorKind::NotFound => Err(crate::ErrorKind::NotFound.into()),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Err(crate::Error::FileNotFound {
+            path: path.to_owned(),
+        }),
         Err(err) => Err(err.into()),
     }
 }
@@ -183,10 +185,7 @@ impl<'conn> Archive<'conn> {
 
                 for ancestor in &ancestor_stack {
                     if same_file::is_same_file(&target, ancestor)? {
-                        return Err(crate::Error::msg(
-                            crate::ErrorKind::FilesystemLoop,
-                            "Encountered a symbolic link that references a parent directory while walking the directory tree.",
-                        ));
+                        return Err(crate::Error::FilesystemLoop);
                     }
                 }
 
@@ -248,27 +247,20 @@ impl<'conn> Archive<'conn> {
         T: ReadMode,
     {
         if dest_root == Path::new("") && !opts.children {
-            return Err(crate::Error::msg(
-                crate::ErrorKind::InvalidArgs,
-                "Cannot use an empty path as the destination directory unless archiving the children of the source directory."
-            ));
+            return Err(crate::Error::InvalidArgs {
+                reason: String::from("Cannot use an empty path as the destination directory unless archiving the children of the source directory.")
+            });
         }
 
         // Wrap the error to provide a more helpful error message.
-        let metadata = read_metadata(src_root).map_err(|err| {
-            err.context(format!(
-                "Could not find the given source file: {}",
-                src_root.to_string_lossy()
-            ))
-        })?;
+        let metadata = read_metadata(src_root)?;
 
         let src_is_dir = metadata.is_dir();
 
         let paths = if opts.children && !src_is_dir {
-            return Err(crate::Error::msg(
-                crate::ErrorKind::NotADirectory,
-                "The given source path is not a directory.",
-            ));
+            return Err(crate::Error::NotADirectory {
+                path: src_root.to_owned(),
+            });
         } else if opts.children {
             fs::read_dir(src_root)?
                 .map(|entry| entry.map(|entry| entry.path()))
@@ -307,9 +299,13 @@ impl<'conn> Archive<'conn> {
                         if err.kind() == io::ErrorKind::AlreadyExists
                             || (cfg!(windows) && err.kind() == io::ErrorKind::PermissionDenied)
                         {
-                            crate::Error::new(crate::ErrorKind::AlreadyExists, err)
+                            crate::Error::FileAlreadyExists {
+                                path: dest_path.into(),
+                            }
                         } else if err.kind() == io::ErrorKind::NotFound {
-                            crate::Error::new(crate::ErrorKind::NotFound, err)
+                            crate::Error::NoParentDirectory {
+                                path: dest_path.into(),
+                            }
                         } else {
                             err.into()
                         }
@@ -330,10 +326,12 @@ impl<'conn> Archive<'conn> {
             }
             FileMetadata::Dir { mode, .. } => {
                 fs::create_dir(dest_path).map_err(|err| match err.kind() {
-                    io::ErrorKind::AlreadyExists => {
-                        crate::Error::new(crate::ErrorKind::AlreadyExists, err)
-                    }
-                    io::ErrorKind::NotFound => crate::Error::new(crate::ErrorKind::NotFound, err),
+                    io::ErrorKind::AlreadyExists => crate::Error::FileAlreadyExists {
+                        path: dest_path.into(),
+                    },
+                    io::ErrorKind::NotFound => crate::Error::NoParentDirectory {
+                        path: dest_path.into(),
+                    },
                     _ => err.into(),
                 })?;
 
@@ -349,12 +347,12 @@ impl<'conn> Archive<'conn> {
                 {
                     std::os::unix::fs::symlink(target, dest_path).map_err(|err| {
                         match err.kind() {
-                            io::ErrorKind::AlreadyExists => {
-                                crate::Error::new(crate::ErrorKind::AlreadyExists, err)
-                            }
-                            io::ErrorKind::NotFound => {
-                                crate::Error::new(crate::ErrorKind::NotFound, err)
-                            }
+                            io::ErrorKind::AlreadyExists => crate::Error::FileAlreadyExists {
+                                path: dest_path.into(),
+                            },
+                            io::ErrorKind::NotFound => crate::Error::NoParentDirectory {
+                                path: dest_path.into(),
+                            },
                             _ => err.into(),
                         }
                     })?;
@@ -378,17 +376,15 @@ impl<'conn> Archive<'conn> {
         let src_path_is_empty = src_root == Path::new("");
 
         if !opts.children && src_path_is_empty {
-            return Err(crate::Error::msg(
-                crate::ErrorKind::InvalidArgs,
-                "Cannot use an empty path as the source directory unless archiving the children of the source directory."
-            ));
+            return Err(crate::Error::InvalidArgs {
+                reason: String::from("Cannot use an empty path as the source directory unless archiving the children of the source directory.")
+            });
         }
 
         if opts.children && !src_path_is_empty && !self.open(src_root)?.metadata()?.is_dir() {
-            return Err(crate::Error::msg(
-                crate::ErrorKind::NotADirectory,
-                "The given source path is not a directory.",
-            ));
+            return Err(crate::Error::NotADirectory {
+                path: src_root.into(),
+            });
         }
 
         // TODO: Reading the file metadata at this point presents a race condition, because the
@@ -405,18 +401,12 @@ impl<'conn> Archive<'conn> {
         // 1. The parent of the dest path doesn't exist.
         // 2. The parent of the dest path exists but is not a directory.
         if opts.children {
-            let metadata = read_metadata(dest_root).map_err(|err| {
-                err.context(format!(
-                    "Could not find the given destination directory: {}",
-                    dest_root.to_string_lossy()
-                ))
-            })?;
+            let metadata = read_metadata(dest_root)?;
 
             if !metadata.is_dir() {
-                return Err(crate::Error::msg(
-                    crate::ErrorKind::NotADirectory,
-                    "The given destination path is not a directory.",
-                ));
+                return Err(crate::Error::NotADirectory {
+                    path: dest_root.into(),
+                });
             }
         }
 

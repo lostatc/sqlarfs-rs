@@ -7,22 +7,26 @@ use thiserror::Error;
 /// An opaque type representing a SQLite error code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SqliteErrorCode {
-    extended_code: std::ffi::c_int,
+    extended_code: Option<std::ffi::c_int>,
 }
 
 impl fmt::Display for SqliteErrorCode {
     #[cfg_attr(coverage_nightly, coverage(off))]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        rusqlite::ffi::Error::new(self.extended_code).fmt(f)
+        if let Some(code) = self.extended_code {
+            rusqlite::ffi::Error::new(code).fmt(f)?;
+        }
+
+        Ok(())
     }
 }
 
 impl SqliteErrorCode {
-    /// The raw extended error code from the SQLite C API.
+    /// The raw extended error code from the SQLite C API, if there is one.
     ///
     /// See the [SQLite docs](https://www.sqlite.org/rescode.html) for more information.
     #[cfg_attr(coverage_nightly, coverage(off))]
-    pub fn raw_code(&self) -> std::ffi::c_int {
+    pub fn raw_code(&self) -> Option<std::ffi::c_int> {
         // We're not including rusqlite in our public API, so we're only exposing the raw error
         // code from the SQLite C API as opposed to any rusqlite types.
         self.extended_code
@@ -108,10 +112,10 @@ pub enum Error {
     ReadOnly,
 
     /// There was an error from the underlying SQLite database.
-    #[error("There was an error from the underlying SQLite database: {code:?}")]
+    #[error("There was an error from the underlying SQLite database: {code}")]
     Sqlite {
         /// The underlying SQLite error code, if there is one.
-        code: Option<SqliteErrorCode>,
+        code: SqliteErrorCode,
     },
 
     /// An I/O error occurred.
@@ -175,9 +179,9 @@ impl From<rusqlite::Error> for Error {
                 ..
             }) => Error::FileTooBig,
             code => Error::Sqlite {
-                code: code.map(|code| SqliteErrorCode {
-                    extended_code: code.extended_code,
-                }),
+                code: SqliteErrorCode {
+                    extended_code: code.map(|code| code.extended_code),
+                },
             },
         }
     }

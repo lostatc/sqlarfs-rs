@@ -36,7 +36,7 @@ impl SqliteErrorCode {
 /// into a new [`sqlarfs::Error::Io`].
 ///
 /// [`sqlarfs::Error`]: crate::Error
-/// [`sqlarfs::ErrorKind::Io`]: crate::ErrorKind::Io
+/// [`sqlarfs::Error::Io`]: crate::Error::Io
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Error {

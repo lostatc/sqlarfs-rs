@@ -119,8 +119,8 @@ pub enum Error {
     #[error("Attempted to open a file that is not a SQLite database.")]
     NotADatabase,
 
-    /// Attempted to create the `sqlar` table, but one already exists.
-    #[error("Attempted to create the `sqlar` table, but one already exists.")]
+    /// Attempted to create a new SQLite archive, but one already exists.
+    #[error("Attempted to create a new SQLite archive, but one already exists.")]
     SqlarAlreadyExists,
 
     /// There was an error from the underlying SQLite database.

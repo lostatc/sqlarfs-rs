@@ -52,13 +52,13 @@ impl Connection {
 
     /// Open a connection to the SQLite archive at `path`.
     ///
-    /// This creates and initializes a new SQLite archive if one does not already exist.
+    /// This creates a new SQLite archive if one does not already exist.
     ///
     /// You can access more options for how the connection is opened with [`Connection::builder`].
     ///
     /// See [`OpenOptions::open`].
     pub fn open<P: AsRef<Path>>(path: P) -> crate::Result<Self> {
-        OpenOptions::new().open(path)
+        OpenOptions::new().create(true).open(path)
     }
 
     /// Open a SQLite connection to an in-memory database.

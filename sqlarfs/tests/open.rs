@@ -55,7 +55,7 @@ fn any_db_operation_errors_when_file_is_not_a_db() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn creating_new_read_only_db_errors() -> sqlarfs::Result<()> {
+fn creating_read_only_db_errors() -> sqlarfs::Result<()> {
     let temp_file = tempfile::NamedTempFile::new()?;
     let temp_path = temp_file.path().to_path_buf();
 
@@ -76,7 +76,7 @@ fn creating_new_read_only_db_errors() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn initializing_read_only_db_errors() -> sqlarfs::Result<()> {
+fn creating_new_read_only_db_errors() -> sqlarfs::Result<()> {
     let temp_file = tempfile::NamedTempFile::new()?;
     let temp_path = temp_file.path().to_path_buf();
 
@@ -84,16 +84,7 @@ fn initializing_read_only_db_errors() -> sqlarfs::Result<()> {
 
     let result = OpenOptions::new()
         .read_only(true)
-        .init(true)
-        .open(&temp_path);
-
-    expect!(result)
-        .to(be_err())
-        .to(match_pattern(pattern!(Error::InvalidArgs { .. })));
-
-    let result = OpenOptions::new()
-        .read_only(true)
-        .init_new(true)
+        .create_new(true)
         .open(&temp_path);
 
     expect!(result)
@@ -127,37 +118,15 @@ fn any_write_operation_when_db_is_read_only_errors() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn writing_to_uninitialized_db_errors() -> sqlarfs::Result<()> {
-    let temp_file = tempfile::NamedTempFile::new()?;
-    let temp_path = temp_file.path().to_path_buf();
-
-    temp_file.close()?;
-
-    let mut conn = OpenOptions::new().init(false).open(&temp_path)?;
-
-    conn.exec(|archive| {
-        let mut file = archive.open("file")?;
-
-        expect!(file.create_file()).to(be_err());
-
-        sqlarfs::Result::Ok(())
-    })?;
-
-    fs::remove_file(&temp_path).ok();
-
-    Ok(())
-}
-
-#[test]
-fn init_and_init_new_are_mutually_exclusive() -> sqlarfs::Result<()> {
+fn create_and_create_new_are_mutually_exclusive() -> sqlarfs::Result<()> {
     let temp_file = tempfile::NamedTempFile::new()?;
     let temp_path = temp_file.path().to_path_buf();
 
     temp_file.close()?;
 
     let result = OpenOptions::new()
-        .init_new(true)
-        .init(true)
+        .create(true)
+        .create_new(true)
         .open(&temp_path);
 
     expect!(result)
@@ -170,16 +139,16 @@ fn init_and_init_new_are_mutually_exclusive() -> sqlarfs::Result<()> {
 }
 
 #[test]
-fn init_new_errors_when_sqlar_table_already_exists() -> sqlarfs::Result<()> {
+fn create_new_errors_when_sqlar_table_already_exists() -> sqlarfs::Result<()> {
     let temp_file = tempfile::NamedTempFile::new()?;
     let temp_path = temp_file.path().to_path_buf();
 
     temp_file.close()?;
 
     // Create the database and then immediately close the connection.
-    OpenOptions::new().init_new(true).open(&temp_path)?;
+    OpenOptions::new().create_new(true).open(&temp_path)?;
 
-    let result = OpenOptions::new().init_new(true).open(&temp_path);
+    let result = OpenOptions::new().create_new(true).open(&temp_path);
 
     expect!(result)
         .to(be_err())

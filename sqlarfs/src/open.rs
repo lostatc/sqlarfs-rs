@@ -10,10 +10,9 @@ use super::transaction::Connection;
 /// use [`Connection::open_in_memory`].
 #[derive(Debug, Clone)]
 pub struct OpenOptions {
-    create: bool,
-    init: bool,
-    init_new: bool,
-    read_only: bool,
+    create: Option<bool>,
+    create_new: Option<bool>,
+    read_only: Option<bool>,
 }
 
 impl Default for OpenOptions {
@@ -26,78 +25,56 @@ impl OpenOptions {
     /// Create a new [`OpenOptions`] builder.
     pub fn new() -> Self {
         Self {
-            create: true,
-            init: true,
-            init_new: false,
-            read_only: false,
+            create: None,
+            create_new: None,
+            read_only: None,
         }
     }
 
-    /// Set whether to create the database if it doesn't already exist in the filesystem.
+    /// Set whether to create the SQLite archive if it doesn't already exist.
     ///
-    /// The default is `true`.
-    pub fn create(&mut self, create: bool) -> &mut Self {
-        self.create = create;
-
-        self
-    }
-
-    /// Set whether to create the `sqlar` table if it doesn't already exist in the database.
-    ///
-    /// A SQLite archive is a SQLite database with a table named `sqlar` that conforms to a
-    /// specific schema. That table needs to exist in order to use this database as a SQLite
-    /// archive.
-    ///
-    /// This is mutually exclusive with [`OpenOptions::init_new`].
-    ///
-    /// The default is `true`.
-    pub fn init(&mut self, init: bool) -> &mut Self {
-        self.init = init;
-
-        self
-    }
-
-    /// Set whether to create the `sqlar` table in the database and fail if it already exists.
-    ///
-    /// This sets [`OpenOptions::init`] to `false`. If it's overridden and set to `true`, then
-    /// [`OpenOptions::open`] will return an error.
-    ///
-    /// See [`OpenOptions::init`] for more information.
+    /// This is mutually exclusive with [`OpenOptions::create_new`].
     ///
     /// The default is `false`.
-    pub fn init_new(&mut self, init_new: bool) -> &mut Self {
-        self.init_new = init_new;
-        self.init = false;
+    pub fn create(&mut self, create: bool) -> &mut Self {
+        self.create = Some(create);
+
+        self
+    }
+
+    /// Set whether to create the SQLite archive, failing if it already exists.
+    ///
+    /// This is mutually exclusive with [`OpenOptions::create`].
+    ///
+    /// The default is `false`.
+    pub fn create_new(&mut self, create_new: bool) -> &mut Self {
+        self.create_new = Some(create_new);
 
         self
     }
 
     /// Set whether the database should be read-only.
     ///
-    /// This sets [`OpenOptions::create`], [`OpenOptions::init`], and [`OpenOptions::init_new`] to
-    /// `false`. If any are overridden and set to `true`, then [`OpenOptions::open`] will return an
-    /// error.
+    /// You cannot create a new database in read-only mode. This is mutually exclusive with
+    /// [`OpenOptions::create`] and [`OpenOptions::create_new`].
     ///
     /// The default is `false`.
     pub fn read_only(&mut self, read_only: bool) -> &mut Self {
-        self.read_only = read_only;
-        self.create = false;
-        self.init = false;
-        self.init_new = false;
+        self.read_only = Some(read_only);
 
         self
     }
 
     fn validate_options(&self) -> crate::Result<()> {
-        if self.init && self.init_new {
+        if self.create == Some(true) && self.create_new == Some(true) {
             return Err(crate::Error::InvalidArgs {
                 reason: String::from(
-                    "`OpenOptions::init` and `OpenOptions::init_new` are mutually exclusive.",
+                    "`OpenOptions::create` and `OpenOptions::create_new` are mutually exclusive.",
                 ),
             });
         }
 
-        if self.read_only && self.create {
+        if self.read_only == Some(true) && self.create == Some(true) {
             return Err(crate::Error::InvalidArgs {
                 reason: String::from(
                     "`OpenOptions::read_only` and `OpenOptions::create` are mutually exclusive.",
@@ -105,18 +82,10 @@ impl OpenOptions {
             });
         }
 
-        if self.read_only && self.init {
+        if self.read_only == Some(true) && self.create_new == Some(true) {
             return Err(crate::Error::InvalidArgs {
                 reason: String::from(
-                    "`OpenOptions::read_only` and `OpenOptions::init` are mutually exclusive.",
-                ),
-            });
-        }
-
-        if self.read_only && self.init_new {
-            return Err(crate::Error::InvalidArgs {
-                reason: String::from(
-                    "`OpenOptions::read_only` and `OpenOptions::init_new` are mutually exclusive.",
+                    "`OpenOptions::read_only` and `OpenOptions::create_new` are mutually exclusive.",
                 ),
             });
         }
@@ -131,7 +100,7 @@ impl OpenOptions {
     /// - [`CannotOpen`]: The database could not be opened for some reason, such as because it does
     /// not exist.
     /// - [`NotADatabase`]: The file at `path` is not a SQLite database.
-    /// - [`SqlarAlreadyExists`]: [`OpenOptions::init_new`] was `true`, but the `sqlar` table
+    /// - [`SqlarAlreadyExists`]: [`OpenOptions::create_new`] was `true`, but the `sqlar` table
     /// already exists.
     ///
     /// [`CannotOpen`]: crate::Error::CannotOpen
@@ -145,21 +114,19 @@ impl OpenOptions {
         // SQLITE_OPEN_NO_MUTEX is the default in rusqlite. Its docs explain why.
         let mut flags = OpenFlags::SQLITE_OPEN_NO_MUTEX;
 
-        if self.read_only {
+        if self.read_only.unwrap_or(false) {
             flags |= OpenFlags::SQLITE_OPEN_READ_ONLY;
         } else {
             flags |= OpenFlags::SQLITE_OPEN_READ_WRITE;
         }
 
-        if self.create {
+        if self.create.unwrap_or(false) || self.create_new.unwrap_or(false) {
             flags |= OpenFlags::SQLITE_OPEN_CREATE;
         }
 
         let mut conn = Connection::new(rusqlite::Connection::open_with_flags(path, flags)?);
 
-        if self.init || self.init_new {
-            conn.exec(|archive| archive.init(self.init_new))?;
-        }
+        conn.exec(|archive| archive.init(self.create_new.unwrap_or(false)))?;
 
         Ok(conn)
     }

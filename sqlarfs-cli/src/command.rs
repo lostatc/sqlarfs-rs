@@ -23,7 +23,7 @@ impl Create {
         });
 
         let mut conn = Connection::builder()
-            .init_new(true)
+            .create_new(true)
             .open(archive_filename)?;
 
         let opts = ArchiveOptions::new()

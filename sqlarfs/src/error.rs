@@ -5,7 +5,7 @@ use std::result;
 use thiserror::Error;
 
 /// An opaque type representing a SQLite error code.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SqliteErrorCode {
     extended_code: Option<std::ffi::c_int>,
 }

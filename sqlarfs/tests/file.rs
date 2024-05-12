@@ -5,16 +5,16 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 
-use sqlarfs::{Compression, Connection, ErrorKind, FileMode, FileType};
+use sqlarfs::{Compression, Connection, Error, FileMode, FileType};
 use tempfile::NamedTempFile;
 use xpct::{
-    be_empty, be_false, be_ok, be_some, be_true, be_zero, equal, expect, fields, match_fields,
-    match_pattern, pattern, why,
+    be_empty, be_err, be_false, be_ok, be_some, be_true, be_zero, equal, expect, fields,
+    match_fields, match_pattern, pattern, why,
 };
 
 use common::{
-    connection, have_error_kind, have_file_metadata, have_symlink_metadata, random_bytes,
-    truncate_mtime, RegularFileMetadata, WRITE_DATA_SIZE,
+    connection, have_file_metadata, have_symlink_metadata, random_bytes, truncate_mtime,
+    RegularFileMetadata, WRITE_DATA_SIZE,
 };
 
 //
@@ -54,7 +54,11 @@ fn create_file_errors_when_it_already_exists() -> sqlarfs::Result<()> {
 
         file.create_file()?;
 
-        expect!(file.create_file()).to(have_error_kind(ErrorKind::AlreadyExists));
+        expect!(file.create_file())
+            .to(be_err())
+            .to(equal(Error::FileAlreadyExists {
+                path: "existing-file".into(),
+            }));
 
         Ok(())
     })
@@ -67,7 +71,11 @@ fn create_file_errors_when_it_has_a_non_directory_parent() -> sqlarfs::Result<()
 
         let mut child = archive.open("parent/child")?;
 
-        expect!(child.create_file()).to(have_error_kind(ErrorKind::NotADirectory));
+        expect!(child.create_file())
+            .to(be_err())
+            .to(equal(Error::NoParentDirectory {
+                path: "parent/child".into(),
+            }));
 
         Ok(())
     })
@@ -78,7 +86,11 @@ fn create_file_errors_when_it_has_no_parent() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open("parent/child")?;
 
-        expect!(file.create_file()).to(have_error_kind(ErrorKind::NotFound));
+        expect!(file.create_file())
+            .to(be_err())
+            .to(equal(Error::NoParentDirectory {
+                path: "parent/child".into(),
+            }));
 
         Ok(())
     })
@@ -91,7 +103,11 @@ fn create_file_with_trailing_slash_when_it_already_exists_without_one() -> sqlar
 
         let mut file = archive.open(if cfg!(windows) { r"file\" } else { "file/" })?;
 
-        expect!(file.create_file()).to(have_error_kind(ErrorKind::AlreadyExists));
+        expect!(file.create_file())
+            .to(be_err())
+            .to(equal(Error::FileAlreadyExists {
+                path: "file".into(),
+            }));
 
         Ok(())
     })
@@ -160,7 +176,11 @@ fn create_dir_all_errors_if_regular_file_already_exists() -> sqlarfs::Result<()>
 
         dir.create_file()?;
 
-        expect!(dir.create_dir_all()).to(have_error_kind(ErrorKind::AlreadyExists));
+        expect!(dir.create_dir_all())
+            .to(be_err())
+            .to(equal(Error::FileAlreadyExists {
+                path: "file".into(),
+            }));
 
         Ok(())
     })
@@ -175,7 +195,9 @@ fn create_symlink_with_empty_target_errors() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut link = archive.open("link")?;
 
-        expect!(link.create_symlink("")).to(have_error_kind(ErrorKind::InvalidArgs));
+        expect!(link.create_symlink(""))
+            .to(be_err())
+            .to(match_pattern(pattern!(Error::InvalidArgs { .. })));
 
         Ok(())
     })
@@ -190,7 +212,8 @@ fn create_symlink_with_non_utf8_target_errors() -> sqlarfs::Result<()> {
         let mut link = archive.open("link")?;
 
         expect!(link.create_symlink(OsStr::from_bytes(b"not/valid/utf8/\x80\x81")))
-            .to(have_error_kind(ErrorKind::InvalidArgs));
+            .to(be_err())
+            .to(match_pattern(pattern!(Error::InvalidArgs { .. })));
 
         Ok(())
     })
@@ -398,7 +421,11 @@ fn deleting_file_errors_when_it_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open("nonexistent-file")?;
 
-        expect!(file.delete()).to(have_error_kind(ErrorKind::NotFound));
+        expect!(file.delete())
+            .to(be_err())
+            .to(equal(Error::FileNotFound {
+                path: "nonexistent-file".into(),
+            }));
 
         Ok(())
     })
@@ -515,7 +542,12 @@ fn set_file_mode_errors_when_file_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open("file")?;
 
-        expect!(file.set_mode(None)).to(have_error_kind(ErrorKind::NotFound));
+        expect!(file.set_mode(None))
+            .to(be_err())
+            .to(equal(Error::FileNotFound {
+                path: "file".into(),
+            }));
+
         Ok(())
     })
 }
@@ -590,7 +622,11 @@ fn set_file_mtime_errors_when_file_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open("file")?;
 
-        expect!(file.set_mtime(None)).to(have_error_kind(ErrorKind::NotFound));
+        expect!(file.set_mtime(None))
+            .to(be_err())
+            .to(equal(Error::FileNotFound {
+                path: "file".into(),
+            }));
 
         Ok(())
     })
@@ -604,7 +640,9 @@ fn set_file_mtime_with_pre_epoch_mtime_errors() -> sqlarfs::Result<()> {
 
         let pre_epoch_mtime = SystemTime::UNIX_EPOCH - Duration::from_secs(1);
 
-        expect!(file.set_mtime(Some(pre_epoch_mtime))).to(have_error_kind(ErrorKind::InvalidArgs));
+        expect!(file.set_mtime(Some(pre_epoch_mtime)))
+            .to(be_err())
+            .to(match_pattern(pattern!(Error::InvalidArgs { .. })));
 
         Ok(())
     })
@@ -646,7 +684,11 @@ fn is_file_empty_errors_when_it_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let file = archive.open("file")?;
 
-        expect!(file.is_empty()).to(have_error_kind(ErrorKind::NotFound));
+        expect!(file.is_empty())
+            .to(be_err())
+            .to(equal(Error::FileNotFound {
+                path: "file".into(),
+            }));
 
         Ok(())
     })
@@ -658,7 +700,9 @@ fn is_file_empty_errors_when_it_is_a_directory() -> sqlarfs::Result<()> {
         let mut dir = archive.open("dir")?;
         dir.create_dir()?;
 
-        expect!(dir.is_empty()).to(have_error_kind(ErrorKind::NotARegularFile));
+        expect!(dir.is_empty())
+            .to(be_err())
+            .to(equal(Error::NotARegularFile { path: "dir".into() }));
 
         Ok(())
     })
@@ -670,7 +714,11 @@ fn is_file_empty_errors_when_it_is_a_symlink() -> sqlarfs::Result<()> {
         let mut link = archive.open("link")?;
         link.create_symlink("target")?;
 
-        expect!(link.is_empty()).to(have_error_kind(ErrorKind::NotARegularFile));
+        expect!(link.is_empty())
+            .to(be_err())
+            .to(equal(Error::NotARegularFile {
+                path: "link".into(),
+            }));
 
         Ok(())
     })
@@ -685,7 +733,11 @@ fn is_file_compressed_errors_when_it_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let file = archive.open("file")?;
 
-        expect!(file.is_compressed()).to(have_error_kind(ErrorKind::NotFound));
+        expect!(file.is_compressed())
+            .to(be_err())
+            .to(equal(Error::FileNotFound {
+                path: "file".into(),
+            }));
 
         Ok(())
     })
@@ -697,7 +749,9 @@ fn is_file_compressed_errors_when_it_is_a_directory() -> sqlarfs::Result<()> {
         let mut dir = archive.open("dir")?;
         dir.create_dir()?;
 
-        expect!(dir.is_compressed()).to(have_error_kind(ErrorKind::NotARegularFile));
+        expect!(dir.is_compressed())
+            .to(be_err())
+            .to(equal(Error::NotARegularFile { path: "dir".into() }));
 
         Ok(())
     })
@@ -709,7 +763,11 @@ fn is_file_compressed_errors_when_it_is_a_symlink() -> sqlarfs::Result<()> {
         let mut link = archive.open("link")?;
         link.create_symlink("target")?;
 
-        expect!(link.is_compressed()).to(have_error_kind(ErrorKind::NotARegularFile));
+        expect!(link.is_compressed())
+            .to(be_err())
+            .to(equal(Error::NotARegularFile {
+                path: "link".into(),
+            }));
 
         Ok(())
     })
@@ -724,7 +782,11 @@ fn open_reader_errors_when_file_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open("file")?;
 
-        expect!(file.reader()).to(have_error_kind(ErrorKind::NotFound));
+        expect!(file.reader())
+            .to(be_err())
+            .to(equal(Error::FileNotFound {
+                path: "file".into(),
+            }));
 
         Ok(())
     })
@@ -736,7 +798,9 @@ fn open_reader_errors_when_file_is_a_directory() -> sqlarfs::Result<()> {
         let mut dir = archive.open("dir")?;
         dir.create_dir()?;
 
-        expect!(dir.reader()).to(have_error_kind(ErrorKind::NotARegularFile));
+        expect!(dir.reader())
+            .to(be_err())
+            .to(equal(Error::NotARegularFile { path: "dir".into() }));
 
         Ok(())
     })
@@ -748,7 +812,11 @@ fn open_reader_errors_when_file_is_a_symlink() -> sqlarfs::Result<()> {
         let mut link = archive.open("link")?;
         link.create_symlink("target")?;
 
-        expect!(link.reader()).to(have_error_kind(ErrorKind::NotARegularFile));
+        expect!(link.reader())
+            .to(be_err())
+            .to(equal(Error::NotARegularFile {
+                path: "link".into(),
+            }));
 
         Ok(())
     })
@@ -796,7 +864,11 @@ fn truncate_file_errors_when_it_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open("file")?;
 
-        expect!(file.truncate()).to(have_error_kind(ErrorKind::NotFound));
+        expect!(file.truncate())
+            .to(be_err())
+            .to(equal(Error::FileNotFound {
+                path: "file".into(),
+            }));
 
         Ok(())
     })
@@ -808,7 +880,9 @@ fn truncate_file_errors_when_it_is_a_directory() -> sqlarfs::Result<()> {
         let mut file = archive.open("dir")?;
         file.create_dir()?;
 
-        expect!(file.truncate()).to(have_error_kind(ErrorKind::NotARegularFile));
+        expect!(file.truncate())
+            .to(be_err())
+            .to(equal(Error::NotARegularFile { path: "dir".into() }));
 
         Ok(())
     })
@@ -820,7 +894,11 @@ fn truncate_file_errors_when_it_is_a_symlink() -> sqlarfs::Result<()> {
         let mut file = archive.open("link")?;
         file.create_symlink("target")?;
 
-        expect!(file.truncate()).to(have_error_kind(ErrorKind::NotARegularFile));
+        expect!(file.truncate())
+            .to(be_err())
+            .to(equal(Error::NotARegularFile {
+                path: "link".into(),
+            }));
 
         Ok(())
     })
@@ -837,7 +915,11 @@ fn write_bytes_errors_when_file_does_not_exist() -> sqlarfs::Result<()> {
 
         let expected = random_bytes(WRITE_DATA_SIZE);
 
-        expect!(file.write_bytes(&expected)).to(have_error_kind(ErrorKind::NotFound));
+        expect!(file.write_bytes(&expected))
+            .to(be_err())
+            .to(equal(Error::FileNotFound {
+                path: "file".into(),
+            }));
 
         Ok(())
     })
@@ -849,7 +931,9 @@ fn write_bytes_errors_when_file_is_a_directory() -> sqlarfs::Result<()> {
         let mut dir = archive.open("dir")?;
         dir.create_dir()?;
 
-        expect!(dir.write_bytes(b"file content")).to(have_error_kind(ErrorKind::NotARegularFile));
+        expect!(dir.write_bytes(b"file content"))
+            .to(be_err())
+            .to(equal(Error::NotARegularFile { path: "dir".into() }));
 
         Ok(())
     })
@@ -861,7 +945,11 @@ fn write_bytes_errors_when_file_is_a_symlink() -> sqlarfs::Result<()> {
         let mut link = archive.open("link")?;
         link.create_symlink("target")?;
 
-        expect!(link.write_bytes(b"file content")).to(have_error_kind(ErrorKind::NotARegularFile));
+        expect!(link.write_bytes(b"file content"))
+            .to(be_err())
+            .to(equal(Error::NotARegularFile {
+                path: "link".into(),
+            }));
 
         Ok(())
     })
@@ -876,7 +964,11 @@ fn write_string_errors_when_file_does_not_exist() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let mut file = archive.open("file")?;
 
-        expect!(file.write_str("file content")).to(have_error_kind(ErrorKind::NotFound));
+        expect!(file.write_str("file content"))
+            .to(be_err())
+            .to(equal(Error::FileNotFound {
+                path: "file".into(),
+            }));
 
         Ok(())
     })
@@ -888,7 +980,9 @@ fn write_string_errors_when_file_is_a_directory() -> sqlarfs::Result<()> {
         let mut dir = archive.open("dir")?;
         dir.create_dir()?;
 
-        expect!(dir.write_str("file content")).to(have_error_kind(ErrorKind::NotARegularFile));
+        expect!(dir.write_str("file content"))
+            .to(be_err())
+            .to(equal(Error::NotARegularFile { path: "dir".into() }));
 
         Ok(())
     })
@@ -900,7 +994,11 @@ fn write_string_errors_when_file_is_a_symlink() -> sqlarfs::Result<()> {
         let mut link = archive.open("link")?;
         link.create_symlink("target")?;
 
-        expect!(link.write_str("file content")).to(have_error_kind(ErrorKind::NotARegularFile));
+        expect!(link.write_str("file content"))
+            .to(be_err())
+            .to(equal(Error::NotARegularFile {
+                path: "link".into(),
+            }));
 
         Ok(())
     })
@@ -916,7 +1014,10 @@ fn write_from_reader_errors_when_file_does_not_exist() -> sqlarfs::Result<()> {
         let mut file = archive.open("file")?;
 
         expect!(file.write_from(&mut "file content".as_bytes()))
-            .to(have_error_kind(ErrorKind::NotFound));
+            .to(be_err())
+            .to(equal(Error::FileNotFound {
+                path: "file".into(),
+            }));
 
         Ok(())
     })
@@ -929,7 +1030,8 @@ fn write_from_reader_errors_when_file_is_a_directory() -> sqlarfs::Result<()> {
         dir.create_dir()?;
 
         expect!(dir.write_from(&mut "file content".as_bytes()))
-            .to(have_error_kind(ErrorKind::NotARegularFile));
+            .to(be_err())
+            .to(equal(Error::NotARegularFile { path: "dir".into() }));
 
         Ok(())
     })
@@ -942,7 +1044,10 @@ fn write_from_reader_errors_when_file_is_a_symlink() -> sqlarfs::Result<()> {
         link.create_symlink("target")?;
 
         expect!(link.write_from(&mut "file content".as_bytes()))
-            .to(have_error_kind(ErrorKind::NotARegularFile));
+            .to(be_err())
+            .to(equal(Error::NotARegularFile {
+                path: "link".into(),
+            }));
 
         Ok(())
     })
@@ -954,12 +1059,16 @@ fn write_from_reader_errors_when_file_is_a_symlink() -> sqlarfs::Result<()> {
 
 #[test]
 fn write_from_file_errors_when_file_does_not_exist() -> sqlarfs::Result<()> {
-    let mut temp_file = tempfile::tempfile()?;
+    let mut temp_file = tempfile::NamedTempFile::new()?;
 
     connection()?.exec(|archive| {
         let mut file = archive.open("file")?;
 
-        expect!(file.write_file(&mut temp_file)).to(have_error_kind(ErrorKind::NotFound));
+        expect!(file.write_file(temp_file.as_file_mut()))
+            .to(be_err())
+            .to(equal(Error::FileNotFound {
+                path: "file".into(),
+            }));
 
         Ok(())
     })
@@ -973,7 +1082,9 @@ fn write_from_file_errors_when_file_is_a_directory() -> sqlarfs::Result<()> {
         let mut dir = archive.open("dir")?;
         dir.create_dir()?;
 
-        expect!(dir.write_file(&mut temp_file)).to(have_error_kind(ErrorKind::NotARegularFile));
+        expect!(dir.write_file(&mut temp_file))
+            .to(be_err())
+            .to(equal(Error::NotARegularFile { path: "dir".into() }));
 
         Ok(())
     })
@@ -987,7 +1098,11 @@ fn write_from_file_errors_when_file_is_a_symlink() -> sqlarfs::Result<()> {
         let mut link = archive.open("link")?;
         link.create_symlink("target")?;
 
-        expect!(link.write_file(&mut temp_file)).to(have_error_kind(ErrorKind::NotARegularFile));
+        expect!(link.write_file(&mut temp_file))
+            .to(be_err())
+            .to(equal(Error::NotARegularFile {
+                path: "link".into(),
+            }));
 
         Ok(())
     })

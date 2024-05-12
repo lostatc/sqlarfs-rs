@@ -71,20 +71,14 @@ where
     handle.join().unwrap()
 }
 
-// Convert an arbitrary error into a `sqlarfs::Error`. We don't have functionality like this in the
-// library specifically to force callers to explicitly choose a `sqlarfs::ErrorKind`. For tests,
-// however, that's not as important.
-pub fn into_sqlarfs_error<E>(err: E) -> sqlarfs::Error
+// TODO: Use `eyre::Result` instead of `sqlarfs::Result` for all tests, making this unnecessary.
+pub fn into_sqlarfs_error<E>(_: E) -> sqlarfs::Error
 where
     E: std::error::Error + Send + Sync + 'static,
 {
-    sqlarfs::Error::new(
-        // The error kind we use here is somewhat arbitrary.
-        sqlarfs::ErrorKind::Io {
-            kind: io::ErrorKind::Other,
-        },
-        err,
-    )
+    sqlarfs::Error::Io {
+        kind: io::ErrorKind::Other,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -292,7 +292,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     pub fn create_dir_all(&mut self) -> crate::Result<()> {
         match self.validate_can_be_created() {
             Ok(_) => {}
-            Err(crate::Error::FileNotFound { .. }) => {}
+            Err(crate::Error::NoParentDirectory { .. }) => {}
             Err(err) => return Err(err),
         }
 

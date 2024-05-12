@@ -3,10 +3,10 @@ mod common;
 use std::ffi::OsStr;
 use std::path::Path;
 
-use sqlarfs::{ErrorKind, FileMode};
-use xpct::{be_ok, equal, expect};
+use sqlarfs::{Error, FileMode};
+use xpct::{be_err, be_ok, equal, expect, match_pattern, pattern};
 
-use common::{connection, have_error_kind};
+use common::connection;
 
 //
 // `Archive::open`
@@ -21,7 +21,9 @@ fn opening_file_with_absolute_path_errors() -> sqlarfs::Result<()> {
     };
 
     connection()?.exec(|archive| {
-        expect!(archive.open(path)).to(have_error_kind(ErrorKind::InvalidArgs));
+        expect!(archive.open(path))
+            .to(be_err())
+            .to(match_pattern(pattern!(Error::InvalidArgs { .. })));
 
         Ok(())
     })
@@ -34,7 +36,8 @@ fn opening_file_with_non_utf8_path_errors() -> sqlarfs::Result<()> {
 
     connection()?.exec(|archive| {
         expect!(archive.open(OsStr::from_bytes(b"not/valid/utf8/\x80\x81")))
-            .to(have_error_kind(ErrorKind::InvalidArgs));
+            .to(be_err())
+            .to(match_pattern(pattern!(Error::InvalidArgs { .. })));
 
         Ok(())
     })
@@ -43,7 +46,9 @@ fn opening_file_with_non_utf8_path_errors() -> sqlarfs::Result<()> {
 #[test]
 fn opening_file_with_empty_path_errors() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
-        expect!(archive.open("")).to(have_error_kind(ErrorKind::InvalidArgs));
+        expect!(archive.open(""))
+            .to(be_err())
+            .to(match_pattern(pattern!(Error::InvalidArgs { .. })));
 
         Ok(())
     })

@@ -116,7 +116,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
             Ok(())
         } else {
             Err(crate::Error::NotARegularFile {
-                path: PathBuf::from(self.path),
+                path: PathBuf::from(&self.path),
             })
         }
     }
@@ -126,7 +126,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
             Ok(())
         } else {
             Err(crate::Error::NotARegularFile {
-                path: PathBuf::from(self.path),
+                path: PathBuf::from(&self.path),
             })
         }
     }
@@ -151,15 +151,13 @@ impl<'conn, 'ar> File<'conn, 'ar> {
                     Ok(())
                 } else {
                     Err(crate::Error::NoParentDirectory {
-                        path: self.path.into(),
+                        path: PathBuf::from(&self.path),
                     })
                 }
             }
-            Err(err) if matches!(err, crate::Error::FileNotFound { .. }) => {
-                Err(crate::Error::NoParentDirectory {
-                    path: self.path.into(),
-                })
-            }
+            Err(crate::Error::FileNotFound { .. }) => Err(crate::Error::NoParentDirectory {
+                path: PathBuf::from(&self.path),
+            }),
             Err(err) => Err(err),
         }
     }
@@ -189,7 +187,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     pub fn exists(&self) -> crate::Result<bool> {
         match self.metadata() {
             Ok(_) => Ok(true),
-            Err(err) if matches!(err, crate::Error::FileNotFound { .. }) => Ok(false),
+            Err(crate::Error::FileNotFound { .. }) => Ok(false),
             Err(err) => Err(err),
         }
     }
@@ -294,18 +292,18 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     pub fn create_dir_all(&mut self) -> crate::Result<()> {
         match self.validate_can_be_created() {
             Ok(_) => {}
-            Err(err) if matches!(err, crate::ErrorKind::NotFound) => {}
+            Err(crate::Error::FileNotFound { .. }) => {}
             Err(err) => return Err(err),
         }
 
         match self.metadata() {
             Ok(metadata) if !metadata.is_dir() => {
                 return Err(crate::Error::FileAlreadyExists {
-                    path: self.path.into(),
+                    path: PathBuf::from(&self.path),
                 });
             }
             Ok(_) => {}
-            Err(err) if matches!(err, crate::Error::FileNotFound { .. }) => {}
+            Err(crate::Error::FileNotFound { .. }) => {}
             Err(err) => return Err(err),
         }
 
@@ -334,7 +332,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
 
                 match result {
                     Ok(_) => {}
-                    Err(err) if matches!(err, crate::Error::FileAlreadyExists { .. }) => {}
+                    Err(crate::Error::FileAlreadyExists { .. }) => {}
                     Err(err) => return Err(err),
                 }
             }
@@ -735,7 +733,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
                     let compression_level = flate2::Compression::new(level);
 
                     let allocation_size = match size_hint {
-                        Some(len) => Some(len.try_into().map_err(|err| crate::Error::FileTooBig)?),
+                        Some(len) => Some(len.try_into().map_err(|_| crate::Error::FileTooBig)?),
                         None => None,
                     };
 

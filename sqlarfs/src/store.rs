@@ -215,7 +215,7 @@ impl<'conn> Store<'conn> {
         )?;
 
         if num_updated == 0 {
-            return Err(crate::ErrorKind::NotFound.into());
+            return Err(crate::Error::FileNotFound { path: path.into() });
         }
 
         Ok(())
@@ -242,7 +242,7 @@ impl<'conn> Store<'conn> {
                 )?,
                 original_size,
             }),
-            None => Err(crate::ErrorKind::NotFound.into()),
+            None => Err(crate::Error::FileNotFound { path: path.into() }),
         }
     }
 
@@ -253,7 +253,7 @@ impl<'conn> Store<'conn> {
         )?;
 
         if num_updated == 0 {
-            return Err(crate::ErrorKind::NotFound.into());
+            return Err(crate::Error::FileNotFound { path: path.into() });
         }
 
         Ok(())
@@ -265,7 +265,7 @@ impl<'conn> Store<'conn> {
             .execute("UPDATE sqlar SET data = ?1 WHERE name = ?2", (bytes, path))?;
 
         if num_updated == 0 {
-            return Err(crate::ErrorKind::NotFound.into());
+            return Err(crate::Error::FileNotFound { path: path.into() });
         }
 
         Ok(())
@@ -327,7 +327,7 @@ impl<'conn> Store<'conn> {
         )?;
 
         if num_updated == 0 {
-            return Err(crate::ErrorKind::NotFound.into());
+            return Err(crate::Error::FileNotFound { path: path.into() });
         }
 
         Ok(())
@@ -351,7 +351,7 @@ impl<'conn> Store<'conn> {
         )?;
 
         if num_updated == 0 {
-            return Err(crate::ErrorKind::NotFound.into());
+            return Err(crate::Error::FileNotFound { path: path.into() });
         }
 
         Ok(())
@@ -363,7 +363,7 @@ impl<'conn> Store<'conn> {
             .execute("UPDATE sqlar SET sz = ?1 WHERE name = ?2", (size, path))?;
 
         if num_updated == 0 {
-            return Err(crate::ErrorKind::NotFound.into());
+            return Err(crate::Error::FileNotFound { path: path.into() });
         }
 
         Ok(())
@@ -382,7 +382,7 @@ impl<'conn> Store<'conn> {
                 },
             )
             .optional()?
-            .ok_or(crate::ErrorKind::NotFound.into())
+            .ok_or(crate::Error::FileNotFound { path: path.into() })
     }
 
     pub fn list_files(&self, opts: &ListOptions) -> crate::Result<ListEntries> {

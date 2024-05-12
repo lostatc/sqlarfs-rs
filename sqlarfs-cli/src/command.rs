@@ -12,10 +12,9 @@ fn file_name(path: &Path) -> Option<&Path> {
 
 impl Create {
     pub fn run(&self) -> eyre::Result<()> {
-        let source_filename = file_name(&self.source).ok_or(sqlarfs::Error::msg(
-            sqlarfs::ErrorKind::InvalidArgs,
-            "The source path must have a filename.",
-        ))?;
+        let source_filename = file_name(&self.source).ok_or(sqlarfs::Error::InvalidArgs {
+            reason: String::from("The source path must have a filename."),
+        })?;
 
         let archive_filename = self.archive.to_owned().unwrap_or_else(|| {
             let mut filename = source_filename.to_owned();
@@ -25,10 +24,7 @@ impl Create {
 
         let mut conn = Connection::builder()
             .init_new(true)
-            .open(archive_filename)
-            .map_err(|err| {
-                err.context("Failed creating new database. Does a database already exist?")
-            })?;
+            .open(archive_filename)?;
 
         let opts = ArchiveOptions::new()
             .follow_symlinks(self.follow)
@@ -48,10 +44,9 @@ impl Extract {
 
         if let Some(source) = &self.source {
             if source.file_name().is_none() {
-                return Err(sqlarfs::Error::msg(
-                    sqlarfs::ErrorKind::InvalidArgs,
-                    "The source path must have a filename.",
-                )
+                return Err(sqlarfs::Error::InvalidArgs {
+                    reason: String::from("The source path must have a filename."),
+                }
                 .into());
             }
         }

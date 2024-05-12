@@ -45,44 +45,76 @@ pub enum Error {
     // generally represents an error on the part of the user and isn't useful to catch. We may
     // still document the circumstances that could lean to this error, but not that this specific
     // error kind would be returned.
+    /// Some arguments were invalid.
     #[error("Some arguments were invalid: {reason}")]
-    InvalidArgs { reason: String },
+    InvalidArgs {
+        /// Additional context about the error.
+        ///
+        /// This text is meant for humans and should not be parsed.
+        reason: String,
+    },
 
+    /// A file already exists.
     #[error("This file already exists: {path}")]
-    FileAlreadyExists { path: PathBuf },
+    FileAlreadyExists {
+        /// The path of the file that already exists.
+        path: PathBuf,
+    },
 
+    /// A file was not found.
     #[error("This file was not found: {path}")]
-    FileNotFound { path: PathBuf },
+    FileNotFound {
+        /// The path of the file that was not found.
+        path: PathBuf,
+    },
 
+    /// A file has no parent directory.
     #[error("This file has no parent directory: {path}")]
-    NoParentDirectory { path: PathBuf },
+    NoParentDirectory {
+        /// The path of the file that has no parent directory.
+        path: PathBuf,
+    },
 
+    /// A file is a directory or a symbolic link, when we were expecting a regular file.
     #[error("This file is a directory or a symbolic link, when we were expecting a regular file: {path}")]
-    NotARegularFile { path: PathBuf },
+    NotARegularFile {
+        /// The path of the file that is not a regular file.
+        path: PathBuf,
+    },
 
-    #[error("A file is not a directory, when we were expecting one: {path}")]
-    NotADirectory { path: PathBuf },
+    /// A file is not a directory, when we were expecting one.
+    #[error("This file is not a directory, when we were expecting one: {path}")]
+    NotADirectory {
+        /// The path of the file that is not a directory.
+        path: PathBuf,
+    },
 
+    /// A loop of symbolic links was encountered while traversing the filesystem.
     #[error("A loop of symbolic links was encountered while traversing the filesystem.")]
     FilesystemLoop,
 
+    /// Attempted to read a compressed file, but the `deflate` Cargo feature was disabled.
     #[error("Attempted to read a compressed file, but sqlarfs was compiled without compression support.")]
     CompressionNotSupported,
 
+    /// Attempted to write more data to the SQLite archive than its maximum blob size will allow.
     #[error(
         "Attempted to write more data to the SQLite archive than its maximum blob size will allow."
     )]
     FileTooBig,
 
+    /// Attempted to write to a read-only database.
     #[error("Attempted to write to a read-only database.")]
     ReadOnly,
 
+    /// There was an error from the underlying SQLite database.
     #[error("There was an error from the underlying SQLite database: {code:?}")]
     Sqlite {
         /// The underlying SQLite error code, if there is one.
         code: Option<SqliteErrorCode>,
     },
 
+    /// An I/O error occurred.
     #[error("An I/O error occurred: {kind}")]
     Io {
         /// The [`std::io::ErrorKind`] of the I/O error.
@@ -96,7 +128,7 @@ impl From<io::Error> for Error {
         match error.into_inner() {
             Some(payload) => match payload.downcast::<Error>() {
                 Ok(crate_error) => *crate_error,
-                Err(other_error) => Error::Io { kind },
+                Err(_) => Error::Io { kind },
             },
             None => Error::Io { kind },
         }
@@ -181,10 +213,9 @@ mod tests {
 
     #[test]
     fn convert_into_io_error_with_kind() {
-        let err: Error = Error::FileNotFound {
+        let err = Error::FileNotFound {
             path: PathBuf::new(),
-        }
-        .into();
+        };
 
         let io_err: io::Error = err.into();
 
@@ -203,10 +234,9 @@ mod tests {
 
     #[test]
     fn convert_from_io_error_wrapping_a_sqlarfs_error() {
-        let original_err: Error = Error::InvalidArgs {
+        let original_err = Error::InvalidArgs {
             reason: String::new(),
-        }
-        .into();
+        };
         let io_err: io::Error = original_err.into();
         let unwrapped_error: Error = io_err.into();
 

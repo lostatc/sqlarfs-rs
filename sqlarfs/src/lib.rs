@@ -62,7 +62,7 @@ mod tree;
 mod util;
 
 pub use archive::Archive;
-pub use error::{Error, ErrorKind, Result, SqliteErrorCode};
+pub use error::{Error, Result, SqliteErrorCode};
 pub use file::File;
 pub use list::{ListEntries, ListEntry, ListOptions};
 pub use metadata::{FileMetadata, FileMode, FileType};

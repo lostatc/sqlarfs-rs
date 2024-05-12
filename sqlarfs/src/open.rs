@@ -93,10 +93,11 @@ impl OpenOptions {
         use rusqlite::OpenFlags;
 
         if self.init && self.init_new {
-            return Err(crate::Error::msg(
-                crate::ErrorKind::InvalidArgs,
-                "`OpenOptions::init` and `OpenOptions::init_new` are mutually exclusive.",
-            ));
+            return Err(crate::Error::InvalidArgs {
+                reason: String::from(
+                    "`OpenOptions::init` and `OpenOptions::init_new` are mutually exclusive.",
+                ),
+            });
         }
 
         // SQLITE_OPEN_NO_MUTEX is the default in rusqlite. Its docs explain why.

@@ -7,14 +7,14 @@ use thiserror::Error;
 /// An opaque type representing a SQLite error code.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SqliteErrorCode {
-    extended_code: Option<std::ffi::c_int>,
+    inner: Option<rusqlite::ffi::Error>,
 }
 
 impl fmt::Display for SqliteErrorCode {
     #[cfg_attr(coverage_nightly, coverage(off))]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(code) = self.extended_code {
-            rusqlite::ffi::Error::new(code).fmt(f)?;
+        if let Some(code) = self.inner {
+            code.fmt(f)?;
         }
 
         Ok(())
@@ -29,7 +29,7 @@ impl SqliteErrorCode {
     pub fn raw_code(&self) -> Option<std::ffi::c_int> {
         // We're not including rusqlite in our public API, so we're only exposing the raw error
         // code from the SQLite C API as opposed to any rusqlite types.
-        self.extended_code
+        self.inner.map(|err| err.extended_code)
     }
 }
 
@@ -180,7 +180,7 @@ impl From<rusqlite::Error> for Error {
             }) => Error::FileTooBig,
             code => Error::Sqlite {
                 code: SqliteErrorCode {
-                    extended_code: code.map(|code| code.extended_code),
+                    inner: code.cloned(),
                 },
             },
         }

@@ -4,15 +4,13 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use sqlarfs::{ErrorKind, FileMode, FileType, ListOptions};
+use sqlarfs::{Error, FileMode, FileType, ListOptions};
 use xpct::{
-    be_empty, be_gt, be_lt, be_ok, be_some, be_zero, consist_of, contain_element, equal, expect,
-    fields, match_fields, why,
+    be_empty, be_err, be_gt, be_lt, be_ok, be_some, be_zero, consist_of, contain_element, equal,
+    expect, fields, match_fields, match_pattern, pattern, why,
 };
 
-use common::{
-    connection, have_error_kind, have_file_metadata, truncate_mtime, RegularFileMetadata,
-};
+use common::{connection, have_file_metadata, truncate_mtime, RegularFileMetadata};
 
 //
 // `Archive::list`
@@ -117,10 +115,14 @@ fn list_all_paths_with_metadata() -> sqlarfs::Result<()> {
 fn specifying_mutually_exclusive_sort_options_errors() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let opts = ListOptions::new().by_size().by_mtime();
-        expect!(archive.list_with(&opts)).to(have_error_kind(ErrorKind::InvalidArgs));
+        expect!(archive.list_with(&opts))
+            .to(be_err())
+            .to(match_pattern(pattern!(Error::InvalidArgs { .. })));
 
         let opts = ListOptions::new().by_mtime().by_size();
-        expect!(archive.list_with(&opts)).to(have_error_kind(ErrorKind::InvalidArgs));
+        expect!(archive.list_with(&opts))
+            .to(be_err())
+            .to(match_pattern(pattern!(Error::InvalidArgs { .. })));
 
         Ok(())
     })
@@ -130,10 +132,14 @@ fn specifying_mutually_exclusive_sort_options_errors() -> sqlarfs::Result<()> {
 fn specifying_mutually_exclusive_order_options_errors() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let opts = ListOptions::new().asc().desc();
-        expect!(archive.list_with(&opts)).to(have_error_kind(ErrorKind::InvalidArgs));
+        expect!(archive.list_with(&opts))
+            .to(be_err())
+            .to(match_pattern(pattern!(Error::InvalidArgs { .. })));
 
         let opts = ListOptions::new().desc().asc();
-        expect!(archive.list_with(&opts)).to(have_error_kind(ErrorKind::InvalidArgs));
+        expect!(archive.list_with(&opts))
+            .to(be_err())
+            .to(match_pattern(pattern!(Error::InvalidArgs { .. })));
 
         Ok(())
     })
@@ -143,10 +149,14 @@ fn specifying_mutually_exclusive_order_options_errors() -> sqlarfs::Result<()> {
 fn specifying_mutually_exclusive_file_type_options_errors() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let opts = ListOptions::new().file_type(FileType::File).by_size();
-        expect!(archive.list_with(&opts)).to(have_error_kind(ErrorKind::InvalidArgs));
+        expect!(archive.list_with(&opts))
+            .to(be_err())
+            .to(match_pattern(pattern!(Error::InvalidArgs { .. })));
 
         let opts = ListOptions::new().by_size().file_type(FileType::File);
-        expect!(archive.list_with(&opts)).to(have_error_kind(ErrorKind::InvalidArgs));
+        expect!(archive.list_with(&opts))
+            .to(be_err())
+            .to(match_pattern(pattern!(Error::InvalidArgs { .. })));
 
         Ok(())
     })
@@ -156,10 +166,14 @@ fn specifying_mutually_exclusive_file_type_options_errors() -> sqlarfs::Result<(
 fn specifying_mutually_exclusive_descendants_options_errors() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         let opts = ListOptions::new().descendants_of("a").children_of("a");
-        expect!(archive.list_with(&opts)).to(have_error_kind(ErrorKind::InvalidArgs));
+        expect!(archive.list_with(&opts))
+            .to(be_err())
+            .to(match_pattern(pattern!(Error::InvalidArgs { .. })));
 
         let opts = ListOptions::new().children_of("a").descendants_of("a");
-        expect!(archive.list_with(&opts)).to(have_error_kind(ErrorKind::InvalidArgs));
+        expect!(archive.list_with(&opts))
+            .to(be_err())
+            .to(match_pattern(pattern!(Error::InvalidArgs { .. })));
 
         Ok(())
     })

@@ -3,9 +3,8 @@ mod common;
 use std::fs;
 use std::io::prelude::*;
 
-use common::have_error_kind;
-use sqlarfs::OpenOptions;
-use xpct::{be_err, be_ok, expect};
+use sqlarfs::{Error, OpenOptions};
+use xpct::{be_err, be_ok, equal, expect, match_pattern, pattern};
 
 //
 // `OpenOptions::open`
@@ -88,7 +87,7 @@ fn any_write_operation_errors_when_db_is_read_only() -> sqlarfs::Result<()> {
 
     let result = conn.exec(|archive| archive.open("file")?.create_file());
 
-    expect!(result).to(have_error_kind(sqlarfs::ErrorKind::ReadOnly));
+    expect!(result).to(be_err()).to(equal(Error::ReadOnly));
 
     fs::remove_file(&temp_path).ok();
 
@@ -148,7 +147,9 @@ fn init_and_init_new_are_mutually_exclusive() -> sqlarfs::Result<()> {
         .init(true)
         .open(&temp_path);
 
-    expect!(result).to(have_error_kind(sqlarfs::ErrorKind::InvalidArgs));
+    expect!(result)
+        .to(be_err())
+        .to(match_pattern(pattern!(Error::InvalidArgs { .. })));
 
     fs::remove_file(&temp_path).ok();
 

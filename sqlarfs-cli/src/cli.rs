@@ -15,6 +15,7 @@ pub struct Create {
     pub source: PathBuf,
 
     /// The path of the SQLite archive to create.
+    #[arg(long, short = 'f')]
     pub archive: Option<PathBuf>,
 
     /// Follow symbolic links.
@@ -73,7 +74,7 @@ pub struct Archive {
     pub dest: Option<PathBuf>,
 
     /// The path of the SQLite archive.
-    #[arg(long, short)]
+    #[arg(long, short = 'f')]
     pub archive: PathBuf,
 
     /// Follow symbolic links.
@@ -101,6 +102,16 @@ pub struct Archive {
     pub no_preserve: bool,
 }
 
+#[derive(Args, Debug, Clone)]
+pub struct Remove {
+    /// The path of the file or directory to remove.
+    pub path: PathBuf,
+
+    /// The path of the SQLite archive.
+    #[arg(long, short = 'f')]
+    pub archive: PathBuf,
+}
+
 #[derive(Subcommand, Debug, Clone)]
 pub enum Commands {
     /// Create a new SQLite archive from the given directory.
@@ -114,4 +125,8 @@ pub enum Commands {
     /// Copy a file or directory into an existing archive.
     #[command(visible_alias = "ar")]
     Archive(Archive),
+
+    /// Remove a file or directory from an archive.
+    #[command(visible_alias = "rm")]
+    Remove(Remove),
 }

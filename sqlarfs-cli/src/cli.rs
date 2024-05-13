@@ -50,7 +50,7 @@ pub struct Extract {
     /// The path of the SQLite archive.
     pub archive: PathBuf,
 
-    /// The path in the filesystem to extract the files to.
+    /// The directory in the filesystem to extract the files into.
     #[arg(default_value = ".")]
     pub dest: PathBuf,
 

@@ -14,6 +14,13 @@ use xpct::{
 use common::{command, root_path};
 
 #[test]
+fn errors_when_archive_does_not_exist() -> eyre::Result<()> {
+    expect!(command(&["extract", "nonexistent.sqlar"])).to(be_err());
+
+    Ok(())
+}
+
+#[test]
 fn recursive_flag_can_be_overridden() -> eyre::Result<()> {
     let cli = Cli::parse_from(["sqlar", "extract", "nonexistent.sqlar"]);
     expect!(cli.command).to(match_pattern(pattern!(Commands::Extract(Extract {

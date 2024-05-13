@@ -12,15 +12,28 @@ fn file_name(path: &Path) -> Option<&Path> {
 
 impl Create {
     pub fn run(&self) -> eyre::Result<()> {
-        let source_filename = file_name(&self.source).ok_or(sqlarfs::Error::InvalidArgs {
-            reason: String::from("The source path must have a filename."),
-        })?;
+        let archive_filename = if self.source.is_empty() {
+            self.archive.clone().ok_or(sqlarfs::Error::InvalidArgs {
+                reason: String::from("When no files are being added to the archive, the archive path must be specified."),
+            })?
+        } else if self.source.len() == 1 {
+            let source_filename =
+                file_name(&self.source[0]).ok_or(sqlarfs::Error::InvalidArgs {
+                    reason: String::from("The source path must have a filename."),
+                })?;
 
-        let archive_filename = self.archive.to_owned().unwrap_or_else(|| {
-            let mut filename = source_filename.to_owned();
-            filename.set_extension(SQLAR_EXTENSION);
-            filename
-        });
+            self.archive.to_owned().unwrap_or_else(|| {
+                let mut filename = source_filename.to_owned();
+                filename.set_extension(SQLAR_EXTENSION);
+                filename
+            })
+        } else {
+            self.archive.clone().ok_or(sqlarfs::Error::InvalidArgs {
+                reason: String::from(
+                    "When archiving multiple files, the archive path must be specified.",
+                ),
+            })?
+        };
 
         let mut conn = Connection::create_new(archive_filename)?;
 
@@ -30,7 +43,18 @@ impl Create {
             .preserve_metadata(!self.no_preserve)
             .children(false);
 
-        conn.exec(|archive| archive.archive_with(&self.source, source_filename, &opts))?;
+        conn.exec(|archive| {
+            for source_path in &self.source {
+                let source_filename =
+                    file_name(source_path).ok_or(sqlarfs::Error::InvalidArgs {
+                        reason: String::from("The source path must have a filename."),
+                    })?;
+
+                archive.archive_with(source_path, source_filename, &opts)?;
+            }
+
+            sqlarfs::Result::Ok(())
+        })?;
 
         Ok(())
     }

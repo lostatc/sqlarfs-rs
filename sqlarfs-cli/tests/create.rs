@@ -7,6 +7,7 @@ use clap::Parser;
 use serial_test::serial;
 use sqlarfs::Connection;
 use sqlarfs_cli::{Cli, Commands, Create};
+use xpct::be_empty;
 use xpct::{be_err, be_existing_file, expect, match_pattern, pattern};
 
 use common::{command, root_path};
@@ -178,8 +179,9 @@ fn creates_archive_file_at_path() -> eyre::Result<()> {
 
     command(&[
         "create",
-        &source_file.path().to_string_lossy(),
+        "-f",
         &archive_file.path().to_string_lossy(),
+        &source_file.path().to_string_lossy(),
     ])?;
 
     expect!(archive_file.path()).to(be_existing_file());
@@ -199,6 +201,44 @@ fn creating_db_that_already_exists_errors() -> eyre::Result<()> {
         "create",
         &source_file.path().to_string_lossy(),
         &db_path.to_string_lossy()
+    ]))
+    .to(be_err());
+
+    Ok(())
+}
+
+#[test]
+fn archiving_no_files_creates_an_empty_archive() -> eyre::Result<()> {
+    let temp_dir = tempfile::tempdir()?;
+    let archive_path = temp_dir.path().join("test.sqlar");
+
+    command(&["create", "-f", &archive_path.to_string_lossy()])?;
+
+    let mut conn = Connection::open(&archive_path)?;
+
+    let files = conn.exec(|archive| sqlarfs::Result::Ok(archive.list()?.collect::<Vec<_>>()))?;
+
+    expect!(files).to(be_empty());
+
+    Ok(())
+}
+
+#[test]
+fn archive_path_is_required_when_archiving_no_files() -> eyre::Result<()> {
+    expect!(command(&["create"])).to(be_err());
+
+    Ok(())
+}
+
+#[test]
+fn archive_path_is_required_when_archiving_multiple_files() -> eyre::Result<()> {
+    let file1 = tempfile::NamedTempFile::new()?;
+    let file2 = tempfile::NamedTempFile::new()?;
+
+    expect!(command(&[
+        "create",
+        &file1.path().to_string_lossy(),
+        &file2.path().to_string_lossy()
     ]))
     .to(be_err());
 

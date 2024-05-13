@@ -11,10 +11,12 @@ pub struct Cli {
 
 #[derive(Args, Debug, Clone)]
 pub struct Create {
-    /// The directory to archive.
-    pub source: PathBuf,
+    /// The files to archive.
+    pub source: Vec<PathBuf>,
 
     /// The path of the SQLite archive to create.
+    ///
+    /// This is required when archiving multiple files.
     #[arg(long, short = 'f')]
     pub archive: Option<PathBuf>,
 

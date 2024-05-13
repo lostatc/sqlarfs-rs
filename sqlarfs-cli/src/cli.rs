@@ -11,12 +11,12 @@ pub struct Cli {
 
 #[derive(Args, Debug, Clone)]
 pub struct Create {
-    /// The files to archive.
+    /// The files to add to the archive.
     pub source: Vec<PathBuf>,
 
     /// The path of the SQLite archive to create.
     ///
-    /// This is required when archiving multiple files.
+    /// This is required when archiving multiple files or when creating an empty archive.
     #[arg(long, short = 'f')]
     pub archive: Option<PathBuf>,
 
@@ -116,7 +116,7 @@ pub struct Remove {
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum Commands {
-    /// Create a new SQLite archive from the given directory.
+    /// Create a new SQLite archive from the given files.
     #[command(visible_alias = "c")]
     Create(Create),
 

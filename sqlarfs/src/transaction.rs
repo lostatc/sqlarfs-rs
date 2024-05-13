@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use super::archive::Archive;
-use super::open::OpenOptions;
 
 /// The behavior of a SQLite transaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -34,6 +33,14 @@ impl TransactionBehavior {
 /// All operations on an [`Archive`] must happen within the context of a [`Transaction`]. You can
 /// use this connection to begin a transaction. Typically, you'll use [`Connection::exec`] to
 /// execute a closure within a transaction.
+///
+/// You can open a connection to a SQLite archive using one of these methods:
+///
+/// - [`Connection::open`]
+/// - [`Connection::create`]
+/// - [`Connection::create_new`]
+/// - [`Connection::open_readonly`]
+/// - [`Connection::open_in_memory`]
 #[derive(Debug)]
 pub struct Connection {
     conn: rusqlite::Connection,
@@ -44,27 +51,108 @@ impl Connection {
         Self { conn }
     }
 
-    /// Create a new builder for opening a [`Connection`].
-    #[cfg_attr(coverage_nightly, coverage(off))]
-    pub fn builder() -> OpenOptions {
-        OpenOptions::new()
-    }
-
     /// Open a connection to the SQLite archive at `path`.
     ///
-    /// This creates a new SQLite archive if one does not already exist.
+    /// This does not create a new SQLite archive if one does not already exist.
     ///
-    /// You can access more options for how the connection is opened with [`Connection::builder`].
+    /// # Errors
     ///
-    /// See [`OpenOptions::open`].
+    /// - [`CannotOpen`]: The database could not be opened because it does not exist.
+    /// - [`NotADatabase`]: The file at `path` is not a SQLite database.
+    ///
+    /// [`CannotOpen`]: crate::Error::CannotOpen
+    /// [`NotADatabase`]: crate::Error::NotADatabase
     pub fn open<P: AsRef<Path>>(path: P) -> crate::Result<Self> {
-        OpenOptions::new().create(true).open(path)
+        use rusqlite::OpenFlags;
+
+        // SQLITE_OPEN_NO_MUTEX is the default in rusqlite. Its docs explain why.
+        let flags = OpenFlags::SQLITE_OPEN_NO_MUTEX | OpenFlags::SQLITE_OPEN_READ_WRITE;
+
+        let mut conn = Connection::new(rusqlite::Connection::open_with_flags(path, flags)?);
+
+        conn.exec(|archive| archive.init(false))?;
+
+        Ok(conn)
     }
 
-    /// Open a SQLite connection to an in-memory database.
+    /// Create or open the SQLite archive at `path`.
+    ///
+    /// This creates the SQLite archive if it does not already exist.
+    ///
+    /// # Errors
+    ///
+    /// - [`NotADatabase`]: The file at `path` exists but is not a SQLite database.
+    ///
+    /// [`NotADatabase`]: crate::Error::NotADatabase
+    pub fn create<P: AsRef<Path>>(path: P) -> crate::Result<Self> {
+        use rusqlite::OpenFlags;
+
+        // SQLITE_OPEN_NO_MUTEX is the default in rusqlite. Its docs explain why.
+        let flags = OpenFlags::SQLITE_OPEN_NO_MUTEX
+            | OpenFlags::SQLITE_OPEN_READ_WRITE
+            | OpenFlags::SQLITE_OPEN_CREATE;
+
+        let mut conn = Connection::new(rusqlite::Connection::open_with_flags(path, flags)?);
+
+        conn.exec(|archive| archive.init(false))?;
+
+        Ok(conn)
+    }
+
+    /// Create a new SQLite archive at `path`.
+    ///
+    /// This fails if the SQLite archive does not already exist.
+    ///
+    /// # Errors
+    ///
+    /// - [`SqlarAlreadyExists`]: A SQLite archive already exists at `path`.
+    ///
+    /// [`SqlarAlreadyExists`]: crate::Error::SqlarAlreadyExists
+    pub fn create_new<P: AsRef<Path>>(path: P) -> crate::Result<Self> {
+        use rusqlite::OpenFlags;
+
+        // SQLITE_OPEN_NO_MUTEX is the default in rusqlite. Its docs explain why.
+        let flags = OpenFlags::SQLITE_OPEN_NO_MUTEX
+            | OpenFlags::SQLITE_OPEN_READ_WRITE
+            | OpenFlags::SQLITE_OPEN_CREATE;
+
+        let mut conn = Connection::new(rusqlite::Connection::open_with_flags(path, flags)?);
+
+        conn.exec(|archive| archive.init(true))?;
+
+        Ok(conn)
+    }
+
+    /// Open a read-only connection to the SQLite archive at `path`.
+    ///
+    /// This does not create a new SQLite archive if one does not already exist.
+    ///
+    /// # Errors
+    ///
+    /// - [`CannotOpen`]: The database could not be opened because it does not exist.
+    /// - [`NotADatabase`]: The file at `path` is not a SQLite database.
+    ///
+    /// [`CannotOpen`]: crate::Error::CannotOpen
+    /// [`NotADatabase`]: crate::Error::NotADatabase
+    pub fn open_readonly<P: AsRef<Path>>(path: P) -> crate::Result<Self> {
+        use rusqlite::OpenFlags;
+
+        // SQLITE_OPEN_NO_MUTEX is the default in rusqlite. Its docs explain why.
+        let flags = OpenFlags::SQLITE_OPEN_NO_MUTEX | OpenFlags::SQLITE_OPEN_READ_ONLY;
+
+        let mut conn = Connection::new(rusqlite::Connection::open_with_flags(path, flags)?);
+
+        conn.exec(|archive| archive.init(false))?;
+
+        Ok(conn)
+    }
+
+    /// Create a new in-memory SQLite archive.
     pub fn open_in_memory() -> crate::Result<Self> {
         let mut conn = Self::new(rusqlite::Connection::open_in_memory()?);
+
         conn.exec(|archive| archive.init(true))?;
+
         Ok(conn)
     }
 

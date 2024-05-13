@@ -144,7 +144,7 @@ pub const FILE_MODE: u32 = 0o100000;
 pub const DIR_MODE: u32 = 0o040000;
 pub const SYMLINK_MODE: u32 = 0o120000;
 
-/// The type of a file, either a regular file or a directory.
+/// The type of a file, either a regular file, a directory, or a symbolic link.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FileType {
     /// A regular file.

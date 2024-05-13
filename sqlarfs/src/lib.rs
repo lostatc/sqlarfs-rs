@@ -36,14 +36,9 @@
 //! }
 //! ```
 //!
-//! To open a connection to the database, use [`Connection::open`] or [`Connection::builder`]. From
-//! there, you can call [`Connection::exec`] to execute a closure within a transaction. This
-//! closure will be passed an [`Archive`], which is the main type for reading and writing to the
-//! database.
-//!
-//! [`Connection::open`]: crate::Connection::open
-//! [`Connection::exec`]: crate::Connection::exec
-//! [`Archive`]: crate::Archive
+//! To open a SQLite archive, create a new [`Connection`]. From there, you can call
+//! [`Connection::exec`] to execute a closure within a transaction. This closure will be passed an
+//! [`Archive`], which is the main type for reading and writing to the archive.
 
 // This requires the nightly toolchain.
 #![cfg_attr(coverage_nightly, feature(coverage_attribute))]
@@ -54,7 +49,6 @@ mod file;
 mod list;
 mod metadata;
 mod mode;
-mod open;
 mod store;
 mod stream;
 mod transaction;
@@ -66,7 +60,6 @@ pub use error::{Error, Result, SqliteErrorCode};
 pub use file::File;
 pub use list::{ListEntries, ListEntry, ListOptions};
 pub use metadata::{FileMetadata, FileMode, FileType};
-pub use open::OpenOptions;
 pub use stream::{Compression, FileReader};
 pub use transaction::{Connection, Transaction, TransactionBehavior};
 pub use tree::{ArchiveOptions, ExtractOptions};

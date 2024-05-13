@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use sqlarfs::{ArchiveOptions, Connection, ExtractOptions, OpenOptions};
+use sqlarfs::{ArchiveOptions, Connection, ExtractOptions};
 
 use super::cli::{Cli, Commands, Create, Extract};
 
@@ -22,9 +22,7 @@ impl Create {
             filename
         });
 
-        let mut conn = Connection::builder()
-            .create_new(true)
-            .open(archive_filename)?;
+        let mut conn = Connection::create_new(archive_filename)?;
 
         let opts = ArchiveOptions::new()
             .follow_symlinks(self.follow)
@@ -40,7 +38,7 @@ impl Create {
 
 impl Extract {
     pub fn run(&self) -> eyre::Result<()> {
-        let mut conn = OpenOptions::new().create(false).open(&self.archive)?;
+        let mut conn = Connection::open(&self.archive)?;
 
         if let Some(source) = &self.source {
             if source.file_name().is_none() {

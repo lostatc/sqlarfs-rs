@@ -68,7 +68,7 @@ fn extracts_contents_to_current_dir() -> eyre::Result<()> {
 
     env::set_current_dir(temp_dir.path())?;
 
-    let mut conn = Connection::open(&archive_path)?;
+    let mut conn = Connection::create_new(&archive_path)?;
     conn.exec(|archive| archive.open("file")?.create_file())?;
 
     command(&["extract", &archive_path.to_string_lossy()])?;
@@ -83,7 +83,7 @@ fn extracts_contents_to_target_dir() -> eyre::Result<()> {
     let temp_dir = tempfile::tempdir()?;
     let archive_path = temp_dir.path().join("test.sqlar");
 
-    let mut conn = Connection::open(&archive_path)?;
+    let mut conn = Connection::create_new(&archive_path)?;
     conn.exec(|archive| archive.open("file")?.create_file())?;
 
     command(&[
@@ -102,7 +102,7 @@ fn extracts_source_file_to_target_dir() -> eyre::Result<()> {
     let temp_dir = tempfile::tempdir()?;
     let archive_path = temp_dir.path().join("test.sqlar");
 
-    let mut conn = Connection::open(&archive_path)?;
+    let mut conn = Connection::create_new(&archive_path)?;
     conn.exec(|archive| {
         archive.open("file1")?.create_file()?;
         archive.open("file2")?.create_file()?;
@@ -129,7 +129,7 @@ fn extracts_source_dir_to_target_dir() -> eyre::Result<()> {
     let temp_dir = tempfile::tempdir()?;
     let archive_path = temp_dir.path().join("test.sqlar");
 
-    let mut conn = Connection::open(&archive_path)?;
+    let mut conn = Connection::create_new(&archive_path)?;
     conn.exec(|archive| {
         archive.open("dir1/dir2")?.create_dir_all()?;
         archive.open("dir1/dir2/file1")?.create_file()?;
@@ -158,7 +158,7 @@ fn extract_errors_when_source_does_not_have_a_filename() -> eyre::Result<()> {
     let temp_dir = tempfile::tempdir()?;
     let archive_path = temp_dir.path().join("test.sqlar");
 
-    let mut conn = Connection::open(&archive_path)?;
+    let mut conn = Connection::create_new(&archive_path)?;
     conn.exec(|archive| archive.open("file")?.create_file())?;
 
     expect!(command(&[

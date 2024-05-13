@@ -193,7 +193,7 @@ fn creating_db_that_already_exists_errors() -> eyre::Result<()> {
     let db_path = temp_dir.path().join("test.sqlar");
     let source_file = tempfile::NamedTempFile::new()?;
 
-    Connection::open(&db_path)?;
+    Connection::create_new(&db_path)?;
 
     expect!(command(&[
         "create",

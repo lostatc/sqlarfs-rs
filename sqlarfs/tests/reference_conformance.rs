@@ -56,7 +56,7 @@ fn archive_empty_regular_file() -> sqlarfs::Result<()> {
 
     sqlar_command(&reference_db, &["--create", "file"])?;
 
-    Connection::open(&crate_db)?.exec(|archive| {
+    Connection::create_new(&crate_db)?.exec(|archive| {
         let opts = sqlarfs::ArchiveOptions::new().children(true);
         archive.archive_with(temp_dir.path(), "", &opts)
     })?;
@@ -83,7 +83,7 @@ fn archive_regular_file_with_data() -> sqlarfs::Result<()> {
 
     sqlar_command(&reference_db, &["--create", "file"])?;
 
-    Connection::open(&crate_db)?.exec(|archive| {
+    Connection::create_new(&crate_db)?.exec(|archive| {
         let opts = sqlarfs::ArchiveOptions::new().children(true);
         archive.archive_with(temp_dir.path(), "", &opts)
     })?;
@@ -111,7 +111,7 @@ fn archive_symlink() -> sqlarfs::Result<()> {
 
     sqlar_command(&reference_db, &["--create", "symlink"])?;
 
-    Connection::open(&crate_db)?.exec(|archive| {
+    Connection::create_new(&crate_db)?.exec(|archive| {
         let opts = sqlarfs::ArchiveOptions::new().children(true);
         archive.archive_with(temp_dir.path(), "", &opts)
     })?;
@@ -135,7 +135,7 @@ fn archive_empty_directory() -> sqlarfs::Result<()> {
 
     sqlar_command(&reference_db, &["--create", "source"])?;
 
-    Connection::open(&crate_db)?.exec(|archive| {
+    Connection::create_new(&crate_db)?.exec(|archive| {
         let opts = sqlarfs::ArchiveOptions::new().children(true);
         archive.archive_with(temp_dir.path(), "", &opts)
     })?;
@@ -161,7 +161,7 @@ fn archive_directory_with_children() -> sqlarfs::Result<()> {
 
     sqlar_command(&reference_db, &["--create", "source"])?;
 
-    Connection::open(&crate_db)?.exec(|archive| {
+    Connection::create_new(&crate_db)?.exec(|archive| {
         let opts = sqlarfs::ArchiveOptions::new().children(true);
         archive.archive_with(temp_dir.path(), "", &opts)
     })?;
@@ -189,7 +189,7 @@ fn archive_regular_file_with_readonly_permissions() -> sqlarfs::Result<()> {
 
     sqlar_command(&reference_db, &["--create", "file"])?;
 
-    Connection::open(&crate_db)?.exec(|archive| {
+    Connection::create_new(&crate_db)?.exec(|archive| {
         let opts = sqlarfs::ArchiveOptions::new().children(true);
         archive.archive_with(temp_dir.path(), "", &opts)
     })?;
@@ -208,7 +208,7 @@ fn extract_empty_regular_file() -> sqlarfs::Result<()> {
     let crate_dest_dir = tempfile::tempdir()?;
     let reference_dest_dir = tempfile::tempdir()?;
 
-    Connection::open(&db)?.exec(|archive| {
+    Connection::create_new(&db)?.exec(|archive| {
         archive.open("file")?.create_file()?;
 
         archive.extract("file", &crate_dest_dir.path().join("file"))
@@ -237,7 +237,7 @@ fn extract_regular_file_with_data() -> sqlarfs::Result<()> {
     let crate_dest_dir = tempfile::tempdir()?;
     let reference_dest_dir = tempfile::tempdir()?;
 
-    Connection::open(&db)?.exec(|archive| {
+    Connection::create_new(&db)?.exec(|archive| {
         let mut file = archive.open("file")?;
         file.create_file()?;
         file.write_str("file contents")?;
@@ -275,7 +275,7 @@ fn extract_symlink() -> sqlarfs::Result<()> {
 
     let symlink_target = tempfile::NamedTempFile::new()?;
 
-    Connection::open(&db)?.exec(|archive| {
+    Connection::create_new(&db)?.exec(|archive| {
         archive
             .open("symlink")?
             .create_symlink(symlink_target.path())?;
@@ -309,7 +309,7 @@ fn extract_empty_directory() -> sqlarfs::Result<()> {
     let crate_dest_dir = tempfile::tempdir()?;
     let reference_dest_dir = tempfile::tempdir()?;
 
-    Connection::open(&db)?.exec(|archive| {
+    Connection::create_new(&db)?.exec(|archive| {
         archive.open("dir")?.create_dir()?;
 
         archive.extract("dir", &crate_dest_dir.path().join("dir"))
@@ -335,7 +335,7 @@ fn extract_directory_with_children() -> sqlarfs::Result<()> {
     let crate_dest_dir = tempfile::tempdir()?;
     let reference_dest_dir = tempfile::tempdir()?;
 
-    Connection::open(&db)?.exec(|archive| {
+    Connection::create_new(&db)?.exec(|archive| {
         archive.open("dir")?.create_dir()?;
         archive.open("dir/file1")?.create_file()?;
         archive.open("dir/subdir")?.create_dir()?;
@@ -364,7 +364,7 @@ fn extract_regular_file_with_readonly_permissions() -> sqlarfs::Result<()> {
     let crate_dest_dir = tempfile::tempdir()?;
     let reference_dest_dir = tempfile::tempdir()?;
 
-    Connection::open(&db)?.exec(|archive| {
+    Connection::create_new(&db)?.exec(|archive| {
         let mut file = archive.open("file")?;
         file.create_file()?;
         file.set_mode(Some(

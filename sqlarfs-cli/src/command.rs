@@ -132,7 +132,7 @@ impl List {
             opts = opts.descendants_of(self.parent.as_ref().unwrap_or(&PathBuf::from("")));
         }
 
-        if let Some(kind) = self.kind {
+        if let Some(kind) = self.r#type {
             opts = opts.file_type(kind.into());
         }
 

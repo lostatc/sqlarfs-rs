@@ -17,7 +17,7 @@ pub struct Create {
     /// The path of the SQLite archive to create.
     ///
     /// This is required when archiving multiple files or when creating an empty archive.
-    #[arg(long, short = 'f')]
+    #[arg(long, short)]
     pub archive: Option<PathBuf>,
 
     /// Follow symbolic links.
@@ -76,7 +76,7 @@ pub struct Archive {
     pub dest: Option<PathBuf>,
 
     /// The path of the SQLite archive.
-    #[arg(long, short = 'f')]
+    #[arg(long, short)]
     pub archive: PathBuf,
 
     /// Follow symbolic links.
@@ -143,8 +143,8 @@ pub struct List {
     pub no_tree: bool,
 
     /// Only return files of this type.
-    #[arg(short = 't', long = "type", value_enum)]
-    pub kind: Option<FileType>,
+    #[arg(long, short, value_enum)]
+    pub r#type: Option<FileType>,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -153,7 +153,7 @@ pub struct Remove {
     pub path: PathBuf,
 
     /// The path of the SQLite archive.
-    #[arg(long, short = 'f')]
+    #[arg(long, short)]
     pub archive: PathBuf,
 }
 

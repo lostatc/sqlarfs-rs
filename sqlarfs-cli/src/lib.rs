@@ -1,4 +1,4 @@
 mod cli;
 mod command;
 
-pub use cli::{Archive, Cli, Commands, Create, Extract};
+pub use cli::{Archive, Cli, Commands, Create, Extract, List, Remove};

@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use sqlarfs::{ArchiveOptions, Connection, ExtractOptions, ListOptions};
@@ -121,10 +122,11 @@ impl Archive {
 }
 
 impl List {
-    pub fn run(&self) -> eyre::Result<()> {
+    pub fn run(&self, mut stdout: impl Write) -> eyre::Result<()> {
         let mut conn = Connection::open(&self.archive)?;
 
-        let mut opts = ListOptions::new();
+        // We always sort by depth.
+        let mut opts = ListOptions::new().by_depth();
 
         if self.no_tree {
             opts = opts.children_of(self.parent.as_ref().unwrap_or(&PathBuf::from("")));
@@ -138,7 +140,7 @@ impl List {
 
         conn.exec(|archive| {
             for entry in archive.list_with(&opts)? {
-                println!("{}", entry?.path().to_string_lossy());
+                writeln!(stdout, "{}", entry?.path().to_string_lossy())?;
             }
 
             sqlarfs::Result::Ok(())
@@ -159,12 +161,12 @@ impl Remove {
 }
 
 impl Cli {
-    pub fn dispatch(&self) -> eyre::Result<()> {
+    pub fn dispatch(&self, stdout: impl Write) -> eyre::Result<()> {
         match &self.command {
             Commands::Create(create) => create.run(),
             Commands::Extract(extract) => extract.run(),
             Commands::Archive(archive) => archive.run(),
-            Commands::List(list) => list.run(),
+            Commands::List(list) => list.run(stdout),
             Commands::Remove(remove) => remove.run(),
         }
     }

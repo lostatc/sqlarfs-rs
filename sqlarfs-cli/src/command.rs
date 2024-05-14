@@ -2,7 +2,7 @@ use std::path::Path;
 
 use sqlarfs::{ArchiveOptions, Connection, ExtractOptions};
 
-use super::cli::{Cli, Commands, Create, Extract, Remove};
+use super::cli::{Archive, Cli, Commands, Create, Extract, Remove};
 
 const SQLAR_EXTENSION: &str = "sqlar";
 
@@ -86,6 +86,40 @@ impl Extract {
     }
 }
 
+impl Archive {
+    pub fn run(&self) -> eyre::Result<()> {
+        let mut conn = Connection::open(&self.archive)?;
+
+        let opts = ArchiveOptions::new()
+            .follow_symlinks(self.follow)
+            .recursive(!self.no_recursive)
+            .preserve_metadata(!self.no_preserve)
+            .children(false);
+
+        conn.exec(|archive| {
+            let dest_path = if let Some(dest) = &self.dest {
+                dest
+            } else {
+                file_name(&self.source).ok_or(sqlarfs::Error::InvalidArgs {
+                    reason: String::from("The source path must have a filename."),
+                })?
+            };
+
+            if let Some(parent) = dest_path.parent() {
+                if parent != Path::new("") {
+                    archive.open(parent)?.create_dir_all()?;
+                }
+            }
+
+            archive.archive_with(&self.source, dest_path, &opts)?;
+
+            sqlarfs::Result::Ok(())
+        })?;
+
+        Ok(())
+    }
+}
+
 impl Remove {
     pub fn run(&self) -> eyre::Result<()> {
         let mut conn = Connection::open(&self.archive)?;
@@ -101,7 +135,7 @@ impl Cli {
         match &self.command {
             Commands::Create(create) => create.run(),
             Commands::Extract(extract) => extract.run(),
-            Commands::Archive(_) => todo!(),
+            Commands::Archive(archive) => archive.run(),
             Commands::Remove(remove) => remove.run(),
         }
     }

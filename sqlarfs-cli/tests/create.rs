@@ -179,7 +179,7 @@ fn creates_archive_file_at_path() -> eyre::Result<()> {
 
     command(&[
         "create",
-        "-f",
+        "--archive",
         &archive_file.path().to_string_lossy(),
         &source_file.path().to_string_lossy(),
     ])?;
@@ -212,7 +212,7 @@ fn archiving_no_files_creates_an_empty_archive() -> eyre::Result<()> {
     let temp_dir = tempfile::tempdir()?;
     let archive_path = temp_dir.path().join("test.sqlar");
 
-    command(&["create", "-f", &archive_path.to_string_lossy()])?;
+    command(&["create", "--archive", &archive_path.to_string_lossy()])?;
 
     let mut conn = Connection::open(&archive_path)?;
 

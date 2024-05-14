@@ -11,7 +11,7 @@ fn errors_when_path_is_root() -> eyre::Result<()> {
 
     expect!(command(&[
         "remove",
-        "-f",
+        "--archive",
         &archive_path.to_string_lossy(),
         &root_path().to_string_lossy(),
     ]))
@@ -22,7 +22,13 @@ fn errors_when_path_is_root() -> eyre::Result<()> {
 
 #[test]
 fn errors_when_archive_does_not_exist() -> eyre::Result<()> {
-    expect!(command(&["remove", "-f", "nonexistent.sqlar", "path"])).to(be_err());
+    expect!(command(&[
+        "remove",
+        "--archive",
+        "nonexistent.sqlar",
+        "path"
+    ]))
+    .to(be_err());
 
     Ok(())
 }
@@ -36,7 +42,7 @@ fn errors_when_path_does_not_exist() -> eyre::Result<()> {
 
     expect!(command(&[
         "remove",
-        "-f",
+        "--archive",
         &archive_path.to_string_lossy(),
         "nonexistent"
     ]))
@@ -58,7 +64,7 @@ fn removes_path_from_archive() -> eyre::Result<()> {
 
     expect!(command(&[
         "remove",
-        "-f",
+        "--archive",
         &archive_path.to_string_lossy(),
         "file"
     ]))

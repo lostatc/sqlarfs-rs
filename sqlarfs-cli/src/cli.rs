@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about)]
@@ -104,6 +104,49 @@ pub struct Archive {
     pub no_preserve: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum FileType {
+    /// Regular files.
+    File,
+
+    /// Directories.
+    Dir,
+
+    /// Symbolic links.
+    Symlink,
+}
+
+impl From<FileType> for sqlarfs::FileType {
+    fn from(kind: FileType) -> Self {
+        match kind {
+            FileType::File => sqlarfs::FileType::File,
+            FileType::Dir => sqlarfs::FileType::Dir,
+            FileType::Symlink => sqlarfs::FileType::Symlink,
+        }
+    }
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct List {
+    /// The path of the SQLite archive.
+    pub archive: PathBuf,
+
+    /// Only return descendants of this directory.
+    pub parent: Option<PathBuf>,
+
+    /// Return all descendants (children, grandchildren, etc.) (default).
+    #[arg(long = "tree", default_value = "true")]
+    pub _tree: bool,
+
+    /// Only return immediate children.
+    #[arg(long, default_value = "false", overrides_with = "_tree")]
+    pub no_tree: bool,
+
+    /// Only return files of this type.
+    #[arg(short = 't', long = "type", value_enum)]
+    pub kind: Option<FileType>,
+}
+
 #[derive(Args, Debug, Clone)]
 pub struct Remove {
     /// The path of the file or directory to remove.
@@ -127,6 +170,10 @@ pub enum Commands {
     /// Copy a file or directory into an existing archive.
     #[command(visible_alias = "ar")]
     Archive(Archive),
+
+    /// List files in an archive.
+    #[command(visible_alias = "ls")]
+    List(List),
 
     /// Remove a file or directory from an archive.
     #[command(visible_alias = "rm")]

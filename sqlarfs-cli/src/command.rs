@@ -1,8 +1,8 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use sqlarfs::{ArchiveOptions, Connection, ExtractOptions};
+use sqlarfs::{ArchiveOptions, Connection, ExtractOptions, ListOptions};
 
-use super::cli::{Archive, Cli, Commands, Create, Extract, Remove};
+use super::cli::{Archive, Cli, Commands, Create, Extract, List, Remove};
 
 const SQLAR_EXTENSION: &str = "sqlar";
 
@@ -120,6 +120,34 @@ impl Archive {
     }
 }
 
+impl List {
+    pub fn run(&self) -> eyre::Result<()> {
+        let mut conn = Connection::open(&self.archive)?;
+
+        let mut opts = ListOptions::new();
+
+        if self.no_tree {
+            opts = opts.children_of(self.parent.as_ref().unwrap_or(&PathBuf::from("")));
+        } else {
+            opts = opts.descendants_of(self.parent.as_ref().unwrap_or(&PathBuf::from("")));
+        }
+
+        if let Some(kind) = self.kind {
+            opts = opts.file_type(kind.into());
+        }
+
+        conn.exec(|archive| {
+            for entry in archive.list_with(&opts)? {
+                println!("{}", entry?.path().to_string_lossy());
+            }
+
+            sqlarfs::Result::Ok(())
+        })?;
+
+        Ok(())
+    }
+}
+
 impl Remove {
     pub fn run(&self) -> eyre::Result<()> {
         let mut conn = Connection::open(&self.archive)?;
@@ -136,6 +164,7 @@ impl Cli {
             Commands::Create(create) => create.run(),
             Commands::Extract(extract) => extract.run(),
             Commands::Archive(archive) => archive.run(),
+            Commands::List(list) => list.run(),
             Commands::Remove(remove) => remove.run(),
         }
     }

@@ -443,11 +443,12 @@ impl<'conn> Store<'conn> {
         ))?;
 
         let params: Vec<Box<dyn rusqlite::ToSql>> = vec![
-            Box::new(
-                opts.ancestor
-                    .as_ref()
-                    .map(|ancestor| ancestor.to_string_lossy().into_owned()),
-            ),
+            Box::new(opts.ancestor.as_ref().map(|ancestor| {
+                ancestor
+                    .to_string_lossy()
+                    .trim_end_matches(std::path::MAIN_SEPARATOR)
+                    .to_string()
+            })),
             Box::new(TYPE_MASK),
             Box::new(if let Some(ListSort::Size) = opts.sort {
                 Some(FILE_MODE)
@@ -460,11 +461,12 @@ impl<'conn> Store<'conn> {
                 Some(FileType::Symlink) => Some(SYMLINK_MODE),
                 None => None,
             }),
-            Box::new(
-                opts.parent
-                    .as_ref()
-                    .map(|parent| parent.to_string_lossy().into_owned()),
-            ),
+            Box::new(opts.parent.as_ref().map(|parent| {
+                parent
+                    .to_string_lossy()
+                    .trim_end_matches(std::path::MAIN_SEPARATOR)
+                    .to_string()
+            })),
         ];
 
         let map_func: ListMapFunc = Box::new(|row| {

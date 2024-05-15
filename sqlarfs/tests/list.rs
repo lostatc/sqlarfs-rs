@@ -267,6 +267,23 @@ fn list_with_filter_immediate_children_of_archive_root() -> sqlarfs::Result<()> 
 }
 
 #[test]
+fn list_with_filter_immediate_children_strips_trailing_slash() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        archive.open("dir")?.create_dir()?;
+        archive.open("dir/file")?.create_file()?;
+
+        let paths = archive
+            .list_with(&ListOptions::new().children_of("dir/"))?
+            .map(|entry| Ok(entry?.into_path()))
+            .collect::<sqlarfs::Result<Vec<_>>>()?;
+
+        expect!(paths).to(consist_of(&[PathBuf::from("dir/file")]));
+
+        Ok(())
+    })
+}
+
+#[test]
 fn list_with_filter_descendants_of_dir() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         archive.open("a")?.create_dir()?;
@@ -341,6 +358,23 @@ fn list_with_filter_descendants_of_archive_root() -> sqlarfs::Result<()> {
             PathBuf::from("dir"),
             PathBuf::from("dir/file2"),
         ]));
+
+        Ok(())
+    })
+}
+
+#[test]
+fn list_with_filter_descendants_strips_trailing_slash() -> sqlarfs::Result<()> {
+    connection()?.exec(|archive| {
+        archive.open("dir")?.create_dir()?;
+        archive.open("dir/file")?.create_file()?;
+
+        let paths = archive
+            .list_with(&ListOptions::new().descendants_of("dir/"))?
+            .map(|entry| Ok(entry?.into_path()))
+            .collect::<sqlarfs::Result<Vec<_>>>()?;
+
+        expect!(paths).to(consist_of(&[PathBuf::from("dir/file")]));
 
         Ok(())
     })

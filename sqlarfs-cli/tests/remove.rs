@@ -52,6 +52,26 @@ fn errors_when_path_does_not_exist() -> eyre::Result<()> {
 }
 
 #[test]
+fn errors_when_path_is_absolute() -> eyre::Result<()> {
+    let temp_dir = tempfile::tempdir()?;
+    let archive_path = temp_dir.path().join("test.sqlar");
+
+    Connection::create_new(&archive_path)?;
+
+    let abs_path = if cfg!(windows) { r"C:\file" } else { "/file" };
+
+    expect!(command(&[
+        "remove",
+        "--archive",
+        &archive_path.to_string_lossy(),
+        abs_path,
+    ]))
+    .to(be_err());
+
+    Ok(())
+}
+
+#[test]
 fn removes_path_from_archive() -> eyre::Result<()> {
     let temp_dir = tempfile::tempdir()?;
     let archive_path = temp_dir.path().join("test.sqlar");

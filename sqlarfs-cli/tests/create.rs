@@ -207,17 +207,18 @@ fn creates_archive_file_at_path() -> eyre::Result<()> {
 }
 
 #[test]
-fn creating_db_that_already_exists_errors() -> eyre::Result<()> {
+fn creating_archive_that_already_exists_errors() -> eyre::Result<()> {
     let temp_dir = tempfile::tempdir()?;
-    let db_path = temp_dir.path().join("test.sqlar");
+    let archive_path = temp_dir.path().join("test.sqlar");
     let source_file = tempfile::NamedTempFile::new()?;
 
-    Connection::create_new(&db_path)?;
+    Connection::create_new(&archive_path)?;
 
     expect!(command(&[
         "create",
+        "--archive",
+        &archive_path.to_string_lossy(),
         &source_file.path().to_string_lossy(),
-        &db_path.to_string_lossy()
     ]))
     .to(be_err());
 

@@ -12,6 +12,8 @@ pub struct Cli {
 #[derive(Args, Debug, Clone)]
 pub struct Create {
     /// The files to add to the archive.
+    ///
+    /// These files are put in the root of the archive.
     pub source: Vec<PathBuf>,
 
     /// The path of the SQLite archive to create.
@@ -56,8 +58,10 @@ pub struct Extract {
     pub archive: PathBuf,
 
     /// The path of a specific file or directory in the archive to extract.
+    ///
+    /// This can be passed multiple times.
     #[arg(short, long)]
-    pub source: Option<PathBuf>,
+    pub source: Vec<PathBuf>,
 
     /// Extract given directory recursively (default).
     #[arg(long = "recursive", default_value = "true")]
@@ -165,7 +169,9 @@ pub enum Commands {
     #[command(visible_alias = "c")]
     Create(Create),
 
-    /// Extract a file or directory from an archive.
+    /// Extract file or directories from an archive.
+    ///
+    /// Unless --source passed, this extracts the entire archive.
     #[command(visible_alias = "ex")]
     Extract(Extract),
 

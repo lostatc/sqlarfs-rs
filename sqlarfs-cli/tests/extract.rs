@@ -178,12 +178,47 @@ fn extracts_source_dir_to_target_dir() -> eyre::Result<()> {
 }
 
 #[test]
+fn extracts_multiple_source_files_to_target_dir() -> eyre::Result<()> {
+    let temp_dir = tempfile::tempdir()?;
+    let archive_path = temp_dir.path().join("test.sqlar");
+
+    let mut conn = Connection::create_new(&archive_path)?;
+    conn.exec(|archive| {
+        archive.open("file1")?.create_file()?;
+        archive.open("file2")?.create_file()?;
+
+        sqlarfs::Result::Ok(())
+    })?;
+
+    command(&[
+        "extract",
+        "--archive",
+        &archive_path.to_string_lossy(),
+        "--source",
+        "file1",
+        "--source",
+        "file2",
+        &temp_dir.path().to_string_lossy(),
+    ])?;
+
+    expect!(temp_dir.path().join("file1")).to(be_regular_file());
+    expect!(temp_dir.path().join("file2")).to(be_regular_file());
+
+    Ok(())
+}
+
+#[test]
 fn extract_errors_when_source_does_not_have_a_filename() -> eyre::Result<()> {
     let temp_dir = tempfile::tempdir()?;
     let archive_path = temp_dir.path().join("test.sqlar");
 
     let mut conn = Connection::create_new(&archive_path)?;
-    conn.exec(|archive| archive.open("file")?.create_file())?;
+    conn.exec(|archive| {
+        archive.open("file1")?.create_file()?;
+        archive.open("file2")?.create_file()?;
+
+        sqlarfs::Result::Ok(())
+    })?;
 
     expect!(command(&[
         "extract",

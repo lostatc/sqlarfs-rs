@@ -67,22 +67,35 @@ impl Extract {
     pub fn run(&self) -> eyre::Result<()> {
         let mut conn = Connection::open(&self.archive)?;
 
-        if let Some(source) = &self.source {
-            if source.file_name().is_none() {
-                return Err(sqlarfs::Error::InvalidArgs {
-                    reason: String::from("The source path must have a filename."),
-                }
-                .into());
+        conn.exec(|archive| {
+            if self.source.is_empty() {
+                archive.extract_with(
+                    "",
+                    &self.dest,
+                    &ExtractOptions::new()
+                        .children(true)
+                        .recursive(!self.no_recursive),
+                )?;
             }
-        }
 
-        conn.exec(|archive| match &self.source {
-            Some(source) => archive.extract_with(
-                source,
-                &self.dest.join(source.file_name().expect("The source directory does not have a filename, but we should have already checked for this. This is a bug.")),
-                &ExtractOptions::new().children(false).recursive(!self.no_recursive),
-            ),
-            None => archive.extract_with("", &self.dest, &ExtractOptions::new().children(true).recursive(!self.no_recursive)),
+            for path in &self.source {
+                let file_name = path.file_name().ok_or(sqlarfs::Error::InvalidArgs {
+                    reason: format!(
+                        "The source path must have a filename: {}",
+                        path.to_string_lossy()
+                    ),
+                })?;
+
+                archive.extract_with(
+                    path,
+                    &self.dest.join(file_name),
+                    &ExtractOptions::new()
+                        .children(false)
+                        .recursive(!self.no_recursive),
+                )?;
+            }
+
+            sqlarfs::Result::Ok(())
         })?;
 
         Ok(())

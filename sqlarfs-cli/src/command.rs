@@ -130,10 +130,12 @@ impl List {
         // We always sort by depth.
         let mut opts = ListOptions::new().by_depth();
 
-        if self.no_tree {
+        if self.children {
             opts = opts.children_of(self.parent.as_ref().unwrap_or(&PathBuf::from("")));
-        } else {
+        } else if self.tree {
             opts = opts.descendants_of(self.parent.as_ref().unwrap_or(&PathBuf::from("")));
+        } else {
+            panic!("The `list` command must have either the --children or --tree flag set. This is a bug.");
         }
 
         if let Some(kind) = self.r#type {

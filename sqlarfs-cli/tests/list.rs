@@ -1,49 +1,12 @@
 mod common;
 
-use clap::Parser;
 use common::command;
 use sqlarfs::Connection;
-use sqlarfs_cli::{Cli, Commands, List};
-use xpct::{be_err, be_ok, consist_of, equal, expect, match_pattern, pattern};
-
-#[test]
-fn tree_flag_can_be_overridden() -> eyre::Result<()> {
-    let cli = Cli::parse_from(["sqlar", "list", "nonexistent.sqlar"]);
-    expect!(cli.command).to(match_pattern(pattern!(Commands::List(List {
-        no_tree: false,
-        ..
-    }))));
-
-    let cli = Cli::parse_from(["sqlar", "list", "--tree", "nonexistent.sqlar"]);
-    expect!(cli.command).to(match_pattern(pattern!(Commands::List(List {
-        no_tree: false,
-        ..
-    }))));
-
-    let cli = Cli::parse_from(["sqlar", "list", "--no-tree", "nonexistent.sqlar"]);
-    expect!(cli.command).to(match_pattern(pattern!(Commands::List(List {
-        no_tree: true,
-        ..
-    }))));
-
-    let cli = Cli::parse_from(["sqlar", "list", "--tree", "--no-tree", "nonexistent.sqlar"]);
-    expect!(cli.command).to(match_pattern(pattern!(Commands::List(List {
-        no_tree: true,
-        ..
-    }))));
-
-    let cli = Cli::parse_from(["sqlar", "list", "--no-tree", "--tree", "nonexistent.sqlar"]);
-    expect!(cli.command).to(match_pattern(pattern!(Commands::List(List {
-        no_tree: false,
-        ..
-    }))));
-
-    Ok(())
-}
+use xpct::{be_err, be_ok, consist_of, expect};
 
 #[test]
 fn errors_when_archive_does_not_exist() -> eyre::Result<()> {
-    expect!(command(&["list", "nonexistent.sqlar"])).to(be_err());
+    expect!(command(&["list", "--archive", "nonexistent.sqlar"])).to(be_err());
 
     Ok(())
 }
@@ -65,8 +28,9 @@ fn listing_descendants_with_no_path_specified() -> eyre::Result<()> {
 
     expect!(command(&[
         "list",
+        "--archive",
+        &archive_path.to_string_lossy(),
         "--tree",
-        &archive_path.to_string_lossy()
     ]))
     .to(be_ok())
     .map(|output| output.split('\n').map(String::from).collect::<Vec<_>>())
@@ -98,8 +62,9 @@ fn listing_descendants_of_path() -> eyre::Result<()> {
 
     expect!(command(&[
         "list",
-        "--tree",
+        "--archive",
         &archive_path.to_string_lossy(),
+        "--tree",
         "dir1",
     ]))
     .to(be_ok())
@@ -130,8 +95,9 @@ fn listing_immediate_children_with_no_path_specified() -> eyre::Result<()> {
 
     expect!(command(&[
         "list",
-        "--no-tree",
-        &archive_path.to_string_lossy()
+        "--archive",
+        &archive_path.to_string_lossy(),
+        "--children",
     ]))
     .to(be_ok())
     .map(|output| output.split('\n').map(String::from).collect::<Vec<_>>())
@@ -159,8 +125,9 @@ fn listing_immediate_children_of_path() -> eyre::Result<()> {
 
     expect!(command(&[
         "list",
-        "--no-tree",
+        "--archive",
         &archive_path.to_string_lossy(),
+        "--children",
         "dir1",
     ]))
     .to(be_ok())
@@ -190,9 +157,10 @@ fn listing_files_by_type() -> eyre::Result<()> {
 
     expect!(command(&[
         "list",
+        "--archive",
+        &archive_path.to_string_lossy(),
         "--type",
         "file",
-        &archive_path.to_string_lossy(),
     ]))
     .to(be_ok())
     .map(|output| output.split('\n').map(String::from).collect::<Vec<_>>())

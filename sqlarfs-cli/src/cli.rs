@@ -47,15 +47,16 @@ pub struct Create {
 
 #[derive(Args, Debug, Clone)]
 pub struct Extract {
-    /// The path of the SQLite archive.
-    pub archive: PathBuf,
-
     /// The directory in the filesystem to extract the files into.
     #[arg(default_value = ".")]
     pub dest: PathBuf,
 
+    /// The path of the SQLite archive.
+    #[arg(long, short)]
+    pub archive: PathBuf,
+
     /// The path of a specific file or directory in the archive to extract.
-    #[arg(long)]
+    #[arg(short, long)]
     pub source: Option<PathBuf>,
 
     /// Extract given directory recursively (default).
@@ -128,19 +129,20 @@ impl From<FileType> for sqlarfs::FileType {
 
 #[derive(Args, Debug, Clone)]
 pub struct List {
-    /// The path of the SQLite archive.
-    pub archive: PathBuf,
-
     /// Only return descendants of this directory.
     pub parent: Option<PathBuf>,
 
+    /// The path of the SQLite archive.
+    #[arg(long, short)]
+    pub archive: PathBuf,
+
     /// Return all descendants (children, grandchildren, etc.) (default).
-    #[arg(long = "tree", default_value = "true")]
-    pub _tree: bool,
+    #[arg(long, default_value = "true", conflicts_with = "children")]
+    pub tree: bool,
 
     /// Only return immediate children.
-    #[arg(long, default_value = "false", overrides_with = "_tree")]
-    pub no_tree: bool,
+    #[arg(long, short, default_value = "false", conflicts_with = "tree")]
+    pub children: bool,
 
     /// Only return files of this type.
     #[arg(long, short, value_enum)]

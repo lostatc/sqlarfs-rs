@@ -173,6 +173,23 @@ fn creates_archive_file_in_current_directory_with_sqlar_file_extension() -> eyre
 }
 
 #[test]
+#[serial(change_directory)]
+fn creates_archive_file_in_current_directory_when_source_path_ends_in_dot_dot() -> eyre::Result<()>
+{
+    let temp_dir = tempfile::tempdir()?;
+    let source_path = temp_dir.path().join("source");
+    fs::create_dir(&source_path)?;
+
+    env::set_current_dir(temp_dir.path())?;
+
+    command(&["create", &source_path.join("..").to_string_lossy()])?;
+
+    expect!(temp_dir.path().join("source.sqlar")).to(be_existing_file());
+
+    Ok(())
+}
+
+#[test]
 fn creates_archive_file_at_path() -> eyre::Result<()> {
     let source_file = tempfile::NamedTempFile::new()?;
     let archive_file = tempfile::NamedTempFile::new()?;

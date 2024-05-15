@@ -8,7 +8,9 @@ use super::cli::{Archive, Cli, Commands, Create, Extract, List, Remove};
 const SQLAR_EXTENSION: &str = "sqlar";
 
 fn file_name(path: &Path) -> Option<&Path> {
-    path.file_name().map(Path::new).or_else(|| path.parent())
+    path.file_name()
+        .map(Path::new)
+        .or_else(|| path.parent().and_then(|p| p.file_name().map(Path::new)))
 }
 
 impl Create {

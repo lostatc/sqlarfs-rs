@@ -4,7 +4,7 @@ use clap::Parser;
 use common::command;
 use sqlarfs::Connection;
 use sqlarfs_cli::{Cli, Commands, List};
-use xpct::{be_ok, consist_of, equal, expect, match_pattern, pattern};
+use xpct::{be_err, be_ok, consist_of, equal, expect, match_pattern, pattern};
 
 #[test]
 fn tree_flag_can_be_overridden() -> eyre::Result<()> {
@@ -37,6 +37,13 @@ fn tree_flag_can_be_overridden() -> eyre::Result<()> {
         no_tree: false,
         ..
     }))));
+
+    Ok(())
+}
+
+#[test]
+fn errors_when_archive_does_not_exist() -> eyre::Result<()> {
+    expect!(command(&["list", "nonexistent.sqlar"])).to(be_err());
 
     Ok(())
 }

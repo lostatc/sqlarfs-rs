@@ -46,6 +46,7 @@
 mod archive;
 mod error;
 mod file;
+mod fuse;
 mod list;
 mod metadata;
 mod mode;

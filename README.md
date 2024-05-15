@@ -103,6 +103,17 @@ sqlar rm -a files.sqlar Documents
 
 ## FUSE Filesystem
 
+To use the FUSE filesystem, you must have the `fuse` Cargo feature enabled and
+the following system dependencies installed:
+
+- `fuse3` or `fuse` (depending on your distro)
+- `libfuse3-dev` or `fuse-devel` (depending on your distro)
+- `pkg-config` or `pkgconf` (depending on your distro)
+
+```shell
+sudo apt install fuse3 libfuse3-dev pkg-config
+```
+
 You can mount the archive as a FUSE filesystem using the CLI:
 
 ```shell

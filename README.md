@@ -126,7 +126,7 @@ fn main() -> sqlarfs::Result<()> {
         file.create_file()?;
 
         // This blocks until the filesystem is unmounted.
-        archive.mount("", "~/mnt")?;
+        archive.mount("", "/home/wren/mnt")?;
 
         sqlarfs::Result::Ok(())
     })?;

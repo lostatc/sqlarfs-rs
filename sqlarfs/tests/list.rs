@@ -272,8 +272,10 @@ fn list_with_filter_immediate_children_strips_trailing_slash() -> sqlarfs::Resul
         archive.open("dir")?.create_dir()?;
         archive.open("dir/file")?.create_file()?;
 
+        let parent = if cfg!(windows) { r"dir\" } else { "dir/" };
+
         let paths = archive
-            .list_with(&ListOptions::new().children_of("dir/"))?
+            .list_with(&ListOptions::new().children_of(parent))?
             .map(|entry| Ok(entry?.into_path()))
             .collect::<sqlarfs::Result<Vec<_>>>()?;
 
@@ -369,8 +371,10 @@ fn list_with_filter_descendants_strips_trailing_slash() -> sqlarfs::Result<()> {
         archive.open("dir")?.create_dir()?;
         archive.open("dir/file")?.create_file()?;
 
+        let ancestor = if cfg!(windows) { r"dir\" } else { "dir/" };
+
         let paths = archive
-            .list_with(&ListOptions::new().descendants_of("dir/"))?
+            .list_with(&ListOptions::new().descendants_of(ancestor))?
             .map(|entry| Ok(entry?.into_path()))
             .collect::<sqlarfs::Result<Vec<_>>>()?;
 

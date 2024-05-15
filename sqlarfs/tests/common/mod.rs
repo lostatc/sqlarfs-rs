@@ -78,6 +78,7 @@ where
 {
     sqlarfs::Error::Io {
         kind: io::ErrorKind::Other,
+        code: None,
     }
 }
 

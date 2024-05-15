@@ -135,18 +135,23 @@ pub enum Error {
     Io {
         /// The [`std::io::ErrorKind`] of the I/O error.
         kind: io::ErrorKind,
+
+        /// The raw OS error code, if there is one.
+        code: Option<i32>,
     },
 }
 
 impl From<io::Error> for Error {
     fn from(error: io::Error) -> Self {
         let kind = error.kind();
+        let code = error.raw_os_error();
+
         match error.into_inner() {
             Some(payload) => match payload.downcast::<Error>() {
                 Ok(crate_error) => *crate_error,
-                Err(_) => Error::Io { kind },
+                Err(_) => Error::Io { kind, code },
             },
-            None => Error::Io { kind },
+            None => Error::Io { kind, code },
         }
     }
 }
@@ -174,7 +179,7 @@ impl From<Error> for io::Error {
             Error::NotADatabase => io::ErrorKind::Other,
             Error::SqlarAlreadyExists => io::ErrorKind::AlreadyExists,
             Error::Sqlite { .. } => io::ErrorKind::Other,
-            Error::Io { kind } => kind,
+            Error::Io { kind, .. } => kind,
         };
 
         io::Error::new(kind, err)
@@ -223,6 +228,7 @@ mod tests {
     fn convert_sqlarfs_io_err_into_std_io_error() {
         let err = Error::Io {
             kind: io::ErrorKind::NotFound,
+            code: None,
         };
 
         let io_err: io::Error = err.into();
@@ -235,6 +241,7 @@ mod tests {
             .to(be_ok())
             .to(equal(Box::new(Error::Io {
                 kind: io::ErrorKind::NotFound,
+                code: None,
             })));
     }
 
@@ -256,6 +263,7 @@ mod tests {
 
         expect!(err).to(equal(Error::Io {
             kind: io::ErrorKind::NotFound,
+            code: None,
         }));
     }
 

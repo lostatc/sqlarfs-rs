@@ -50,6 +50,22 @@ pub struct FuseAdapter<'conn, 'ar> {
 }
 
 impl<'conn, 'ar> FuseAdapter<'conn, 'ar> {
+    pub fn new(archive: &'ar mut Archive<'conn>, root: &Path) -> crate::Result<Self> {
+        let root_file = archive.open(root)?;
+
+        if !root_file.metadata()?.is_dir() {
+            return Err(crate::Error::NotADirectory {
+                path: root.to_owned(),
+            });
+        }
+
+        Ok(Self {
+            archive,
+            inodes: InodeTable::new(root),
+            handles: HandleTable::new(),
+        })
+    }
+
     fn get_attrs(&mut self, req: &Request, inode: Ino) -> crate::Result<FileAttr> {
         let file_path = self.inodes.path(inode).ok_or(crate::Error::FileNotFound {
             // We don't have a path to include in this error message, so we just use the inode.
@@ -93,15 +109,7 @@ impl<'conn, 'ar> FuseAdapter<'conn, 'ar> {
     }
 }
 
-impl<'conn, 'ar> FuseAdapter<'conn, 'ar> {
-    pub fn new(archive: &'ar mut Archive<'conn>, root: &Path) -> crate::Result<Self> {
-        Ok(Self {
-            archive,
-            inodes: InodeTable::new(root),
-            handles: HandleTable::new(),
-        })
-    }
-
+impl<'conn, 'ar> fuser::Filesystem for FuseAdapter<'conn, 'ar> {
     fn getattr(&mut self, req: &Request, ino: u64, reply: ReplyAttr) {
         let attr = try_result!(self.get_attrs(req, ino.into()), reply);
         reply.attr(&DEFAULT_TTL, &attr);

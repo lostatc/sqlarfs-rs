@@ -7,6 +7,9 @@ use super::list::{ListEntries, ListOptions};
 use super::store::Store;
 use super::tree::ArchiveOptions;
 
+#[cfg(all(unix, feature = "fuse"))]
+use super::fuse::MountOption;
+
 /// A SQLite archive.
 ///
 /// This is the main type for reading and writing to the archive. You can only access an `Archive`
@@ -190,6 +193,46 @@ impl<'conn> Archive<'conn> {
             #[cfg(windows)]
             &super::mode::WindowsModeAdapter,
         )
+    }
+
+    /// Mount the archive as a FUSE file system.
+    ///
+    /// This accepts the path of the `root` entry in the repository which will be mounted in the
+    /// file system at `mountpoint`. This also accepts an array of mount `options` to pass to
+    /// libfuse.
+    ///
+    /// This method does not return until the file system is unmounted.
+    ///
+    /// # Errors
+    ///
+    /// - [`FileNotFound`]: There is no file in the archive at `root`.
+    /// - [`NotADirectory`]: The file at `root` is not a directory.
+    ///
+    /// [`FileNotFound`]: crate::Error::FileNotFound
+    /// [`NotADirectory`]: crate::Error::NotADirectory
+    #[cfg(all(unix, feature = "fuse"))]
+    pub fn mount<P: AsRef<Path>, Q: AsRef<Path>>(
+        &mut self,
+        mountpoint: P,
+        root: Q,
+        options: &[MountOption],
+    ) -> crate::Result<()> {
+        use std::collections::HashSet;
+
+        use crate::fuse::{default_mount_opts, FuseAdapter};
+
+        // These need to be deduplicated.
+        let all_opts = [default_mount_opts(), options.to_vec()]
+            .concat()
+            .into_iter()
+            .map(|opt| opt.into_fuser())
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+
+        let adapter = FuseAdapter::new(self, root.as_ref())?;
+
+        Ok(fuser::mount2(adapter, &mountpoint, &all_opts)?)
     }
 
     /// The current umask for newly created files and directories.

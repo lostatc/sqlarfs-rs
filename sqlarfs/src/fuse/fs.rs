@@ -1,7 +1,8 @@
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-use fuser::{FileAttr, ReplyAttr, ReplyDirectory, ReplyEmpty, ReplyOpen, Request};
+use fuser::{FileAttr, ReplyAttr, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen, Request};
 use nix::libc;
 
 use super::error::{try_option, try_result};
@@ -66,14 +67,8 @@ impl<'conn, 'ar> FuseAdapter<'conn, 'ar> {
         })
     }
 
-    fn get_attrs(&mut self, req: &Request, inode: Ino) -> crate::Result<FileAttr> {
-        let file_path = self.inodes.path(inode).ok_or(crate::Error::FileNotFound {
-            // We don't have a path to include in this error message, so we just use the inode.
-            // Users should never be seeing this error message regardless.
-            path: PathBuf::from(Into::<u64>::into(inode).to_string()),
-        })?;
-
-        let metadata = self.archive.open(file_path)?.metadata()?;
+    fn file_attr(&mut self, req: &Request, inode: Ino, path: &Path) -> crate::Result<FileAttr> {
+        let metadata = self.archive.open(path)?.metadata()?;
 
         let size = match &metadata {
             FileMetadata::File { size, .. } => *size,
@@ -107,11 +102,46 @@ impl<'conn, 'ar> FuseAdapter<'conn, 'ar> {
             flags: 0,
         })
     }
+
+    fn attr_by_path(&mut self, req: &Request, path: &Path) -> crate::Result<FileAttr> {
+        let inode = self.inodes.inode(path).ok_or(crate::Error::FileNotFound {
+            path: path.to_owned(),
+        })?;
+
+        self.file_attr(req, inode, path)
+    }
+
+    fn attr_by_inode(&mut self, req: &Request, inode: Ino) -> crate::Result<FileAttr> {
+        let path = self
+            .inodes
+            .path(inode)
+            .ok_or(crate::Error::FileNotFound {
+                // We don't have a path to include in this error, but that's fine, because users will
+                // never see this error message.
+                path: PathBuf::from(u64::from(inode).to_string()),
+            })?
+            .to_owned();
+
+        self.file_attr(req, inode, &path)
+    }
 }
 
 impl<'conn, 'ar> fuser::Filesystem for FuseAdapter<'conn, 'ar> {
+    fn lookup(&mut self, req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
+        let file_name = try_option!(name.to_str(), reply, libc::ENOENT);
+
+        let parent_path =
+            try_option!(self.inodes.path(parent.into()), reply, libc::ENOENT).join(file_name);
+
+        let parent_inode = try_option!(self.inodes.inode(&parent_path), reply, libc::ENOENT);
+
+        let attr = try_result!(self.file_attr(req, parent_inode, &parent_path), reply);
+
+        reply.entry(&DEFAULT_TTL, &attr, DEFAULT_GENERATION);
+    }
+
     fn getattr(&mut self, req: &Request, ino: u64, reply: ReplyAttr) {
-        let attr = try_result!(self.get_attrs(req, ino.into()), reply);
+        let attr = try_result!(self.attr_by_inode(req, ino.into()), reply);
         reply.attr(&DEFAULT_TTL, &attr);
     }
 

@@ -23,7 +23,8 @@ impl From<Ino> for u64 {
 #[derive(Debug)]
 pub struct InodeTable {
     table: IdTable<Ino>,
-    paths: HashMap<Ino, PathBuf>,
+    paths_by_inode: HashMap<Ino, PathBuf>,
+    inodes_by_path: HashMap<PathBuf, Ino>,
 }
 
 impl InodeTable {
@@ -32,10 +33,11 @@ impl InodeTable {
 
         let mut table = Self {
             table: IdTable::new(vec![fuse_root_id]),
-            paths: HashMap::new(),
+            paths_by_inode: HashMap::new(),
+            inodes_by_path: HashMap::new(),
         };
 
-        table.paths.insert(fuse_root_id, root.to_owned());
+        table.paths_by_inode.insert(fuse_root_id, root.to_owned());
 
         table
     }
@@ -43,12 +45,17 @@ impl InodeTable {
     pub fn insert(&mut self, path: PathBuf) -> Ino {
         let inode = self.table.next();
 
-        self.paths.insert(inode, path);
+        self.paths_by_inode.insert(inode, path.clone());
+        self.inodes_by_path.insert(path, inode);
 
         inode
     }
 
     pub fn path(&self, inode: Ino) -> Option<&Path> {
-        self.paths.get(&inode).map(PathBuf::as_path)
+        self.paths_by_inode.get(&inode).map(PathBuf::as_path)
+    }
+
+    pub fn inode(&self, path: &Path) -> Option<Ino> {
+        self.inodes_by_path.get(path).copied()
     }
 }

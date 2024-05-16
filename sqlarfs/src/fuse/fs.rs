@@ -6,10 +6,11 @@ use std::time::{Duration, SystemTime};
 use fuser::{
     FileAttr, ReplyAttr, ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen, Request,
 };
+use nix::fcntl::OFlag;
 use nix::libc;
 
 use super::error::{try_option, try_result};
-use super::handle::{DirectoryEntry, DirectoryHandle, HandleState, HandleTable};
+use super::handle::{DirectoryEntry, DirectoryHandle, FileHandle, HandleState, HandleTable};
 use super::inode::{Ino, InodeTable};
 use crate::{Archive, FileMetadata, FileType, ListOptions};
 
@@ -29,6 +30,22 @@ const NON_SPECIAL_RDEV: u32 = 0;
 
 // TODO: What TTL should we use? Can the contents of the archive be modified out from under FUSE?
 const DEFAULT_TTL: Duration = Duration::ZERO;
+
+// The set of `open` flags which are not supported by this file system.
+fn unsupported_open_flags() -> OFlag {
+    // Most of these are disallowed because the filesystem is read-only.
+    OFlag::O_APPEND
+        | OFlag::O_CREAT
+        | OFlag::O_DSYNC
+        | OFlag::O_FSYNC
+        // SQLite archives have a pretty small max file size.
+        | OFlag::O_LARGEFILE
+        | OFlag::O_RDWR
+        | OFlag::O_SYNC
+        | OFlag::O_TMPFILE
+        | OFlag::O_TRUNC
+        | OFlag::O_WRONLY
+}
 
 impl FileMetadata {
     fn mode_or_default(&self) -> u16 {
@@ -161,6 +178,39 @@ impl<'conn, 'ar> fuser::Filesystem for FuseAdapter<'conn, 'ar> {
         } else {
             reply.error(libc::EINVAL);
         }
+    }
+
+    fn open(&mut self, _req: &Request, ino: u64, flags: i32, reply: ReplyOpen) {
+        let flags = OFlag::from_bits_truncate(flags);
+
+        if flags.intersects(unsupported_open_flags()) {
+            reply.error(libc::ENOTSUP);
+            return;
+        }
+
+        let file_path = try_option!(self.inodes.path(ino.into()), reply, libc::ENOENT);
+
+        let metadata = try_result!(
+            self.archive
+                .open(file_path)
+                .and_then(|file| file.metadata()),
+            reply
+        );
+
+        if metadata.is_dir() {
+            reply.error(libc::EISDIR);
+            return;
+        }
+
+        if !metadata.is_file() {
+            reply.error(libc::ENOTSUP);
+            return;
+        }
+
+        let state = HandleState::File(FileHandle { flags, pos: 0 });
+        let fh = self.handles.open(state);
+
+        reply.opened(fh.into(), 0);
     }
 
     fn opendir(&mut self, _req: &Request, ino: u64, _flags: i32, reply: ReplyOpen) {

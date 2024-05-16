@@ -13,6 +13,8 @@ macro_rules! try_result {
     };
 }
 
+pub(crate) use try_result;
+
 // Handle an `Option` in a FUSE method.
 macro_rules! try_option {
     ($result:expr, $reply:expr, $error:expr) => {
@@ -25,6 +27,8 @@ macro_rules! try_option {
         }
     };
 }
+
+pub(crate) use try_option;
 
 impl crate::Error {
     // Get the libc errno for this error.

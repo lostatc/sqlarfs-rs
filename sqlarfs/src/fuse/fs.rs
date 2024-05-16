@@ -1,8 +1,11 @@
 use std::ffi::OsStr;
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-use fuser::{FileAttr, ReplyAttr, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen, Request};
+use fuser::{
+    FileAttr, ReplyAttr, ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen, Request,
+};
 use nix::libc;
 
 use super::error::{try_option, try_result};
@@ -143,6 +146,21 @@ impl<'conn, 'ar> fuser::Filesystem for FuseAdapter<'conn, 'ar> {
     fn getattr(&mut self, req: &Request, ino: u64, reply: ReplyAttr) {
         let attr = try_result!(self.attr_by_inode(req, ino.into()), reply);
         reply.attr(&DEFAULT_TTL, &attr);
+    }
+
+    fn readlink(&mut self, _req: &Request, ino: u64, reply: ReplyData) {
+        let path = try_option!(self.inodes.path(ino.into()), reply, libc::ENOENT);
+
+        let metadata = try_result!(
+            self.archive.open(path).and_then(|file| file.metadata()),
+            reply
+        );
+
+        if let FileMetadata::Symlink { target, .. } = metadata {
+            reply.data(target.as_os_str().as_bytes());
+        } else {
+            reply.error(libc::EINVAL);
+        }
     }
 
     fn opendir(&mut self, _req: &Request, ino: u64, _flags: i32, reply: ReplyOpen) {

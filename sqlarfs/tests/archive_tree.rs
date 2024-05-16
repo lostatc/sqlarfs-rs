@@ -217,7 +217,9 @@ fn archive_with_trailing_slash_in_dest_path() -> sqlarfs::Result<()> {
     let temp_file = tempfile::NamedTempFile::new()?;
 
     connection()?.exec(|archive| {
-        expect!(archive.archive(temp_file.path(), "file/")).to(be_ok());
+        let dest_path = if cfg!(windows) { r"file\" } else { "file/" };
+
+        expect!(archive.archive(temp_file.path(), dest_path)).to(be_ok());
 
         let file = archive.open("file")?;
 

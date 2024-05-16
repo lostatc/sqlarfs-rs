@@ -460,7 +460,9 @@ fn extracting_with_trailing_slash_in_source_path() -> sqlarfs::Result<()> {
     connection()?.exec(|archive| {
         archive.open("file")?.create_file()?;
 
-        expect!(archive.extract("file/", &dest_path)).to(be_ok());
+        let source_path = if cfg!(windows) { r"file\" } else { "file/" };
+
+        expect!(archive.extract(source_path, &dest_path)).to(be_ok());
 
         expect!(dest_path).to(be_regular_file());
 

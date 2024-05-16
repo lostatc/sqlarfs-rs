@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use fuser::{ReplyOpen, Request};
+use fuser::{ReplyDirectory, ReplyOpen, Request};
 use nix::libc;
 
 use super::error::{try_option, try_result};
@@ -73,5 +73,39 @@ impl<'conn, 'ar> FuseAdapter<'conn, 'ar> {
         reply.opened(fh.into(), 0);
 
         todo!();
+    }
+
+    fn readdir(
+        &mut self,
+        _req: &Request,
+        _ino: u64,
+        fh: u64,
+        offset: i64,
+        mut reply: ReplyDirectory,
+    ) {
+        let entries = match self.handles.state(fh.into()) {
+            None => {
+                reply.error(libc::EBADF);
+                return;
+            }
+            Some(HandleState::File(_)) => {
+                reply.error(libc::ENOTDIR);
+                return;
+            }
+            Some(HandleState::Directory(DirectoryHandle { entries })) => entries,
+        };
+
+        for (i, dir_entry) in entries[offset as usize..].iter().enumerate() {
+            if reply.add(
+                dir_entry.inode.into(),
+                (i + 1) as i64,
+                dir_entry.file_type,
+                &dir_entry.file_name,
+            ) {
+                break;
+            }
+        }
+
+        reply.ok();
     }
 }

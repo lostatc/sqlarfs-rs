@@ -151,7 +151,7 @@ impl<'conn, 'ar> fuser::Filesystem for FuseAdapter<'conn, 'ar> {
         let file_name = try_option!(name.to_str(), reply, libc::ENOENT);
 
         let parent_path =
-            try_option!(self.inodes.path(parent.into()), reply, libc::ENOENT).join(file_name);
+            try_option!(self.inodes.path(parent), reply, libc::ENOENT).join(file_name);
 
         let parent_inode = try_option!(self.inodes.inode(&parent_path), reply, libc::ENOENT);
 
@@ -166,7 +166,7 @@ impl<'conn, 'ar> fuser::Filesystem for FuseAdapter<'conn, 'ar> {
     }
 
     fn readlink(&mut self, _req: &Request, ino: u64, reply: ReplyData) {
-        let path = try_option!(self.inodes.path(ino.into()), reply, libc::ENOENT);
+        let path = try_option!(self.inodes.path(ino), reply, libc::ENOENT);
 
         let metadata = try_result!(
             self.archive.open(path).and_then(|file| file.metadata()),
@@ -188,7 +188,7 @@ impl<'conn, 'ar> fuser::Filesystem for FuseAdapter<'conn, 'ar> {
             return;
         }
 
-        let file_path = try_option!(self.inodes.path(ino.into()), reply, libc::ENOENT);
+        let file_path = try_option!(self.inodes.path(ino), reply, libc::ENOENT);
 
         let metadata = try_result!(
             self.archive
@@ -213,8 +213,33 @@ impl<'conn, 'ar> fuser::Filesystem for FuseAdapter<'conn, 'ar> {
         reply.opened(fh.into(), 0);
     }
 
+    fn read(
+        &mut self,
+        req: &Request,
+        ino: u64,
+        fh: u64,
+        offset: i64,
+        size: u32,
+        _flags: i32,
+        _lock_owner: Option<u64>,
+        reply: ReplyData,
+    ) {
+        // TODO: Technically, on Unix systems, a file should still be accessible via its file
+        // descriptor once it's been unlinked.
+        let entry_path = match self.inodes.path(ino) {
+            Some(path) => path.to_owned(),
+            None => {
+                self.handles.close(fh);
+                reply.error(libc::EBADF);
+                return;
+            }
+        };
+
+        todo!()
+    }
+
     fn opendir(&mut self, _req: &Request, ino: u64, _flags: i32, reply: ReplyOpen) {
-        let dir_path = try_option!(self.inodes.path(ino.into()), reply, libc::ENOENT);
+        let dir_path = try_option!(self.inodes.path(ino), reply, libc::ENOENT);
 
         let dir = try_result!(self.archive.open(dir_path), reply);
         let meatadata = try_result!(dir.metadata(), reply);
@@ -272,7 +297,7 @@ impl<'conn, 'ar> fuser::Filesystem for FuseAdapter<'conn, 'ar> {
         offset: i64,
         mut reply: ReplyDirectory,
     ) {
-        let entries = match self.handles.state(fh.into()) {
+        let entries = match self.handles.state(fh) {
             None => {
                 reply.error(libc::EBADF);
                 return;
@@ -299,7 +324,7 @@ impl<'conn, 'ar> fuser::Filesystem for FuseAdapter<'conn, 'ar> {
     }
 
     fn releasedir(&mut self, _req: &Request, _ino: u64, fh: u64, _flags: i32, reply: ReplyEmpty) {
-        self.handles.close(fh.into());
+        self.handles.close(fh);
         reply.ok()
     }
 }

@@ -71,18 +71,19 @@ impl HandleTable {
     }
 
     // Remove the given file handle from the table.
-    pub fn close(&mut self, fh: Fh) {
+    pub fn close(&mut self, fh: impl Into<Fh>) {
+        let fh = fh.into();
         self.id_table.recycle(fh);
         self.state.remove(&fh);
     }
 
     // Get the state associated with the given file handle.
-    pub fn state(&self, fh: Fh) -> Option<&HandleState> {
-        self.state.get(&fh)
+    pub fn state(&self, fh: impl Into<Fh>) -> Option<&HandleState> {
+        self.state.get(&fh.into())
     }
 
     // Get the state associated with the given file handle.
-    pub fn state_mut(&mut self, fh: Fh) -> Option<&mut HandleState> {
-        self.state.get_mut(&fh)
+    pub fn state_mut(&mut self, fh: impl Into<Fh>) -> Option<&mut HandleState> {
+        self.state.get_mut(&fh.into())
     }
 }

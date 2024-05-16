@@ -51,8 +51,8 @@ impl InodeTable {
         inode
     }
 
-    pub fn path(&self, inode: Ino) -> Option<&Path> {
-        self.paths_by_inode.get(&inode).map(PathBuf::as_path)
+    pub fn path(&self, inode: impl Into<Ino>) -> Option<&Path> {
+        self.paths_by_inode.get(&inode.into()).map(PathBuf::as_path)
     }
 
     pub fn inode(&self, path: &Path) -> Option<Ino> {

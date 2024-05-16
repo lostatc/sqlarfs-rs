@@ -452,6 +452,22 @@ fn extracting_preserves_file_mtime() -> sqlarfs::Result<()> {
     })
 }
 
+#[test]
+fn extracting_with_trailing_slash_in_source_path() -> sqlarfs::Result<()> {
+    let temp_dir = tempfile::tempdir()?;
+    let dest_path = temp_dir.path().join("dest");
+
+    connection()?.exec(|archive| {
+        archive.open("file")?.create_file()?;
+
+        expect!(archive.extract("file/", &dest_path)).to(be_ok());
+
+        expect!(dest_path).to(be_regular_file());
+
+        Ok(())
+    })
+}
+
 //
 // `ExtractOptions::children`
 //

@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use fuser::{ReplyDirectory, ReplyOpen, Request};
+use fuser::{ReplyDirectory, ReplyEmpty, ReplyOpen, Request};
 use nix::libc;
 
 use super::error::{try_option, try_result};
@@ -107,5 +107,10 @@ impl<'conn, 'ar> FuseAdapter<'conn, 'ar> {
         }
 
         reply.ok();
+    }
+
+    fn releasedir(&mut self, _req: &Request, _ino: u64, fh: u64, _flags: i32, reply: ReplyEmpty) {
+        self.handles.close(fh.into());
+        reply.ok()
     }
 }

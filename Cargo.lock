@@ -824,7 +824,6 @@ dependencies = [
  "bitflags",
  "flate2",
  "fuser",
- "libc",
  "nix",
  "ouroboros",
  "rand",

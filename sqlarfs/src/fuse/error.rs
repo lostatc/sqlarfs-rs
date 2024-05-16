@@ -28,7 +28,9 @@ macro_rules! try_option {
 
 impl crate::Error {
     // Get the libc errno for this error.
-    pub(super) fn to_errno(&self) -> libc::c_int {
+    pub(super) fn to_errno(&self) -> i32 {
+        use nix::libc;
+
         match self {
             crate::Error::InvalidArgs { .. } => libc::EINVAL,
             crate::Error::FileAlreadyExists { .. } => libc::EEXIST,

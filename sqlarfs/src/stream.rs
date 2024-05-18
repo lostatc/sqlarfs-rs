@@ -84,7 +84,7 @@ impl<'conn> FileReader<'conn> {
             });
 
             #[cfg(not(feature = "deflate"))]
-            return Err(crate::ErrorKind::CompressionNotSupported.into());
+            return Err(crate::Error::CompressionNotSupported);
         }
 
         Ok(Self {

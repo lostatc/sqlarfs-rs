@@ -8,7 +8,7 @@ authors = ["Wren Powell <wrenp@duck.com>"]
 description = "A CLI tool for working with sqlar archives"
 homepage = "https://github.com/lostatc/sqlarfs-rs"
 repository = "https://github.com/lostatc/sqlarfs-rs"
-readme = "README.md"
+readme = "../README.md"
 keywords = ["sqlite", "sqlar", "database", "archive"]
 categories = ["filesystem", "command-line-utilities"]
 license = "MIT"
@@ -20,7 +20,7 @@ name = "sqlar"
 clap = { version = "4.5.4", features = ["derive"] }
 color-eyre = "0.6.3"
 eyre = "0.6.12"
-sqlarfs = "0.1.0"
+sqlarfs = { version = "0.1.0", path = "../sqlarfs" }
 
 [dev-dependencies]
 serial_test = "3.1.1"

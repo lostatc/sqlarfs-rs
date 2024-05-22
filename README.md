@@ -5,8 +5,6 @@
 
 # sqlarfs
 
-🚧 This library is under construction. It's not ready to be used just yet. 🚧
-
 A file archive format and virtual filesystem backed by a SQLite database.
 
 This library is a Rust implementation of the

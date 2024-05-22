@@ -16,7 +16,7 @@ This library consists of:
 
 - A Rust API
 - A CLI
-- A FUSE filesystem
+- TODO: A FUSE filesystem
 
 ## Rust API
 
@@ -99,38 +99,4 @@ sqlar c -a files.sqlar ~/Documents ~/Pictures
 sqlar ex -a files.sqlar
 sqlar ls -a files.sqlar
 sqlar rm -a files.sqlar Documents
-```
-
-## FUSE Filesystem
-
-You can mount the archive as a FUSE filesystem using the CLI:
-
-```shell
-sqlar create --archive documents.sqlar ~/Documents
-sqlar mount --archive documents.sqlar ./mnt
-```
-
-You can also mount the archive using the Rust API:
-
-```rust
-use sqlarfs::Connection;
-
-fn main() -> sqlarfs::Result<()> {
-    let mut conn = Connection::open_in_memory()?;
-
-    conn.exec(|archive| {
-        let mut dir = archive.open("path/to")?;
-        dir.create_dir_all()?;
-
-        let mut file = archive.open("path/to/file")?;
-        file.create_file()?;
-
-        // This blocks until the filesystem is unmounted.
-        archive.mount("", "/home/wren/mnt")?;
-
-        sqlarfs::Result::Ok(())
-    })?;
-
-    Ok(())
-}
 ```

@@ -4,6 +4,14 @@ version = "0.1.0"
 edition = "2021"
 # If you update this, update the GitHub Actions workflow as well.
 rust-version = "1.75.0"
+authors = ["Wren Powell <wrenp@duck.com>"]
+description = "A CLI tool for working with sqlar archives"
+homepage = "https://github.com/lostatc/sqlarfs-rs"
+repository = "https://github.com/lostatc/sqlarfs-rs"
+readme = "README.md"
+keywords = ["sqlite", "sqlar", "database", "archive"]
+categories = ["filesystem", "command-line-utilities"]
+license = "MIT"
 
 [[bin]]
 name = "sqlar"
@@ -12,7 +20,7 @@ name = "sqlar"
 clap = { version = "4.5.4", features = ["derive"] }
 color-eyre = "0.6.3"
 eyre = "0.6.12"
-sqlarfs = { version = "0.1.0", path = "../sqlarfs" }
+sqlarfs = "0.1.0"
 
 [dev-dependencies]
 serial_test = "3.1.1"

@@ -4,6 +4,15 @@ version = "0.1.0"
 edition = "2021"
 # If you update this, update the GitHub Actions workflow as well.
 rust-version = "1.75.0"
+authors = ["Wren Powell <wrenp@duck.com>"]
+description = "A file archive format and virtual filesystem backed by a SQLite database"
+homepage = "https://github.com/lostatc/sqlarfs-rs"
+repository = "https://github.com/lostatc/sqlarfs-rs"
+documentation = "https://docs.rs/sqlarfs"
+readme = "README.md"
+keywords = ["sqlite", "sqlar", "database", "archive"]
+categories = ["filesystem"]
+license = "MIT"
 
 [dependencies]
 thiserror = "1.0.60"

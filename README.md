@@ -60,41 +60,36 @@ sqlar extract --archive files.sqlar
 Extract a specific file from an archive:
 
 ```shell
-sqlar create --archive documents.sqlar ~/Documents
 sqlar extract --archive documents.sqlar --source Documents/report.pdf
 ```
 
 Add a file to an existing archive.
 
 ```shell
-sqlar create --archive documents.sqlar ~/Documents
 sqlar archive --archive documents.sqlar ~/Downloads/report.pdf Documents/report.pdf
 ```
 
 List all regular files in an archive:
 
 ```shell
-sqlar create --archive documents.sqlar ~/Documents
 sqlar list --archive documents.sqlar --type file
 ```
 
 List only the immediate children of a specific directory in an archive:
 
 ```shell
-sqlar create --archive documents.sqlar ~/Documents
 sqlar list --archive documents.sqlar --children Documents/Reports/
 ```
 
 Remove a file from an archive:
 
 ```shell
-sqlar create --archive documents.sqlar ~/Documents
 sqlar remove --archive documents.sqlar Documents/report.pdf
 ```
 
 The tool has a shorthand syntax for each command:
 
-```
+```shell
 sqlar c -a files.sqlar ~/Documents ~/Pictures
 sqlar ex -a files.sqlar
 sqlar ls -a files.sqlar

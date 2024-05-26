@@ -1,6 +1,8 @@
+use std::cell::RefCell;
 use std::fs;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
+use std::rc::{Rc, Weak};
 use std::time::SystemTime;
 
 #[cfg(feature = "deflate")]
@@ -45,23 +47,29 @@ fn unwrap_path_parent(path: &Path) -> &Path {
 /// Consider disabling compression if you know you're going to be writing a lot of incompressible
 /// data, such as files that are already compressed (e.g. photos and videos).
 ///
+/// # File Invalidation
+///
+/// Attempting to read or write to a [`File`] after its corresponding [`Archive`] has been dropped
+/// will return an [`Error::FileInvalidated`].
+///
 /// [`Read`]: std::io::Read
 /// [`Write`]: std::io::Write
 /// [`Seek`]: std::io::Seek
+/// [`Error::FileInvalidated`]: crate::Error::FileInvalidated
 #[derive(Debug)]
-pub struct File<'conn, 'ar> {
+pub struct File<'conn> {
     // We store this internally as a string because the contract of this type requires the path to
     // be valid Unicode, which `PathBuf` does not guarantee.
     path: String,
     compression: Compression,
     umask: FileMode,
-    store: &'ar mut Store<'conn>,
+    store: Weak<Store<'conn>>,
 }
 
-impl<'conn, 'ar> File<'conn, 'ar> {
+impl<'conn> File<'conn> {
     pub(super) fn new(
         path: &Path,
-        store: &'ar mut Store<'conn>,
+        store: Weak<RefCell<Store<'conn>>>,
         umask: FileMode,
     ) -> crate::Result<Self> {
         if path == Path::new("") {
@@ -111,8 +119,12 @@ impl<'conn, 'ar> File<'conn, 'ar> {
         })
     }
 
+    fn store(&self) -> crate::Result<&mut Store<'conn>> {
+        Ok(Rc::get_mut(&mut self.store.upgrade().unwrap()).expect(""))
+    }
+
     fn validate_is_writable(&self) -> crate::Result<()> {
-        if self.store.read_metadata(&self.path)?.is_file() {
+        if self.store()?.borrow().read_metadata(&self.path)?.is_file() {
             Ok(())
         } else {
             Err(crate::Error::NotARegularFile {
@@ -122,7 +134,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     }
 
     fn validate_is_readable(&self) -> crate::Result<()> {
-        if self.store.read_metadata(&self.path)?.is_file() {
+        if self.store()?.borrow().read_metadata(&self.path)?.is_file() {
             Ok(())
         } else {
             Err(crate::Error::NotARegularFile {
@@ -145,7 +157,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
             None => panic!("The given path is not valid Unicode, but we should have already checked for this when opening the file handle. This is a bug."),
         };
 
-        match self.store.read_metadata(parent_str) {
+        match self.store()?.borrow().read_metadata(parent_str) {
             Ok(metadata) => {
                 if metadata.is_dir() {
                     Ok(())
@@ -213,7 +225,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     pub fn create_file(&mut self) -> crate::Result<()> {
         self.validate_can_be_created()?;
 
-        self.store.create_file(
+        self.store()?.borrow().create_file(
             &self.path,
             FileType::File,
             mode_from_umask(FileType::File, self.umask),
@@ -243,7 +255,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     pub fn create_dir(&mut self) -> crate::Result<()> {
         self.validate_can_be_created()?;
 
-        self.store.create_file(
+        self.store()?.borrow().create_file(
             &self.path,
             FileType::Dir,
             mode_from_umask(FileType::Dir, self.umask),
@@ -320,7 +332,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
             parent = unwrap_path_parent(parent);
         }
 
-        self.store.exec(|store| {
+        self.store()?.borrow_mut().exec(|store| {
             for dir in parents.iter().rev() {
                 let result = store.create_file(
                     dir.to_string_lossy().as_ref(),
@@ -401,7 +413,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
             }
         };
 
-        self.store.create_file(
+        self.store()?.borrow().create_file(
             &self.path,
             FileType::Symlink,
             mode_from_umask(FileType::Symlink, self.umask),
@@ -440,7 +452,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// [`FileNotFound`]: crate::Error::FileNotFound
     pub fn delete(&mut self) -> crate::Result<()> {
-        self.store.delete_file(&self.path)
+        self.store()?.borrow().delete_file(&self.path)
     }
 
     /// The file metadata.
@@ -451,7 +463,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// [`FileNotFound`]: crate::Error::FileNotFound
     pub fn metadata(&self) -> crate::Result<FileMetadata> {
-        self.store.read_metadata(&self.path)
+        self.store()?.borrow().read_metadata(&self.path)
     }
 
     /// Set the file mode.
@@ -483,7 +495,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// [`FileNotFound`]: crate::Error::FileNotFound
     pub fn set_mode(&mut self, mode: Option<FileMode>) -> crate::Result<()> {
-        self.store.set_mode(&self.path, mode)
+        self.store()?.borrow().set_mode(&self.path, mode)
     }
 
     /// Set the time the file was last modified.
@@ -519,7 +531,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// [`FileNotFound`]: crate::Error::FileNotFound
     pub fn set_mtime(&mut self, mtime: Option<SystemTime>) -> crate::Result<()> {
-        self.store.set_mtime(&self.path, mtime)
+        self.store()?.borrow().set_mtime(&self.path, mtime)
     }
 
     /// Whether the file is empty.
@@ -579,7 +591,11 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     pub fn is_compressed(&self) -> crate::Result<bool> {
         self.validate_is_readable()?;
 
-        Ok(self.store.blob_size(&self.path)?.is_compressed())
+        Ok(self
+            .store()?
+            .borrow()
+            .blob_size(&self.path)?
+            .is_compressed())
     }
 
     /// Truncate the file to zero bytes.
@@ -613,7 +629,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     pub fn truncate(&mut self) -> crate::Result<()> {
         self.validate_is_writable()?;
 
-        self.store.exec(|store| {
+        self.store()?.borrow_mut().exec(|store| {
             store.allocate_blob(&self.path, 0)?;
             store.set_size(&self.path, 0)?;
 
@@ -665,7 +681,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     pub fn reader(&mut self) -> crate::Result<FileReader> {
         self.validate_is_readable()?;
 
-        FileReader::new(self.store.open_blob(&self.path, true)?)
+        FileReader::new(self.store()?.borrow().open_blob(&self.path, true)?)
     }
 
     fn write_stream<R>(&mut self, reader: &mut R, size_hint: Option<u64>) -> crate::Result<()>

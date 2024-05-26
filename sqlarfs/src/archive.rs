@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::rc::Rc;
 
 use crate::{ExtractOptions, FileMode};
 
@@ -24,20 +25,24 @@ use super::tree::ArchiveOptions;
 /// [`Connection::exec`]: crate::Connection::exec
 #[derive(Debug)]
 pub struct Archive<'conn> {
-    store: Store<'conn>,
+    store: Rc<Store<'conn>>,
     umask: FileMode,
 }
 
 impl<'conn> Archive<'conn> {
     pub(super) fn new(tx: rusqlite::Transaction<'conn>) -> Self {
         Self {
-            store: Store::new(tx),
+            store: Rc::new(Store::new(tx)),
             umask: FileMode::OTHER_W,
         }
     }
 
     pub(super) fn into_tx(self) -> rusqlite::Transaction<'conn> {
-        self.store.into_tx()
+        Rc::into_inner(self.store)
+            .expect(
+                "There is more than one strong reference to the backing database. This is a bug.",
+            )
+            .into_tx()
     }
 
     pub(super) fn init(&mut self, fail_if_exists: bool) -> crate::Result<()> {
@@ -50,11 +55,11 @@ impl<'conn> Archive<'conn> {
     /// handle to a file that may or may not exist.
     ///
     /// See [`File::exists`] to check if the file actually exists in the archive.
-    pub fn open<'ar, P: AsRef<Path>>(&'ar mut self, path: P) -> crate::Result<File<'conn, 'ar>> {
+    pub fn open<P: AsRef<Path>>(&mut self, path: P) -> crate::Result<File<'conn>> {
         // Opening a file must take a mutable receiver to ensure that the user can't get lwo
         // handles to the same file. Otherwise they could do things like open the blob twice or
         // edit the row while the blob is open.
-        File::new(path.as_ref(), &mut self.store, self.umask)
+        File::new(path.as_ref(), Rc::downgrade(&self.store), self.umask)
     }
 
     /// Return an iterator over the files in this archive.

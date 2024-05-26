@@ -123,6 +123,10 @@ pub enum Error {
     #[error("Attempted to create a new SQLite archive, but one already exists.")]
     SqlarAlreadyExists,
 
+    /// Tried to access a file, but the [`Archive`] it belongs to was dropped.
+    #[error("Tried to access a file, but the archive was dropped.")]
+    FileInvalidated,
+
     /// There was an error from the underlying SQLite database.
     #[error("There was an error from the underlying SQLite database: {code}")]
     Sqlite {

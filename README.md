@@ -45,44 +45,44 @@ Archive directory and extract it to a target directory:
 
 ```shell
 sqlar create ./src
-sqlar extract --archive src.sqlar ~/Desktop
+sqlar extract -a src.sqlar ~/Desktop
 ```
 
 Archive two directories and extract them to the current directory:
 
 ```shell
-sqlar create --archive files.sqlar ~/Documents ~/Pictures
-sqlar extract --archive files.sqlar
+sqlar create -a files.sqlar ~/Documents ~/Pictures
+sqlar extract -a files.sqlar
 ```
 
 Extract a specific file from an archive:
 
 ```shell
-sqlar extract --archive documents.sqlar --source Documents/report.pdf
+sqlar extract -a documents.sqlar -s Documents/report.pdf
 ```
 
 Add a file to an existing archive.
 
 ```shell
-sqlar archive --archive documents.sqlar ~/Downloads/report.pdf Documents/report.pdf
+sqlar archive -a documents.sqlar ~/Downloads/report.pdf Documents/report.pdf
 ```
 
 List all regular files in an archive:
 
 ```shell
-sqlar list --archive documents.sqlar --type file
+sqlar list -a documents.sqlar -t file
 ```
 
 List only the immediate children of a specific directory in an archive:
 
 ```shell
-sqlar list --archive documents.sqlar --children Documents/Reports/
+sqlar list -a documents.sqlar --children Documents/Reports/
 ```
 
 Remove a file from an archive:
 
 ```shell
-sqlar remove --archive documents.sqlar Documents/report.pdf
+sqlar remove -a documents.sqlar Documents/report.pdf
 ```
 
 The tool has a shorthand syntax for each command:

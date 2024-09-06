@@ -39,3 +39,4 @@ reference-conformance-tests = []
 unsafe_code = "forbid"
 missing_debug_implementations = "warn"
 missing_docs = "warn"
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(coverage_nightly)"] }

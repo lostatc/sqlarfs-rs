@@ -88,7 +88,7 @@ impl Extract {
 
                 archive.extract_with(
                     path,
-                    &self.dest.join(file_name),
+                    self.dest.join(file_name),
                     &ExtractOptions::new()
                         .children(false)
                         .recursive(!self.no_recursive),

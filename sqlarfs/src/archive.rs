@@ -121,11 +121,11 @@ impl<'conn> Archive<'conn> {
     /// - [`FileNotFound`]: [`ArchiveOptions::children`] was `true` and `to` does not exist.
     /// - [`NoParentDirectory`]: The parent directory of `to` does not exist.
     /// - [`NotADirectory`]: [`ArchiveOptions::children`] was `true` and the file at `from` is not
-    /// a directory.
+    ///   a directory.
     /// - [`NotADirectory`]: [`ArchiveOptions::children`] was `true` and the file at `to` exists
-    /// but is not a directory.
+    ///   but is not a directory.
     /// - [`FileAlreadyExists`]: One of the files in `from` would overwrite an existing file in the
-    /// archive.
+    ///   archive.
     ///
     /// [`FileNotFound`]: crate::Error::FileNotFound
     /// [`NoParentDirectory`]: crate::Error::NoParentDirectory
@@ -165,11 +165,11 @@ impl<'conn> Archive<'conn> {
     /// - [`FileNotFound`]: [`ExtractOptions::children`] was `true` and `to` does not exist.
     /// - [`NoParentDirectory`]: The parent directory of `to` does not exist.
     /// - [`NotADirectory`]: [`ExtractOptions::children`] was `true` and the file at `from` is not
-    /// a directory.
+    ///   a directory.
     /// - [`NotADirectory`]: [`ExtractOptions::children`] was `true` and the file at `to` exists
-    /// but is not a directory.
+    ///   but is not a directory.
     /// - [`FileAlreadyExists`]: One of the files in `from` would overwrite an existing file in the
-    /// filesystem.
+    ///   filesystem.
     ///
     /// [`FileNotFound`]: crate::Error::FileNotFound
     /// [`NoParentDirectory`]: crate::Error::NoParentDirectory

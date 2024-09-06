@@ -637,7 +637,7 @@ impl<'conn, 'ar> File<'conn, 'ar> {
     ///
     /// - [`FileNotFound`]: This file does not exist.
     /// - [`CompressionNotSupported`]: This file is compressed, but the `deflate` Cargo feature is
-    /// disabled.
+    ///   disabled.
     /// - [`NotARegularFile`]: The file is a directory or a symbolic link.
     ///
     /// # Examples

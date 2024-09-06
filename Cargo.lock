@@ -797,6 +797,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlarfs"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8858f8f5e462cf027483856d93bab636c1acc507d6a95ec40e3478892569fd99"
+dependencies = [
+ "bitflags",
+ "flate2",
+ "ouroboros",
+ "rusqlite",
+ "same-file",
+ "thiserror",
+]
+
+[[package]]
 name = "sqlarfs-cli"
 version = "0.1.0"
 dependencies = [
@@ -804,7 +818,7 @@ dependencies = [
  "color-eyre",
  "eyre",
  "serial_test",
- "sqlarfs",
+ "sqlarfs 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempfile",
  "xpct",
 ]

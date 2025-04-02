@@ -82,7 +82,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: "Install stable toolchain"
-        run: rustup toolchain install --profile minimal --component rustfmt clippy -- stable
+        run: rustup toolchain install --profile minimal --component rustfmt --component clippy -- stable
 
       - name: "Set up Rust build cache"
         uses: Swatinem/rust-cache@v2

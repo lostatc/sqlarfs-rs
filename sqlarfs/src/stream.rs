@@ -43,7 +43,7 @@ enum InnerReader<'conn> {
     Uncompressed(Blob<'conn>),
 }
 
-impl<'conn> fmt::Debug for InnerReader<'conn> {
+impl fmt::Debug for InnerReader<'_> {
     #[cfg_attr(coverage_nightly, coverage(off))]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -54,7 +54,7 @@ impl<'conn> fmt::Debug for InnerReader<'conn> {
     }
 }
 
-impl<'conn> Read for InnerReader<'conn> {
+impl Read for InnerReader<'_> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self {
             #[cfg(feature = "deflate")]
@@ -93,7 +93,7 @@ impl<'conn> FileReader<'conn> {
     }
 }
 
-impl<'conn> Read for FileReader<'conn> {
+impl Read for FileReader<'_> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.inner.read(buf)
     }

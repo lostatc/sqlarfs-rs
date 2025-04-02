@@ -228,7 +228,7 @@ struct ListEntriesInner<'conn> {
     iter: rusqlite::MappedRows<'this, ListMapFunc>,
 }
 
-impl<'conn> fmt::Debug for ListEntriesInner<'conn> {
+impl fmt::Debug for ListEntriesInner<'_> {
     #[cfg_attr(coverage_nightly, coverage(off))]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ListEntries").finish_non_exhaustive()
@@ -279,7 +279,7 @@ impl<'conn> ListEntries<'conn> {
     }
 }
 
-impl<'conn> Iterator for ListEntries<'conn> {
+impl Iterator for ListEntries<'_> {
     type Item = crate::Result<ListEntry>;
 
     fn next(&mut self) -> Option<Self::Item> {

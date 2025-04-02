@@ -150,7 +150,7 @@ fn rebase_path(path: &Path, new_base: &Path, old_base: &Path) -> PathBuf {
     ))
 }
 
-impl<'conn> Archive<'conn> {
+impl Archive<'_> {
     pub(super) fn archive_file<T>(
         &mut self,
         src_path: &Path,
